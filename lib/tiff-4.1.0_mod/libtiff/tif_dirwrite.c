@@ -2689,6 +2689,7 @@ TIFFLinkDirectory(TIFF* tif)
 			 * First directory, overwrite offset in header.
 			 */
 			tif->tif_header.classic.tiff_diroff = (uint32) tif->tif_diroff;
+			tif->tif_header.classic.tiff_diroff_last = (uint32) tif->tif_diroff; // ADDED
 			(void) TIFFSeekFile(tif,4, SEEK_SET);
 			if (!WriteOK(tif, &m, 4)) {
 				TIFFErrorExt(tif->tif_clientdata, tif->tif_name,
@@ -2700,7 +2701,8 @@ TIFFLinkDirectory(TIFF* tif)
 		/*
 		 * Not the first directory, search to the last and append.
 		 */
-		nextdir = tif->tif_header.classic.tiff_diroff;
+		//nextdir = tif->tif_header.classic.tiff_diroff; // COMMENTED OUT
+		nextdir = tif->tif_header.classic.tiff_diroff_last; // ADDED
 		while(1) {
 			uint16 dircount;
 			uint32 nextnextdir;
@@ -2748,6 +2750,7 @@ TIFFLinkDirectory(TIFF* tif)
 			 * First directory, overwrite offset in header.
 			 */
 			tif->tif_header.big.tiff_diroff = tif->tif_diroff;
+			tif->tif_header.big.tiff_diroff_last = tif->tif_diroff; // ADDED
 			(void) TIFFSeekFile(tif,8, SEEK_SET);
 			if (!WriteOK(tif, &m, 8)) {
 				TIFFErrorExt(tif->tif_clientdata, tif->tif_name,
@@ -2759,7 +2762,8 @@ TIFFLinkDirectory(TIFF* tif)
 		/*
 		 * Not the first directory, search to the last and append.
 		 */
-		nextdir = tif->tif_header.big.tiff_diroff;
+		//nextdir = tif->tif_header.big.tiff_diroff; // COMMENTED OUT
+		nextdir = tif->tif_header.big.tiff_diroff_last; // ADDED
 		while(1) {
 			uint64 dircount64;
 			uint16 dircount;

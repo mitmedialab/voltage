@@ -96,6 +96,7 @@ typedef struct {
 	uint16 tiff_magic;      /* magic number (defines byte order) */
 	uint16 tiff_version;    /* TIFF version number */
 	uint32 tiff_diroff;     /* byte offset to first directory */
+	uint32 tiff_diroff_last; /* ADDED: byte offset to last directory */
 } TIFFHeaderClassic;
 typedef struct {
 	uint16 tiff_magic;      /* magic number (defines byte order) */
@@ -103,6 +104,7 @@ typedef struct {
 	uint16 tiff_offsetsize; /* size of offsets, should be 8 */
 	uint16 tiff_unused;     /* unused word, should be 0 */
 	uint64 tiff_diroff;     /* byte offset to first directory */
+	uint64 tiff_diroff_last; /* ADDED: byte offset to last directory */
 } TIFFHeaderBig;
 
 
