@@ -2737,6 +2737,7 @@ TIFFLinkDirectory(TIFF* tif)
 			}
 			nextdir=nextnextdir;
 		}
+		tif->tif_header.classic.tiff_diroff_last = (uint32) tif->tif_diroff; // ADDED
 	}
 	else
 	{
@@ -2806,6 +2807,7 @@ TIFFLinkDirectory(TIFF* tif)
 			}
 			nextdir=nextnextdir;
 		}
+		tif->tif_header.big.tiff_diroff_last = tif->tif_diroff; // ADDED
 	}
 	return (1);
 }
