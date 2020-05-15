@@ -17,6 +17,8 @@ int main(int argc, char *argv[])
     motion_param.search_size = 3;
     motion_param.patch_size = 10;
     motion_param.patch_offset = 7;
+    motion_param.x_range = 0.7;
+    motion_param.y_range = 1.0;
     motion_param.a_stdev = 1.0;
     motion_param.m_stdev = 3.0;
     motion_param.thresh_xy = 1.0;

@@ -33,8 +33,12 @@ static double normalized_cross_correlation(int w, int h, int cx, int cy, int pat
     double ref_sum2 = 0, tgt_sum2 = 0;
     double cross = 0;
     int n = 0;
-    for(int i = cx - patch_size; i <= cx + patch_size; i++)
-    for(int j = cy - patch_size; j <= cy + patch_size; j++)
+    int start_i = cx - patch_size; if(start_i < 0) start_i = 0;
+    int end_i   = cx + patch_size; if(end_i  >= w) end_i   = w - 1;
+    int start_j = cy - patch_size; if(start_j < 0) start_j = 0;
+    int end_j   = cy + patch_size; if(end_j  >= h) end_j   = h - 1;
+    for(int i = start_i; i <= end_i; i++)
+    for(int j = start_j; j <= end_j; j++)
     {
         int u = i + x;
         int v = j + y;
@@ -56,15 +60,17 @@ static double normalized_cross_correlation(int w, int h, int cx, int cy, int pat
     double covar = cross - ref_sum * tgt_sum;
     double ref_var = ref_sum2 - ref_sum * ref_sum; if(ref_var < 0) ref_var = 0;
     double tgt_var = tgt_sum2 - tgt_sum * tgt_sum; if(tgt_var < 0) tgt_var = 0;
-    return covar / sqrt(ref_var * tgt_var + 1e-6);
+    //return covar / sqrt(ref_var * tgt_var + 1e-6); // raw NCC
+    return ref_sum * covar / sqrt(ref_var * tgt_var + 1e-6); // scaled by average intensity of reference patch
 }
 
 static double get_peak(int search_size, double **v, bool subpixel, float *x, float *y)
 {
+    const int size2 = search_size * 2;
     double max_corr = 0;
     int max_i = 0, max_j = 0;
-    for(int i = 0; i <= search_size * 2; i++)
-    for(int j = 0; j <= search_size * 2; j++)
+    for(int i = 0; i <= size2; i++)
+    for(int j = 0; j <= size2; j++)
     {
         if(max_corr < v[i][j])
         {
@@ -74,6 +80,14 @@ static double get_peak(int search_size, double **v, bool subpixel, float *x, flo
         }
     }
     
+    // check if max_i and max_j is within [1, search_size*2-1]
+    // otherwise it's likely that the true minimum is outside of the search space
+    // (but proceed anyway even if so)
+    if(max_i == 0 || max_i == size2 || max_j == 0 || max_j == size2)
+    {
+        fprintf(stderr, "peak is at the edge of search space: (%d, %d)\n", max_i, max_j);
+    }
+
     if(subpixel)
     {
         int im = max_i - 1; if(im < 0) im = 0;
@@ -92,9 +106,20 @@ static double get_peak(int search_size, double **v, bool subpixel, float *x, flo
         double denom = 4 * a * c - b * b;
         double px = (b * e - 2 * c * d) / denom;
         double py = (b * d - 2 * a * e) / denom;
-        *x = (float)(max_i - search_size + px);
-        *y = (float)(max_j - search_size + py);
-        return a * px * px + b * px * py + c * py * py + d * px + e * py + f;
+        if(-1 < px && px < 1 && -1 < py && py < 1)
+        {
+            *x = (float)(max_i - search_size + px);
+            *y = (float)(max_j - search_size + py);
+            return a * px * px + b * px * py + c * py * py + d * px + e * py + f;
+        }
+        else
+        {
+            fprintf(stderr, "subpixel estimate exceeded one pixel: (%.1f, %.1f)\n", px, py);
+            // revert to pixel-unit estimate
+            *x = max_i - search_size;
+            *y = max_j - search_size;
+            return max_corr;
+        }
     }
     else
     {
@@ -106,21 +131,22 @@ static double get_peak(int search_size, double **v, bool subpixel, float *x, flo
 
 static double estimate_motion_recursive(int level, bool top,
                                         int search_size, int patch_size, int patch_offset,
+                                        float x_range, float y_range,
                                         int w, int h, float **ref, float **tgt, float *x, float *y)
 {
-    const int w_half = w / 2;
-    const int h_half = h / 2;
-    const int w_margin = (int)(w * 0.3);
-    const int h_margin = (int)(h * 0.1);
-
     int bx = 0, by = 0;
     if(level > 0)
     {
+        const int patch_size_half = (patch_size + 1) / 2;
+        const int patch_offset_half = (patch_offset + 1) / 2;
+        const int w_half = w / 2;
+        const int h_half = h / 2;
         float **ref_half = downsample_image(w_half, h_half, ref);
         float **tgt_half = downsample_image(w_half, h_half, tgt);
         float x_half, y_half;
         estimate_motion_recursive(level - 1, false,
-                                  search_size, patch_size, patch_offset,
+                                  search_size, patch_size_half, patch_offset_half,
+                                  x_range, y_range,
                                   w_half, h_half, ref_half, tgt_half, &x_half, &y_half);
         free_float2d(ref_half);
         free_float2d(tgt_half);
@@ -128,18 +154,16 @@ static double estimate_motion_recursive(int level, bool top,
         by = (int)(2 * y_half);
     }
     
-    int patch_num_x = (w_half - w_margin - patch_size - search_size - abs(bx)) / patch_offset;
-    int patch_num_y = (h_half - h_margin - patch_size - search_size - abs(by)) / patch_offset;
-    if(patch_num_x < 0)
-    {
-        fprintf(stderr, "patch_num_x became negative: %d\n", patch_num_x);
-        patch_num_x = 0;
-    }
-    if(patch_num_y < 0)
-    {
-        fprintf(stderr, "patch_num_y became negative: %d\n", patch_num_y);
-        patch_num_y = 0;
-    }
+    int x_space = (int)(w * x_range * 0.5) - patch_size - search_size;
+    int y_space = (int)(h * y_range * 0.5) - patch_size - search_size;
+    int patch_num_l = (x_space + bx) / patch_offset;
+    int patch_num_r = (x_space - bx) / patch_offset;
+    int patch_num_b = (y_space + by) / patch_offset;
+    int patch_num_t = (y_space - by) / patch_offset;
+    if(patch_num_l < 0) patch_num_l = 0;
+    if(patch_num_r < 0) patch_num_r = 0;
+    if(patch_num_b < 0) patch_num_b = 0;
+    if(patch_num_t < 0) patch_num_t = 0;
     
     const int size = search_size * 2 + 1;
     double **corr = malloc_double2d(size, size);
@@ -152,8 +176,8 @@ static double estimate_motion_recursive(int level, bool top,
         int v = k / size;
         int s = u - search_size + bx;
         int t = v - search_size + by;
-        for(int i = -patch_num_x; i <= patch_num_x; i++)
-        for(int j = -patch_num_y; j <= patch_num_y; j++)
+        for(int i = -patch_num_l; i <= patch_num_r; i++)
+        for(int j = -patch_num_b; j <= patch_num_t; j++)
         {
             int cx = w / 2 + i * patch_offset;
             int cy = h / 2 + j * patch_offset;
@@ -170,10 +194,12 @@ static double estimate_motion_recursive(int level, bool top,
     return ret;
 }
 
-static double estimate_motion(int level, int search_size, int patch_size, int patch_offset,
+static double estimate_motion(motion_param_t &param,
                               int w, int h, float **ref, float **tgt, float *x, float *y)
 {
-    return estimate_motion_recursive(level, true, search_size, patch_size, patch_offset,
+    return estimate_motion_recursive(param.level, true,
+                                     param.search_size, param.patch_size, param.patch_offset,
+                                     param.x_range, param.y_range,
                                      w, h, ref, tgt, x, y);
 }
 
@@ -265,8 +291,7 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
 	{
 	    // motion estimation
 	    float x, y;
-	    double c = estimate_motion(param.level, param.search_size, param.patch_size, param.patch_offset,
-	                               width, height, img[0], img[i], &x, &y);
+	    double c = estimate_motion(param, width, height, img[0], img[i], &x, &y);
         
         // check motion vector against Kalman prediction
         float ux = kf_x->update(x);

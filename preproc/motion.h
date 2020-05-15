@@ -19,6 +19,9 @@ typedef struct
     int patch_size;   // [-patch_size, +patch_size] pixels will be used as a patch in X and Y
     int patch_offset; // offset (both in X and Y) between adjacent patches
     
+    float x_range;    // width  * x_range around center will be searched (1 means entire width)
+    float y_range;    // heigth * y_range around center will be searched (1 means entire height)
+
     float a_stdev;    // standard deviation of acceleration [pixels/frame^2]
     float m_stdev;    // standard deviation of motion estimation error [pixels]
     float thresh_xy;  // motion spatial error threshold [pixels]
