@@ -10,6 +10,15 @@
 #include "signal.h"
 
 
+static void print_help(char *command, motion_param_t &motion_param)
+{
+    printf("%s [options] in.tiff out_path\n", command);
+    printf("  -ms <int> : motion search size (%d)\n",  motion_param.search_size);
+    printf("  -mp <int> : motion patch size (%d)\n",   motion_param.patch_size);
+    printf("  -mo <int> : motion patch offset (%d)\n", motion_param.patch_offset);
+    exit(0);
+}
+
 int main(int argc, char *argv[])
 {
     motion_param_t motion_param;
@@ -35,15 +44,19 @@ int main(int argc, char *argv[])
     signal_param.patch_size = 8;
     signal_param.patch_offset = 1;
 
-    if(argc != 3)
-    {
-        printf("%s in.tiff out_path\n", argv[0]);
-        return 0;
-    }
     char in_file[512], out_path[512];
-    strcpy(in_file, argv[1]);
-    strcpy(out_path, argv[2]);
-
+    int n = 1;
+    int m = 0;
+    while(n < argc)
+    {
+        if(     strcmp(argv[n], "-ms") == 0) { motion_param.search_size  = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-mp") == 0) { motion_param.patch_size   = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-mo") == 0) { motion_param.patch_offset = atoi(argv[n+1]); n+=2; }
+        else if(m == 0) { strcpy(in_file,  argv[n]); n++; m++; }
+        else if(m == 1) { strcpy(out_path, argv[n]); n++; m++; }
+        else print_help(argv[0], motion_param);
+    }
+    if(m < 2) print_help(argv[0], motion_param);
 
     TimerUtil *tu;
     
