@@ -7,12 +7,17 @@
 #include "image.h"
 #include "motion.h"
 #include "shading.h"
+#include "blood.h"
 #include "signal.h"
 
 
 static void print_help(char *command, motion_param_t &motion_param)
 {
     printf("%s [options] in.tiff out_path\n", command);
+    printf("\n");
+    printf("  -ds : disable shading correction\n");
+    printf("  -db : disable blood suppression\n");
+    printf("\n");
     printf("  -ms <int> : motion search size (%d)\n",  motion_param.search_size);
     printf("  -mp <int> : motion patch size (%d)\n",   motion_param.patch_size);
     printf("  -mo <int> : motion patch offset (%d)\n", motion_param.patch_offset);
@@ -37,6 +42,13 @@ int main(int argc, char *argv[])
     shading_param_t shading_param;
     shading_param.period = 1000;
 
+    blood_param_t blood_param;
+    blood_param.period = 1000;
+    blood_param.frames_per_sec = 1000.0;
+    blood_param.freq_min = 20.0;
+    blood_param.freq_max = 200.0;
+    blood_param.thresh = 0.9;
+
     signal_param_t signal_param;
     signal_param.normalize = false;
     signal_param.downsample = true;
@@ -44,12 +56,17 @@ int main(int argc, char *argv[])
     signal_param.patch_size = 8;
     signal_param.patch_offset = 1;
 
+    bool skip_shading_correction = false;
+    bool skip_blood_suppression = false;
+    
     char in_file[512], out_path[512];
     int n = 1;
     int m = 0;
     while(n < argc)
     {
-        if(     strcmp(argv[n], "-ms") == 0) { motion_param.search_size  = atoi(argv[n+1]); n+=2; }
+        if(     strcmp(argv[n], "-ds") == 0) { skip_shading_correction = true; n++; }
+        else if(strcmp(argv[n], "-db") == 0) { skip_blood_suppression = true; n++; }
+        else if(strcmp(argv[n], "-ms") == 0) { motion_param.search_size  = atoi(argv[n+1]); n+=2; }
         else if(strcmp(argv[n], "-mp") == 0) { motion_param.patch_size   = atoi(argv[n+1]); n+=2; }
         else if(strcmp(argv[n], "-mo") == 0) { motion_param.patch_offset = atoi(argv[n+1]); n+=2; }
         else if(m == 0) { strcpy(in_file,  argv[n]); n++; m++; }
@@ -82,26 +99,49 @@ int main(int argc, char *argv[])
     printf("(x, y) in [%.1f, %.1f] x [%.1f, %.1f]\n",
            range.min_x, range.max_x, range.min_y, range.max_y);
 
-    tu = new TimerUtil("shading correction");
-    correct_shading(shading_param, t, w, h, img, motion_list);
-    delete tu;
+    if(skip_shading_correction)
+    {
+        printf("shading correction skipped\n");
+    }
+    else
+    {
+        tu = new TimerUtil("shading correction");
+        correct_shading(shading_param, t, w, h, img, motion_list);
+        delete tu;
+    }
+    
+    float ***bld = NULL;
+    if(skip_blood_suppression)
+    {
+        printf("blood suppression skipped\n");
+    }
+    else
+    {
+        tu = new TimerUtil("blood suppression");
+        bld = suppress_blood(blood_param, t, w, h, img);
+        delete tu;
+    }
     
     tu = new TimerUtil("signal extraction");
     int num_out;
     float ***out = extract_signal(signal_param, t, w, h, img, motion_list, range, &num_out);
     delete tu;
     
-    tu= new TimerUtil("saving tiff");
+    tu = new TimerUtil("saving tiff");
     char out_file[512];
     sprintf(out_file, "%s/corrected.tif", out_path);
-    bool ret1 = write_tiff(out_file, t, w, h, img);
+    bool ret_c = write_tiff(out_file, t, w, h, img);
+
+    sprintf(out_file, "%s/blood.tif", out_path);
+    bool ret_b = skip_blood_suppression || write_tiff(out_file, 3 + blood_param.period / 2, w, h, bld);
 
     sprintf(out_file, "%s/signal.tif", out_path);
-    bool ret2 = write_tiff(out_file, num_out, w, h, out);
+    bool ret_s = write_tiff(out_file, num_out, w, h, out);
     delete tu;
     
     free_float3d(img);
+    if(bld != NULL) free_float3d(bld);
     free_float3d(out);
-    return (ret1 && ret2) ? 0 : 1;
+    return (ret_c && ret_b && ret_s) ? 0 : 1;
 }
 
