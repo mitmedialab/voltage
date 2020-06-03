@@ -12,6 +12,8 @@ typedef struct
     int period;       // signal detection will be performed per this time period [frames]
     int patch_size;   // square patch of patch_size x patch_size pixels will be used
     int patch_offset; // offset (both in X and Y) between adjacent patches
+    float frames_per_sec; // video frame rate
+    float freq_max;   // cutoff frequency [Hz] for temporal Gaussian low-pass filter (2 sigma)
 } signal_param_t;
 
 

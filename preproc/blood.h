@@ -6,8 +6,8 @@ typedef struct
 {
     int period; // time period [frames] for temporal spectral analysis
     float frames_per_sec; // video frame rate
-    float freq_min; // minimum temporal frequency of blood flow
-    float freq_max; // maximum temporal frequency of blood flow
+    float freq_min; // minimum temporal frequency [Hz] of blood flow
+    float freq_max; // maximum temporal frequency [Hz] of blood flow
     float thresh; // threshold to determine if blood or not (<= 1)
 } blood_param_t;
 

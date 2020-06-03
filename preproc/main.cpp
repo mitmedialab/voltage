@@ -11,16 +11,38 @@
 #include "signal.h"
 
 
-static void print_help(char *command, motion_param_t &motion_param)
+static void print_help(char *command, float frames_per_sec,
+                       motion_param_t  &motion_param,
+                       shading_param_t &shading_param,
+                       blood_param_t   &blood_param,
+                       signal_param_t  &signal_param)
 {
     printf("%s [options] in.tiff out_path\n", command);
     printf("\n");
     printf("  -ds : disable shading correction\n");
     printf("  -db : disable blood suppression\n");
     printf("\n");
-    printf("  -ms <int> : motion search size (%d)\n",  motion_param.search_size);
-    printf("  -mp <int> : motion patch size (%d)\n",   motion_param.patch_size);
-    printf("  -mo <int> : motion patch offset (%d)\n", motion_param.patch_offset);
+    printf("  -fr <float>: frame rate (%.1f Hz)\n", frames_per_sec);
+    printf("\n");
+    printf("  motion correction parameters\n");
+    printf("  -ms <int>  : search size (%d pixels)\n", motion_param.search_size);
+    printf("  -mp <int>  : patch size (%d pixels)\n", motion_param.patch_size);
+    printf("  -mo <int>  : patch offset (%d pixels)\n", motion_param.patch_offset);
+    printf("\n");
+    printf("  shading correction parameters\n");
+    printf("  -hw <int>  : window length (%d frames)\n", shading_param.period);
+    printf("\n");
+    printf("  blood suppression parameters\n");
+    printf("  -bw <int>  : window length (%d frames)\n", blood_param.period);
+    printf("  -bl <float>: minimum frequency (%.1f Hz)\n", blood_param.freq_min);
+    printf("  -bh <float>: maximum frequency (%.1f Hz)\n", blood_param.freq_max);
+    printf("  -bt <float>: threshold (%.1f)\n", blood_param.thresh);
+    printf("\n");
+    printf("  signal extraction parameters\n");
+    printf("  -sw <int>  : window length (%d frames)\n", signal_param.period);
+    printf("  -sp <int>  : patch size (%d pixels)\n", signal_param.patch_size);
+    printf("  -so <int>  : patch offset (%d pixels)\n", signal_param.patch_offset);
+    printf("  -sc <float>: cutoff frequency (%.1f Hz)\n", signal_param.freq_max);
     exit(0);
 }
 
@@ -44,7 +66,6 @@ int main(int argc, char *argv[])
 
     blood_param_t blood_param;
     blood_param.period = 1000;
-    blood_param.frames_per_sec = 1000.0;
     blood_param.freq_min = 20.0;
     blood_param.freq_max = 200.0;
     blood_param.thresh = 0.9;
@@ -55,10 +76,12 @@ int main(int argc, char *argv[])
     signal_param.period = 100;
     signal_param.patch_size = 8;
     signal_param.patch_offset = 1;
+    signal_param.freq_max = 100.0;
 
     bool skip_shading_correction = false;
     bool skip_blood_suppression = false;
-    
+    float frames_per_sec = 1000.0;
+
     char in_file[512], out_path[512];
     int n = 1;
     int m = 0;
@@ -66,14 +89,31 @@ int main(int argc, char *argv[])
     {
         if(     strcmp(argv[n], "-ds") == 0) { skip_shading_correction = true; n++; }
         else if(strcmp(argv[n], "-db") == 0) { skip_blood_suppression = true; n++; }
+        else if(strcmp(argv[n], "-fr") == 0) { frames_per_sec = (float)atof(argv[n+1]); n+=2; }
         else if(strcmp(argv[n], "-ms") == 0) { motion_param.search_size  = atoi(argv[n+1]); n+=2; }
         else if(strcmp(argv[n], "-mp") == 0) { motion_param.patch_size   = atoi(argv[n+1]); n+=2; }
         else if(strcmp(argv[n], "-mo") == 0) { motion_param.patch_offset = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-hw") == 0) { shading_param.period = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-bw") == 0) { blood_param.period = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-bl") == 0) { blood_param.freq_min = (float)atof(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-bh") == 0) { blood_param.freq_max = (float)atof(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-bt") == 0) { blood_param.thresh = (float)atof(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-sw") == 0) { signal_param.period = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-sp") == 0) { signal_param.patch_size = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-so") == 0) { signal_param.patch_offset = atoi(argv[n+1]); n+=2; }
+        else if(strcmp(argv[n], "-sc") == 0) { signal_param.freq_max = (float)atof(argv[n+1]); n+=2; }
         else if(m == 0) { strcpy(in_file,  argv[n]); n++; m++; }
         else if(m == 1) { strcpy(out_path, argv[n]); n++; m++; }
-        else print_help(argv[0], motion_param);
+        else { m = 0; break; }
     }
-    if(m < 2) print_help(argv[0], motion_param);
+    if(m < 2)
+    {
+        print_help(argv[0], frames_per_sec,
+                   motion_param, shading_param, blood_param, signal_param);
+    }
+    blood_param.frames_per_sec = frames_per_sec;
+    signal_param.frames_per_sec = frames_per_sec;
+
 
     TimerUtil *tu;
     

@@ -7,6 +7,10 @@
 #include "signal.h"
 
 
+void recursive_gauss_set_filter(float stdev, float *c);
+void recursive_gauss_apply_filter(float *c, int n, float *dat);//, float *buf);
+
+
 static float **compute_principal_component(std::vector<int> frames, int x, int y, int size, float ***img,
                                            bool normalize, bool downsample)
 {
@@ -31,7 +35,7 @@ static float **compute_principal_component(std::vector<int> frames, int x, int y
         else
         {
             data[k][size * j + i] = img[frame][x + i][y + j];
-        }        
+        }
     }
     
     // subtract mean for each column
@@ -195,6 +199,54 @@ static void upsample2x2(int size, float **in, float **out, int x, int y)
     }
 }
 
+static float ***temporal_filter(int start, int end,
+                                int t, int w, int h, float ***img, float stdev)
+{
+    const int len = end - start;
+    float ***out = malloc_float3d(len, w, h);
+    
+    if(stdev < 0.5) // copy without filtering
+    {
+        for(int f = start; f < end; f++)
+        {
+            int k = f - start;
+            for(int i = 0; i < w; i++)
+            for(int j = 0; j < h; j++)
+            {
+                out[k][i][j] = img[f][i][j];
+            }
+        }
+    }
+    else
+    {
+        float c[4];
+        recursive_gauss_set_filter(stdev, c);
+
+        const int margin = (int)(stdev * 2.0 + 3.5);
+        const int ext_len = len + margin * 2;
+        float *dat = malloc_float1d(ext_len);
+        for(int i = 0; i < w; i++)
+        for(int j = 0; j < h; j++)
+        {
+            for(int k = 0; k < ext_len; k++)
+            {
+                int f = start - margin + k;
+                if(f < 0) f = 0;
+                else if(f >= t) f = t - 1;
+                dat[k] = img[f][i][j];
+            }
+            recursive_gauss_apply_filter(c, ext_len, dat);
+            for(int k = 0; k < len; k++)
+            {
+                out[k][i][j] = dat[k + margin];
+            }
+        }
+        free_float1d(dat);
+    }
+            
+    return out;
+}
+
 float ***extract_signal(signal_param_t &param,
                         int num_pages, int width, int height, float ***img,
                         std::vector<motion_t> motion, motion_range_t range, int *num_out)
@@ -205,6 +257,7 @@ float ***extract_signal(signal_param_t &param,
     const int period = param.period;
     const int patch_size = param.patch_size;
     const int patch_offset = param.patch_offset;
+    const float temp_stdev = param.freq_max <= 0 ? 0 : param.frames_per_sec / (M_PI * param.freq_max);
 
     const int down = downsample ? 2 : 1;
     const int w_start = (int)ceil(range.min_x < 0 ? -range.min_x / down : 0);
@@ -249,7 +302,7 @@ float ***extract_signal(signal_param_t &param,
         if(end_frame > num_pages) end_frame = num_pages;
         for(int f = start_frame; f < end_frame; f++)
         {
-            if(motion[f].valid) frames.push_back(f);
+            if(motion[f].valid) frames.push_back(f - start_frame);
         }
         if((int)frames.size() < period / 2)
 	    {
@@ -257,7 +310,10 @@ float ***extract_signal(signal_param_t &param,
 	                (int)frames.size(), start_frame);
 	        continue; // out[k] is all zero
 	    }
-   
+
+        float ***buf = temporal_filter(start_frame, end_frame,
+                                       num_pages, width, height, img, temp_stdev);
+
         // below cannot be parallelized as-is because destination out[][][]
         // overlaps due to overlapping patches
         // need to separate it into multiple sets of non-overlapping patches
@@ -265,7 +321,7 @@ float ***extract_signal(signal_param_t &param,
 	    for(int i = w_start; i <= w_end - patch_size; i += patch_offset)
 	    for(int j = h_start; j <= h_end - patch_size; j += patch_offset)
 	    {
-	        float **pc = compute_principal_component(frames, i, j, patch_size, img,
+	        float **pc = compute_principal_component(frames, i, j, patch_size, buf,
 	                                                 normalize, downsample);
 	        if(downsample)
 	        {
@@ -282,6 +338,7 @@ float ***extract_signal(signal_param_t &param,
 	            
 	        free_float2d(pc);
 	    }
+	    free_float3d(buf);
 	    
 	    for(int i = 0; i < width; i++)
 	    for(int j = 0; j < height; j++)
