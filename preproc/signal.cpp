@@ -3,12 +3,14 @@
 #include <string.h>
 #include <math.h>
 #include <vector>
+#include <algorithm>
 #include "malloc_util.h"
 #include "signal.h"
 
 
 void recursive_gauss_set_filter(float stdev, float *c);
-void recursive_gauss_apply_filter(float *c, int n, float *dat);//, float *buf);
+void recursive_gauss_apply_filter(float *c, int n, float *dat);
+void recursive_gauss_apply_filter2d(float *c, float stdev, int w, int h, float **dat);
 
 
 static float **compute_principal_component(std::vector<int> frames, int x, int y, int size, float ***img,
@@ -252,13 +254,15 @@ float ***extract_signal(signal_param_t &param,
                         std::vector<motion_t> motion, motion_range_t range, int *num_out)
 
 {
-    const bool normalize = param.normalize;
-    const bool downsample = param.downsample;
+    const int method = param.method;
     const int period = param.period;
+    const bool normalize = param.normalize;
+    const bool downsample = param.downsample && method == 0;
     const int patch_size = param.patch_size;
     const int patch_offset = param.patch_offset;
     const float temp_stdev = param.freq_max <= 0 ? 0 : param.frames_per_sec / (M_PI * param.freq_max);
-
+    const float space_stdev = param.smooth_scale;
+    
     const int down = downsample ? 2 : 1;
     const int w_start = (int)ceil(range.min_x < 0 ? -range.min_x / down : 0);
     const int w_end = width / down - (int)ceil(range.max_x > 0 ? range.max_x / down : 0);
@@ -314,37 +318,65 @@ float ***extract_signal(signal_param_t &param,
         float ***buf = temporal_filter(start_frame, end_frame,
                                        num_pages, width, height, img, temp_stdev);
 
-        // below cannot be parallelized as-is because destination out[][][]
-        // overlaps due to overlapping patches
-        // need to separate it into multiple sets of non-overlapping patches
-        //#pragma omp parallel for
-	    for(int i = w_start; i <= w_end - patch_size; i += patch_offset)
-	    for(int j = h_start; j <= h_end - patch_size; j += patch_offset)
-	    {
-	        float **pc = compute_principal_component(frames, i, j, patch_size, buf,
-	                                                 normalize, downsample);
-	        if(downsample)
-	        {
-	            upsample2x2(patch_size, pc, out[k], i, j);
-	        }
-	        else
-	        {
-	            for(int u = 0; u < patch_size; u++)
-	            for(int v = 0; v < patch_size; v++)
-	            {
-	                out[k][i + u][j + v] += fabsf(pc[u][v]);
-	            }
-	        }
-	            
-	        free_float2d(pc);
-	    }
-	    free_float3d(buf);
-	    
-	    for(int i = 0; i < width; i++)
-	    for(int j = 0; j < height; j++)
-	    {
-	        if(cnt[i][j] > 0) out[k][i][j] /= cnt[i][j];
-	    }
+        if(method == 0) // PCA
+        {
+            // below cannot be parallelized as-is because destination out[][][]
+            // overlaps due to overlapping patches
+            // need to separate it into multiple sets of non-overlapping patches
+            //#pragma omp parallel for
+            for(int i = w_start; i <= w_end - patch_size; i += patch_offset)
+            for(int j = h_start; j <= h_end - patch_size; j += patch_offset)
+            {
+                float **pc = compute_principal_component(frames, i, j, patch_size, buf,
+                                                         normalize, downsample);
+                if(downsample)
+                {
+                    upsample2x2(patch_size, pc, out[k], i, j);
+                }
+                else
+                {
+                    for(int u = 0; u < patch_size; u++)
+                    for(int v = 0; v < patch_size; v++)
+                    {
+                        out[k][i + u][j + v] += fabsf(pc[u][v]);
+                    }
+                }
+                
+                free_float2d(pc);
+            }
+
+            for(int i = 0; i < width; i++)
+            for(int j = 0; j < height; j++)
+            {
+                if(cnt[i][j] > 0) out[k][i][j] /= cnt[i][j];
+            }
+        }
+        else // max-median
+        {
+            float c[4];
+            recursive_gauss_set_filter(space_stdev, c);
+            for(auto f : frames)
+            {
+                recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
+            }
+            const size_t m = frames.size() / 2;
+            for(int i = w_start; i < w_end; i++)
+            for(int j = h_start; j < h_end; j++)
+            {
+                std::vector<float> v;
+                float max = 0;
+                for(auto f : frames)
+                {
+                    float val = buf[f][i][j];
+                    v.push_back(val);
+                    if(max < val) max = val;
+                }
+                std::nth_element(v.begin(), v.begin() + m, v.end());
+                out[k][i][j] = max - v[m];
+            }
+        }
+        
+        free_float3d(buf);
 	}
 
     free_float2d(cnt);
@@ -352,5 +384,4 @@ float ***extract_signal(signal_param_t &param,
     *num_out = n;
     return out;
 }
-
 

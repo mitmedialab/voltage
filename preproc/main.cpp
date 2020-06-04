@@ -11,6 +11,10 @@
 #include "signal.h"
 
 
+#define OPTCMP1(opt) (strcmp(argv[n], opt) == 0)
+#define OPTCMP2(opt) (strcmp(argv[n], opt) == 0 && n+1 < argc)
+
+
 static void print_help(char *command, float frames_per_sec,
                        motion_param_t  &motion_param,
                        shading_param_t &shading_param,
@@ -39,10 +43,12 @@ static void print_help(char *command, float frames_per_sec,
     printf("  -bt <float>: threshold (%.1f)\n", blood_param.thresh);
     printf("\n");
     printf("  signal extraction parameters\n");
+    printf("  -sm <int>  : method PCA=0, max-median=1 (%d)\n", signal_param.method);
     printf("  -sw <int>  : window length (%d frames)\n", signal_param.period);
-    printf("  -sp <int>  : patch size (%d pixels)\n", signal_param.patch_size);
-    printf("  -so <int>  : patch offset (%d pixels)\n", signal_param.patch_offset);
     printf("  -sc <float>: cutoff frequency (%.1f Hz)\n", signal_param.freq_max);
+    printf("  -sp <int>  : PCA patch size (%d pixels)\n", signal_param.patch_size);
+    printf("  -so <int>  : PCA patch offset (%d pixels)\n", signal_param.patch_offset);
+    printf("  -ss <float>: max-median spatial smoothing (%.1f pixels)\n", signal_param.smooth_scale);
     exit(0);
 }
 
@@ -71,12 +77,14 @@ int main(int argc, char *argv[])
     blood_param.thresh = 0.9;
 
     signal_param_t signal_param;
+    signal_param.method = 0;
+    signal_param.period = 100;
+    signal_param.freq_max = 100.0;
     signal_param.normalize = false;
     signal_param.downsample = true;
-    signal_param.period = 100;
     signal_param.patch_size = 8;
     signal_param.patch_offset = 1;
-    signal_param.freq_max = 100.0;
+    signal_param.smooth_scale = 2.0;
 
     bool skip_shading_correction = false;
     bool skip_blood_suppression = false;
@@ -87,21 +95,23 @@ int main(int argc, char *argv[])
     int m = 0;
     while(n < argc)
     {
-        if(     strcmp(argv[n], "-ds") == 0) { skip_shading_correction = true; n++; }
-        else if(strcmp(argv[n], "-db") == 0) { skip_blood_suppression = true; n++; }
-        else if(strcmp(argv[n], "-fr") == 0) { frames_per_sec = (float)atof(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-ms") == 0) { motion_param.search_size  = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-mp") == 0) { motion_param.patch_size   = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-mo") == 0) { motion_param.patch_offset = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-hw") == 0) { shading_param.period = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-bw") == 0) { blood_param.period = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-bl") == 0) { blood_param.freq_min = (float)atof(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-bh") == 0) { blood_param.freq_max = (float)atof(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-bt") == 0) { blood_param.thresh = (float)atof(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-sw") == 0) { signal_param.period = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-sp") == 0) { signal_param.patch_size = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-so") == 0) { signal_param.patch_offset = atoi(argv[n+1]); n+=2; }
-        else if(strcmp(argv[n], "-sc") == 0) { signal_param.freq_max = (float)atof(argv[n+1]); n+=2; }
+        if(     OPTCMP1("-ds")) { skip_shading_correction = true; n++; }
+        else if(OPTCMP1("-db")) { skip_blood_suppression = true; n++; }
+        else if(OPTCMP2("-fr")) { frames_per_sec = (float)atof(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-ms")) { motion_param.search_size  = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-mp")) { motion_param.patch_size   = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-mo")) { motion_param.patch_offset = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-hw")) { shading_param.period = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-bw")) { blood_param.period = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-bl")) { blood_param.freq_min = (float)atof(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-bh")) { blood_param.freq_max = (float)atof(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-bt")) { blood_param.thresh = (float)atof(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-sm")) { signal_param.method = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-sw")) { signal_param.period = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-sc")) { signal_param.freq_max = (float)atof(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-sp")) { signal_param.patch_size = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-so")) { signal_param.patch_offset = atoi(argv[n+1]); n+=2; }
+        else if(OPTCMP2("-ss")) { signal_param.smooth_scale = (float)atof(argv[n+1]); n+=2; }
         else if(m == 0) { strcpy(in_file,  argv[n]); n++; m++; }
         else if(m == 1) { strcpy(out_path, argv[n]); n++; m++; }
         else { m = 0; break; }
