@@ -284,7 +284,7 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
         m.corr = 0;
         m.valid = true;
         motion_list.push_back(m);
-        fprintf(fp, "0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0\n");
+        fprintf(fp, "0 0 0 0 0 0 0 0 0 0 1 1 1\n");
     }
         
 	for(int i = 1; i < num_pages; i++)
@@ -345,6 +345,76 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
 	fclose(fp);
     
     free_float2d(out);
+    
+    range.min_x = min_x;
+    range.max_x = max_x;
+    range.min_y = min_y;
+    range.max_y = max_y;
+    return motion_list;
+}
+
+std::vector<motion_t> read_motion_file(char *filename, int num_frames, motion_range_t &range)
+{
+    std::vector<motion_t> motion_list;
+    
+    FILE *fp;
+    if((fp = fopen(filename, "rt")) == NULL)
+    {
+        fprintf(stderr, "failed to open: %s\n", filename);
+        return motion_list;
+    }
+    
+    float min_x = 0, max_x = 0, min_y = 0, max_y = 0;
+    char buf[512];
+    int expected_frame = 0;
+    while(fgets(buf, 512, fp) != NULL)
+    {
+        int frame;
+        float x, y, c, mx, my, mc, dx, dy, dc;
+        int vx, vy, vc;
+        if(sscanf(buf, "%d %f %f %f %f %f %f %f %f %f %d %d %d",
+                  &frame, &x, &y, &c, &mx, &my, &mc, &dx, &dy, &dc, &vx, &vy, &vc) == 13)
+        {
+            bool valid = (vx * vy * vc) > 0;
+            if(frame == expected_frame)
+            {
+                motion_t m;
+                m.x = x;
+                m.y = y;
+                m.corr = c;
+                m.valid = valid;
+                motion_list.push_back(m);
+            }
+            else
+            {
+                fprintf(stderr, "unexpected frame: %d\n", frame);
+                motion_list.clear();
+                break;
+            }
+            expected_frame++;
+            
+            if(frame == 0)
+            {
+                min_x = x;
+                max_x = x;
+                min_y = y;
+                max_y = y;
+            }
+            else if(valid)
+            {
+                if(min_x > x) min_x = x;
+                if(max_x < x) max_x = x;
+                if(min_y > y) min_y = y;
+                if(max_y < y) max_y = y;
+            }
+        }
+    }
+    
+    if(expected_frame != num_frames)
+    {
+        fprintf(stderr, "missing frames %d (%d frames expected)\n", expected_frame, num_frames);
+        motion_list.clear();
+    }
     
     range.min_x = min_x;
     range.max_x = max_x;

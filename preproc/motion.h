@@ -43,5 +43,8 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
                                      int num_pages, int width, int height, float ***img,
                                      motion_range_t &range);
 
+std::vector<motion_t> read_motion_file(char *filename, int num_frames, motion_range_t &range);
+
+
 #endif
 

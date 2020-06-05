@@ -23,8 +23,10 @@ static void print_help(char *command, float frames_per_sec,
 {
     printf("%s [options] in.tiff out_path\n", command);
     printf("\n");
-    printf("  -ds : disable shading correction\n");
-    printf("  -db : disable blood suppression\n");
+    printf("  -dm <path>: disable motion correction (motion file required)\n");
+    printf("  -dh       : disable shading correction\n");
+    printf("  -db       : disable blood suppression\n");
+    printf("  -ds       : disable signal extraction\n");
     printf("\n");
     printf("  -fr <float>: frame rate (%.1f Hz)\n", frames_per_sec);
     printf("\n");
@@ -86,17 +88,22 @@ int main(int argc, char *argv[])
     signal_param.patch_offset = 1;
     signal_param.smooth_scale = 2.0;
 
+    bool skip_motion_correction = false;
     bool skip_shading_correction = false;
     bool skip_blood_suppression = false;
+    bool skip_signal_extraction = false;
     float frames_per_sec = 1000.0;
 
     char in_file[512], out_path[512];
+    char motion_file[512];
     int n = 1;
     int m = 0;
     while(n < argc)
     {
-        if(     OPTCMP1("-ds")) { skip_shading_correction = true; n++; }
+        if(OPTCMP2("-dm")) { skip_motion_correction = true; strcpy(motion_file, argv[n+1]); n+=2; }
+        else if(OPTCMP1("-dh")) { skip_shading_correction = true; n++; }
         else if(OPTCMP1("-db")) { skip_blood_suppression = true; n++; }
+        else if(OPTCMP1("-ds")) { skip_signal_extraction = true; n++; }
         else if(OPTCMP2("-fr")) { frames_per_sec = (float)atof(argv[n+1]); n+=2; }
         else if(OPTCMP2("-ms")) { motion_param.search_size  = atoi(argv[n+1]); n+=2; }
         else if(OPTCMP2("-mp")) { motion_param.patch_size   = atoi(argv[n+1]); n+=2; }
@@ -133,19 +140,28 @@ int main(int argc, char *argv[])
 	if(img == NULL) exit(1);
 	delete tu;
 
-    // hack: eliminate black line at the bottom
-	for(int i = 0; i < t; i++)
-	{
-	    for(int j = 0; j < w; j++) img[i][j][h-1] = img[i][j][h-2];
-	}
-
-    normalize_intensity(t, w, h, img);
-
-    tu = new TimerUtil("motion correction");
+    std::vector<motion_t> motion_list;
     motion_range_t range;
-	std::vector<motion_t> motion_list = correct_motion(motion_param, t, w, h, img, range);
-	if(motion_list.empty()) exit(1);
-	delete tu;
+    if(skip_motion_correction)
+    {
+        printf("motion correction skipped\n");
+        motion_list = read_motion_file(motion_file, t, range);
+    }
+    else
+    {
+        // hack: eliminate black line at the bottom
+	    for(int i = 0; i < t; i++)
+	    {
+	        for(int j = 0; j < w; j++) img[i][j][h-1] = img[i][j][h-2];
+	    }
+
+        normalize_intensity(t, w, h, img);
+
+        tu = new TimerUtil("motion correction");
+	    motion_list = correct_motion(motion_param, t, w, h, img, range);
+	    delete tu;
+    }
+    if(motion_list.empty()) exit(1);
     printf("(x, y) in [%.1f, %.1f] x [%.1f, %.1f]\n",
            range.min_x, range.max_x, range.min_y, range.max_y);
 
@@ -172,26 +188,44 @@ int main(int argc, char *argv[])
         delete tu;
     }
     
-    tu = new TimerUtil("signal extraction");
-    int num_out;
-    float ***out = extract_signal(signal_param, t, w, h, img, motion_list, range, &num_out);
-    delete tu;
+    int num_out = 0;
+    float ***out = NULL;
+    if(skip_signal_extraction)
+    {
+        printf("signal extraction skipped\n");
+    }
+    else
+    {
+        tu = new TimerUtil("signal extraction");
+        out = extract_signal(signal_param, t, w, h, img, motion_list, range, &num_out);
+        delete tu;
+    }
     
     tu = new TimerUtil("saving tiff");
     char out_file[512];
-    sprintf(out_file, "%s/corrected.tif", out_path);
-    bool ret_c = write_tiff(out_file, t, w, h, img);
-
-    sprintf(out_file, "%s/blood.tif", out_path);
-    bool ret_b = skip_blood_suppression || write_tiff(out_file, 3 + blood_param.period / 2, w, h, bld);
-
-    sprintf(out_file, "%s/signal.tif", out_path);
-    bool ret_s = write_tiff(out_file, num_out, w, h, out);
+    bool ret_c = true, ret_b = true, ret_s = true;
+    if(!skip_motion_correction || !skip_shading_correction || !skip_blood_suppression)
+    {
+        sprintf(out_file, "%s/corrected.tif", out_path);
+        ret_c = write_tiff(out_file, t, w, h, img);
+    }
+    
+    if(!skip_blood_suppression)
+    {
+        sprintf(out_file, "%s/blood.tif", out_path);
+        ret_b = write_tiff(out_file, 3 + blood_param.period / 2, w, h, bld);
+    }
+    
+    if(!skip_signal_extraction)
+    {
+        sprintf(out_file, "%s/signal.tif", out_path);
+        ret_s = write_tiff(out_file, num_out, w, h, out);
+    }
     delete tu;
     
     free_float3d(img);
     if(bld != NULL) free_float3d(bld);
-    free_float3d(out);
+    if(out != NULL) free_float3d(out);
     return (ret_c && ret_b && ret_s) ? 0 : 1;
 }
 
