@@ -136,6 +136,9 @@ static float **compute_principal_component(std::vector<int> frames, int x, int y
             trace += data[j][i] * data[j][i];
         }
     }
+    // subtracting the average eigenval (lower bound for the largest eigenval)
+    // didn't help either, as the average is smaller by an order of magnitude
+    const double eigen_avg = trace / c;
 */    
     float **out = malloc_float2d(size, size);
     for(int i = 0; i < size; i++)
