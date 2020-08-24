@@ -9,7 +9,7 @@
 #define BYTESPERPIXEL 1
 
 typedef struct param_list {
-	int is_motion_correction;
+    int is_motion_correction;
     int level;
     int search_size;
     int patch_size;
@@ -27,15 +27,26 @@ typedef struct param_list {
 
 typedef struct preprocess_params {
 
-	bool is_motion_correction;
-	motion_param_t mp;
+    bool is_motion_correction;
+    motion_param_t mp;
 
 } preprocess_params;
 
+inline float* loc3D(float *img, int t, int h, int w, int k, int i, int j)
+{
+    return img + ((k * h * w) + (i * w) + j) * BYTESPERPIXEL;   
+}
 
-float* loc3D(float *img, int t, int w, int h, int k, int i, int j);
-float* loc2D(float *img, int w, int h, int i, int j);
-double* loc2D(double *img, int h, int w, int i, int j);
+inline float* loc2D(float *img, int h, int w, int i, int j)
+{
+    return img + ((i * w) + j) * BYTESPERPIXEL; 
+}
+
+inline double* loc2D(double *img, int h, int w, int i, int j)
+{
+    return img + ((i * w) + j) * BYTESPERPIXEL; 
+}
+
 void* populate_parameters(void* allparams);
 float* vol_preprocess(int t, int w, int h, float *img, void* allparams);
 

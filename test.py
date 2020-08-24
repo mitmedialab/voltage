@@ -1,6 +1,7 @@
 import tifffile as tiff
 import preprocess
 import time
+import sys
 mp = {}
 mp['level']=2
 mp['search_size']=3
@@ -15,14 +16,12 @@ mp['length']=2000
 mp['thresh_c']=0.4
 mp['is_motion_correction'] = 1
 # A = tiff.imread('/u/ramdas/Voltage_Imaging/Training_data/OldData/holder/WholeTifs/018.tif')
-A = tiff.imread('sample.tif')
+A = tiff.imread(sys.argv[1])
 A = A.astype('float32')
-# A = A - A.min()
-A = A / A.max()
-tiff.imsave('input.tif', A)
+#tiff.imsave('input.tif', A)
 tic = time.time()
 B = preprocess.preprocess(A, mp)
 toc = time.time()
 print(B.shape)
-tiff.imsave('test.tif', B)
+#tiff.imsave('test.tif', B)
 print("End of program:", round((toc-tic), 2))

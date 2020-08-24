@@ -1,19 +1,27 @@
 MODULES	  := . kalman
-INCLUDES  := $(addprefix -I,$(MODULES))
+INCLUDES  := $(addprefix -I,$(MODULES)) -I /u/ramdas/libs/Tracing/lib_test/
 
-CXX       = nvcc
-CXXFLAGS  = -g -std=c++11 $(INCLUDES) 
+CXX       = g++
+CXXFLAGS  = -O3 -std=c++11 $(INCLUDES) 
 
-LDFLAGS   = -Xcompiler -fopenmp 
-LDLIBS    = -lgomp -lm -lpthread -llzma -ljbig -ljpeg -lz
+LDFLAGS   = -fopenmp -L /u/ramdas/libs/Tracing/lib_test/
+LDLIBS    = -lgomp -lm -lpthread -llzma -ljbig -ljpeg -lz -ltrace
 
 default: libpreprocess.a
 
 libpreprocess.a:  fft2d/fftsg.o kalman/KalmanFilter.o motion.o wrapper.o
 	ar rcs $@ $^ 
 
+.c.o:
+	${CXX} -c -fPIC ${CXXFLAGS} ${LDFLAGS} $< ${LDLIBS} -o $@
+
+
 .cpp.o:
-	${CXX} -c -Xcompiler -fPIC ${CXXFLAGS} ${LDFLAGS} $< ${LDLIBS}
+	${CXX} -c -fPIC ${CXXFLAGS} ${LDFLAGS} $< ${LDLIBS} -o $@
+
+.cu.o:
+	${CXX} -c -fPIC ${CXXFLAGS} ${LDFLAGS} $< ${LDLIBS} -o $@
+
 
 clean:
 	rm *.o *.a
