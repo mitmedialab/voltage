@@ -1,0 +1,554 @@
+{
+    "000": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/000.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "001": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/001.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "002": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/002.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "003": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/003.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "004": {
+        "expected_neurons": 3,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/004.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "005": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/005.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "006": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/006.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "007": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/007.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "008": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/008.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "009": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/009.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "010": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/010.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "011": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/011.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "012": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/012.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "013": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/013.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "014": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/014.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "015": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/015.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "016": {
+        "expected_neurons": 14,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/016.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "017": {
+        "expected_neurons": 4,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/017.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "018": {
+        "expected_neurons": 4,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/018.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "019": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/019.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "020": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/020.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "021": {
+        "expected_neurons": 4,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/021.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "022": {
+        "expected_neurons": 3,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/022.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "023": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/023.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "024": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/024.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "025": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/025.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "026": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/026.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "027": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/027.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "028": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/028.tif",
+        "is_motion_correction": 1,
+        "magnification": 20,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 15,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "029": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/029.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "030": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/030.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "031": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/031.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "032": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/032.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "033": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/033.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "034": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/034.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "035": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/035.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "036": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/036.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "037": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/037.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "038": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/038.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "039": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/039.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "040": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/040.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "041": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/041.tif",
+        "is_motion_correction": 1,
+        "magnification": 40,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 20,
+            "search_size": 4
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "042": {
+        "expected_neurons": 1,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/042.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "043": {
+        "expected_neurons": 3,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/043.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "044": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/044.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    },
+    "045": {
+        "expected_neurons": 2,
+        "filename": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/045.tif",
+        "is_motion_correction": 1,
+        "magnification": 16,
+        "motion_correction": {
+            "patch_offset": 7,
+            "patch_size": 10,
+            "search_size": 3
+        },
+        "output_path": "/home/ramdas/Documents/Voltage_Imaging/Output/"
+    }
+}

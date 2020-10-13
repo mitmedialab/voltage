@@ -2,25 +2,30 @@
 
 
 ## Directory Structure
-* preproc   : preprocessing (motion/shading correction and spike extraction)
-* segment   : segmentation of cells
-* demix     : demixing of voltage traces of individual cells
-* simulation: synthetic data generation
-* pipeline  : pipeline script
-* lib       : libraries
+* lib   : preprocessing (motion correction and U-Net preprocessing)
 
 ## How to Run
 
-$ cd lib/tiff-4.1.0_mod  
-$ ./configure  
-$ make  
-$ cd ../../preproc  
-$ make  
-$ ./main <input_tiff> <output_path>
+#### Build the pre-processing library
+```bash
+bash build.sh
+```
 
-The preprocessing results will be
-* <output_path>/corrected.tif: motion/shading corrected video
-* <output_path>/signal.tif: extracted signal (spikes)
-* ./motion.dat: motion estimation result
+#### Running the pipeline
 
-Building tiff-4.1.0_mod allows much faster saving of multipage tiffs, but one could also use standard libtiff instead.
+Make sure to update the `file_params.txt` accordingly.
+
+To execute in file mode:
+```bash
+python pipeline --file <tag>
+
+#Example
+python pipeline --file 018
+```
+
+To execute in batch mode:
+
+```bash
+python pipeline --batch
+```
+The results will be stored as per the paths set in `file_params.txt`.
