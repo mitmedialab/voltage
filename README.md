@@ -47,6 +47,9 @@ pip install nvgpu --progress-bar off
 
 # Install cython
 conda install -y -q -c anaconda cython
+
+# Install Jupyter Notebook
+conda install -c conda-forge notebook
 ```
 
 ## How to Run
