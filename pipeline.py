@@ -18,7 +18,7 @@ import ray
 import nvgpu
 from prettytable import PrettyTable
 
-WEIGHT_PATH = '/home/ramdas/Documents/Voltage_Imaging/BestLoss_single_gpu.hdf5'
+
 x = PrettyTable()
 x.title = 'File run information'
 x.field_names = ['Time', 'File tag', 'File read', 'Preprocess', 'U-Net', 'Demix', 'Total']
@@ -35,7 +35,7 @@ def printd(*args, **kwargs):
     s = " ".join(str(item) for item in args)
     print('[' + str(datetime.datetime.now())[:-3] + '] ' + s)
 
-def segment_data(data, rd):
+def segment_data(data, weight_path, rd):
     import tensorflow as tf
     from model import initialize_unet
     import os
@@ -44,7 +44,7 @@ def segment_data(data, rd):
     tf.Session(config = session_config)
     print("\n\n\n\nData:", data.shape)
     model = initialize_unet()
-    model.load_weights(WEIGHT_PATH)
+    model.load_weights(weight_path)
     rd['ypred'] = model.predict(data)
 
 
@@ -81,23 +81,24 @@ def chunkIt(seqlen, num):
         last += avg
     return si, ei
 
-def process_file(param, gsize):
+def process_file(param, settings, gsize):
     tic_full = time.time()
     magnification = param['magnification']
     param['output_dimension'] = 128
-    fpath = param['filename']
+    fpath = settings['input_base_path'] + '/' + param['filename']
     fname = path_leaf(fpath)
 
-    outdir_mc = param['output_path'] + '/motion_corrected/'
-    outpath_mc = outdir_mc + fname
-    outdir_pre = param['output_path'] + '/preprocessed/'
-    outpath_pre = outdir_pre + fname
-    outdir_seg = param['output_path'] + '/segmented/'
-    outpath_seg = outdir_seg + fname
-    outdir_dmix = param['output_path'] + '/demixed/'
-    outpath_dmix_json = outdir_dmix + fname[:-4] + '.json'
-    outpath_dmix_mask = outdir_dmix + fname
-    outdir_eval = param['output_path'] + '/evaluated/'
+    outpath_base = settings['output_base_path'] + '/' + param['output_path'] + '/'
+    outdir_mc = outpath_base + settings['motion_correction_result_path']
+    outpath_mc = outdir_mc + '/' + fname
+    outdir_pre = outpath_base + settings['preprocessing_result_path']
+    outpath_pre = outdir_pre + '/' + fname
+    outdir_seg = outpath_base + settings['segmentation_result_path']
+    outpath_seg = outdir_seg + '/' + fname
+    outdir_dmix = outpath_base + settings['cell_demixing_result_path']
+    outpath_dmix_json = outdir_dmix + '/' + fname[:-4] + '.json'
+    outpath_dmix_mask = outdir_dmix + '/' + fname
+    outdir_eval = outpath_base + settings['evaluation_result_path']
 
     tic = time.time()
     file = tiff.imread(fpath).astype('float32')
@@ -170,9 +171,11 @@ def process_file(param, gsize):
         tic = time.time()
         
         print("Prediction")
+        num_gpus = settings['num_gpus']
+        weight_path = settings['weight_base_path'] + '/' + settings['weight_files'][num_gpus-1]
         manager = multiprocessing.Manager()
         return_dict = manager.dict()
-        p = multiprocessing.Process(target=segment_data, args=(preprocessed,return_dict))
+        p = multiprocessing.Process(target=segment_data, args=(preprocessed,weight_path,return_dict))
         p.start()
         p.join()
         ypred = return_dict['ypred']
@@ -226,11 +229,16 @@ parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument('--file',action='store',type=str)
 group.add_argument('--batch',action='store_true')
+parser.add_argument('--num-gpus',action='store',type=int,default=2)
 args = parser.parse_args()
 
 mode = 0
 gsize = get_minium_size_for_gpu()
 
+
+with open('settings.txt') as file:
+    settings = json.load(file)
+settings['num_gpus'] = args.num_gpus
 
 with open('file_params.txt') as file:
     params = json.load(file)
@@ -242,10 +250,10 @@ else:
 time_init = time.time() - tic
 tic = time.time()
 if(mode == 1):
-    process_file(params[args.file], gsize)
+    process_file(params[args.file], settings, gsize)
 else:
     for tag in params.keys():
-        process_file(params[tag], gsize)
+        process_file(params[tag], settings, gsize)
 time_total = time.time() - tic
 
 printd("\n\nTime init:", time_init)
