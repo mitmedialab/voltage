@@ -13,6 +13,7 @@ import numpy as np
 import gc
 from multiprocessing import Pool
 from cell_demix import demix_neurons
+from evaluate import evaluate_each
 import ray
 import nvgpu
 from prettytable import PrettyTable
@@ -96,6 +97,7 @@ def process_file(param, gsize):
     outdir_dmix = param['output_path'] + '/demixed/'
     outpath_dmix_json = outdir_dmix + fname[:-4] + '.json'
     outpath_dmix_mask = outdir_dmix + fname
+    outdir_eval = param['output_path'] + '/evaluated/'
 
     tic = time.time()
     file = tiff.imread(fpath).astype('float32')
@@ -213,6 +215,9 @@ def process_file(param, gsize):
     x.add_row([str(datetime.datetime.now()), fname, str(round(time_fileread, 2)), 
         str(round(time_preprocess, 2)), str(round(time_pred + time_postproc, 2)), str(round(time_demix, 2)), str(round(time_full, 2))])
 
+    if not os.path.exists(outdir_eval):
+        os.mkdir(outdir_eval)
+    evaluate_each(outdir_dmix, outdir_eval, fname[:-4])
 
 
 model = None
