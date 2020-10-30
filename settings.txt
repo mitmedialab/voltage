@@ -7,6 +7,10 @@
     "cell_demixing_result_path": "demixed",
     "evaluation_result_path": "evaluated",
     "weight_base_path": "/media/bandy/myraid0/ramdas/VI/Weights/",
-    "weight_files": ["BestLoss_1GPU.hdf5", "BestLoss_2GPU.hdf5"]
+    "weight_files": ["BestLoss_1GPU.hdf5", "BestLoss_2GPU.hdf5"],
+    "summary_image_dir": "/media/bandy/myraid0/ramdas/VI/SelectedData_v0.2/GT_comparison/MIP/",
+    "consensus_gt_dir": "/media/bandy/myraid0/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs_rev20201027/consensus/",
+    "individual_gt_dir": "/media/bandy/myraid0/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs/",
+    "individual_gt_ids": ["Atsushi", "Ram", "Bandy"]
 }
 
