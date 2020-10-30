@@ -13,7 +13,7 @@ import numpy as np
 import gc
 from multiprocessing import Pool
 from cell_demix import demix_neurons
-from evaluate import evaluate_each
+from evaluate import evaluate_each, evaluate_all
 import ray
 import nvgpu
 from prettytable import PrettyTable
@@ -254,6 +254,8 @@ if(mode == 1):
 else:
     for tag in params.keys():
         process_file(params[tag], settings, gsize)
+    outdir = settings['output_base_path'] + '/' + settings['evaluation_result_path']
+    evaluate_all(outdir)
 time_total = time.time() - tic
 
 printd("\n\nTime init:", time_init)

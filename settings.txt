@@ -11,6 +11,7 @@
     "summary_image_dir": "/media/bandy/myraid0/ramdas/VI/SelectedData_v0.2/GT_comparison/MIP/",
     "consensus_gt_dir": "/media/bandy/myraid0/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs_rev20201027/consensus/",
     "individual_gt_dir": "/media/bandy/myraid0/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs/",
-    "individual_gt_ids": ["Atsushi", "Ram", "Bandy"]
+    "individual_gt_ids": ["Atsushi", "Ram", "Bandy"],
+    "representative_iou": 0.4
 }
 

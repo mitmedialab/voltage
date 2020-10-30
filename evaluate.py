@@ -11,6 +11,9 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import maximum_bipartite_matching
 from scipy.linalg import block_diag
 import os
+import nbformat
+from nbconvert.preprocessors import ExecutePreprocessor
+from nbconvert import HTMLExporter
 
 
 
@@ -165,10 +168,6 @@ def calc_f1_scores(counts):
 
 
 def evaluate_each(outdir_demix, outdir_eval, basename):
-    import nbformat
-    from nbconvert.preprocessors import ExecutePreprocessor
-    from nbconvert import HTMLExporter
-    
     with open('evaluate_each.ipynb') as f:
         data = f.read()
     data = data.replace('@@@DEMIX_DIR', outdir_demix)
@@ -185,5 +184,21 @@ def evaluate_each(outdir_demix, outdir_eval, basename):
     he.template_name = 'classic'
     (body, resources) = he.from_notebook_node(nb)
     with open(outdir_eval + '/' + basename + '.html', 'w', encoding='utf-8') as f:
+        f.write(body)
+
+
+def evaluate_all(outdir):
+    with open('evaluate_all.ipynb') as f:
+        nb = nbformat.read(f, nbformat.NO_CONVERT)
+    
+    ep = ExecutePreprocessor(timeout=None)
+    ep.preprocess(nb)
+    with open(outdir + '/all.ipynb', 'w', encoding='utf-8') as f:
+        nbformat.write(nb, f)
+
+    he = HTMLExporter()
+    he.template_name = 'classic'
+    (body, resources) = he.from_notebook_node(nb)
+    with open(outdir + '/all.html', 'w', encoding='utf-8') as f:
         f.write(body)
 
