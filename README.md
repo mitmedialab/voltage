@@ -61,7 +61,7 @@ bash build.sh
 
 #### Running the pipeline
 
-Make sure to update the `file_params.txt` accordingly.
+Make sure to update the `settings.txt` (global settings) and `file_params.txt` (file-specific parameters) accordingly.
 
 To execute in file mode:
 ```bash
@@ -76,4 +76,15 @@ To execute in batch mode:
 ```bash
 python pipeline --batch
 ```
-The results will be stored as per the paths set in `file_params.txt`.
+
+The pipeline script assumes two GPUs. To run with a single GPU, replace the following line
+```
+@ray.remote(num_gpus=2)
+```
+
+with `num_gpus=1`, and use `--num-gpus` option as:
+```bash
+python pipeline --batch --num-gpus 1
+```
+
+The results will be stored as per the paths set in `settings.txt` and `file_params.txt`.
