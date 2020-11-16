@@ -16,22 +16,17 @@
 #include <thrust/random.h>
 #include <thrust/generate.h>
 #include <thrust/detail/type_traits.h>
+#include <stdexcept>
 
 #define checkCudaErrors(func) {                                        \
     cudaError_t error = func;                                          \
-    if (error != 0) {                                                  \
+    if (error != 0) {                                                   \
+        throw std::runtime_error(std::string("Cuda failure Error") );     \
         printf("%s-%s(%d): Cuda failure Error: %s\n", __FILE__, __func__, __LINE__, cudaGetErrorString(error));  \
         fflush(stdout);                                                 \
     }                                                                  \
 }
 
-#define checkCudaErrorsGlobal {                                        \
-    cudaError_t error = cudaGetLastError();                                          \
-    if (error != 0) {                                                  \
-        printf("%s-%s(%d): Cuda failure Error: %s\n", __FILE__, __func__, __LINE__, cudaGetErrorString(error));  \
-        fflush(stdout);                                                 \
-    }                                                                  \
-}
 
 __forceinline__ __device__
 float* gloc3D(float *img, int t, int h, int w, int k, int i, int j)
@@ -102,8 +97,7 @@ void normalize_frames(float *img, int out_dim, float *min, float *max)
 
 float * preprocess_unet(motion_buffer_t *mbuf, int magnification, int *t_out, int out_dim)
 {
-	cudaSetDevice(1);
-	
+	cudaSetDevice(0);
 	
 	NppiSize isize = {.width = mbuf->w, .height = mbuf->h};
 	NppiRect iroi = {.x = 0, .y = 0, .width = mbuf->w, .height = mbuf->h};
@@ -141,7 +135,6 @@ float * preprocess_unet(motion_buffer_t *mbuf, int magnification, int *t_out, in
 		mask = NPP_MASK_SIZE_13_X_13;
 		median_window = 60;
 	}
-	checkCudaErrorsGlobal;
 	// CUDA pointer 
 
 	Npp8u *pDeviceBuffer;
@@ -157,11 +150,13 @@ float * preprocess_unet(motion_buffer_t *mbuf, int magnification, int *t_out, in
 		result = nppiFilterGaussBorder_32f_C1R (frame1, ipitch, isize, ioffset, frame2, opitch, osize, mask, NPP_BORDER_REPLICATE);	
 		if(result != 0) {
 			printf("[NPP Error] %s-%s(%d) Code: %d\n", __FILE__, __func__, __LINE__, result);
+			throw std::runtime_error(std::string("NPP failure Error") );
 		}
 
 		result = nppiMean_32f_C1R(frame2, opitch, osize, pDeviceBuffer, (Npp64f *)&mean_at_frame[i]);
 		if(result != 0) {
 			printf("[NPP Error] %s-%s(%d) Code: %d\n", __FILE__, __func__, __LINE__, result);
+			throw std::runtime_error(std::string("NPP failure Error") );
 		}
 
 		sub_from_frame<<<mbuf->h, mbuf->w>>>(frame2, mbuf->h, mbuf->w, &mean_at_frame[i]);
@@ -171,7 +166,6 @@ float * preprocess_unet(motion_buffer_t *mbuf, int magnification, int *t_out, in
 	*t_out = out_t - 2;
 	float *out = (float *) malloc(*t_out * out_dim * out_dim * 3 * sizeof(float));
 	dim3 HW(mbuf->h, mbuf->w);
-	checkCudaErrorsGlobal;
 	for(int i = 0; i < mbuf->w; ++i) {
 		transpose<<<mbuf->t, mbuf->h>>>(buf2, buf1, mbuf->t, mbuf->h, mbuf->w, i);
 	}
@@ -193,23 +187,22 @@ float * preprocess_unet(motion_buffer_t *mbuf, int magnification, int *t_out, in
 	Npp8u *pDeviceBuffer1;
 	nppiMeanGetBufferHostSize_32f_C1R(osizeminmax, &nBufferSize);
 	checkCudaErrors(cudaMalloc((void **)&pDeviceBuffer1, nBufferSize));
-	checkCudaErrorsGlobal;
 	for(int i = 0; i < *t_out; ++i) {
 		Npp32f *frame1 = (Npp32f *)loc3D_3C(buf1, *t_out, mbuf->h, mbuf->w, i, 0, 0);
 		Npp32f *frame2 = (Npp32f *)loc3D_3C(buf2, *t_out, out_dim, out_dim, i, 0, 0);
 		result = nppiResize_32f_C3R(frame1, ipitch, isize, iroi, frame2, opitch, osize, oroi, NPPI_INTER_LANCZOS);
 		if(result != 0) {
 			printf("[NPP Error] %s-%s(%d) Code: %d\n", __FILE__, __func__, __LINE__, result);
+			throw std::runtime_error(std::string("NPP failure Error") );
 		}
 		result = nppiMinMax_32f_C1R(frame2, opitch, osizeminmax, &min_at_frame[i], &max_at_frame[i], pDeviceBuffer1);
 		if(result != 0) {
 			printf("[NPP Error] %s-%s(%d) Code: %d\n", __FILE__, __func__, __LINE__, result);
+			throw std::runtime_error(std::string("NPP failure Error") );
 		}
 		normalize_frames<<<out_dim, out_dim>>>(frame2, out_dim, &min_at_frame[i], &max_at_frame[i]);
 	}
-	checkCudaErrorsGlobal;
 	cudaDeviceSynchronize();
-	printf("Done preprocess %lu %lu \n", (*t_out * out_dim * out_dim * 3 * sizeof(float)), mbuf->t * mbuf->w * mbuf->h * sizeof(float));
 	checkCudaErrors(cudaMemcpy(out, buf2, *t_out * out_dim * out_dim * 3 * sizeof(float), cudaMemcpyDeviceToHost));
 	cudaFree(mean_at_frame);
 	cudaFree(min_at_frame);
@@ -218,7 +211,6 @@ float * preprocess_unet(motion_buffer_t *mbuf, int magnification, int *t_out, in
 	cudaFree(pDeviceBuffer1);
 	cudaFree(buf1);
 	cudaFree(buf2);
-	cudaDeviceReset();
-	printf("Finished pre\n");
+	// cudaDeviceReset();
 	return out;
 }

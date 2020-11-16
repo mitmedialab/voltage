@@ -168,7 +168,7 @@ def calc_f1_scores(counts):
 
 
 def evaluate_each(outdir_demix, outdir_eval, basename):
-    with open('evaluate_each.ipynb') as f:
+    with open('python/evaluate_each.ipynb') as f:
         data = f.read()
     data = data.replace('@@@DEMIX_DIR', outdir_demix)
     data = data.replace('@@@EVAL_DIR',  outdir_eval)
@@ -188,7 +188,7 @@ def evaluate_each(outdir_demix, outdir_eval, basename):
 
 
 def evaluate_all(outdir):
-    with open('evaluate_all.ipynb') as f:
+    with open('python/evaluate_all.ipynb') as f:
         nb = nbformat.read(f, nbformat.NO_CONVERT)
     
     ep = ExecutePreprocessor(timeout=None)

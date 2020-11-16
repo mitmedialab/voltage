@@ -7,6 +7,7 @@
 #include "motion.hpp"
 #include <cuda_runtime_api.h>
 #include <cuda.h>
+#include <stdexcept>
 
 #include <thread>
 
@@ -14,7 +15,8 @@
 #define TGT_DIM  10
 #define checkCudaErrors(func) {                                        \
     cudaError_t error = func;                                          \
-    if (error != 0) {                                                  \
+    if (error != 0) {                                                   \
+        throw std::runtime_error(std::string("Cuda failure Error") );     \
         printf("%s-%s(%d): Cuda failure Error: %s\n", __FILE__, __func__, __LINE__, cudaGetErrorString(error));  \
         fflush(stdout);                                                 \
     }                                                                  \
@@ -659,22 +661,6 @@ void apply_motion(int w, int h, float *in, float x, float y, float *out)
 }
 
 
-// void process_gpu_threads(gpuMotionCorrect_t *gp)
-// {   
-//     cudaSetDevice(gp->gpu_device_id);
-
-//     for(int i = 0; i < gp->delta_t; i++) {
-//         float x = 0, y = 0;
-//         double c = estimate_motion(gp, loc3D(gp->in, gp->T, gp->H, gp->W, i, 0, 0), &x, &y);
-// #ifdef DEBUG
-//         if(i < 100)
-//             printf("[%d] C: %f, x %f , y %f\n", i, c, x, y);
-// #endif
-//         apply_motion<<<gp->H, gp->W>>>(gp->W, gp->H, loc3D(gp->in, gp->T, gp->H, gp->W, i, 0, 0), x, y, loc3D(gp->out, gp->T, gp->H, gp->W, i, 0, 0));
-//     }
-// }
-
-
 void process_gpu_threads(gpuMotionCorrect_t *gp)
 {   
     cudaSetDevice(gp->gpu_device_id);
@@ -748,7 +734,6 @@ void process_gpu_threads(gpuMotionCorrect_t *gp)
     cudaFree(gp->tgt_sum2);
     cudaFree(gp->narray);
 
-    // cudaDeviceSynchronize();
 }
 
 
@@ -776,6 +761,7 @@ float* correct_motion(motion_param_t &param, motion_buffer_t *mbuf)
     
     int gpu_n;
     checkCudaErrors(cudaGetDeviceCount(&gpu_n));
+    printf("Motion Correction GPU NUM %d\n", gpu_n);
     gpuMotionCorrect_t *gp = new gpuMotionCorrect_t[gpu_n];
 
     
@@ -783,8 +769,6 @@ float* correct_motion(motion_param_t &param, motion_buffer_t *mbuf)
     int *splits_timeframes = get_time_frame_splits(mbuf->t, gpu_n);
     gp[0].t_start = 0;
     mbuf->out = (float *) malloc (mbuf->t * mbuf->w * mbuf->h * sizeof(float));
-    // checkCudaErrors(cudaMallocHost((void **)&mbuf->out, mbuf->t * mbuf->w * mbuf->h * sizeof(float)));
-    // cudaMallocHost(
     memcpy(mbuf->out, mbuf->in, mbuf->h * mbuf->w * sizeof(float));
 
     for(int i = 0; i < gpu_n; ++i) {
@@ -804,10 +788,7 @@ float* correct_motion(motion_param_t &param, motion_buffer_t *mbuf)
         gp[i].t_end = gp[i].t_start + splits_timeframes[i];
         gp[0].t_start = 1;
         gp[i].delta_t = gp[i].t_end - gp[i].t_start;
-    // }
 
-    // for(int i = 0; i < gpu_n; ++i) {
-        // cudaSetDevice(i);
         
         threads[i] = std::thread(process_gpu_threads, &gp[i]);
     }
@@ -817,24 +798,6 @@ float* correct_motion(motion_param_t &param, motion_buffer_t *mbuf)
         th.join();
     }
 
-    // for(int i = 0; i < gpu_n; ++i) {
-    //     cudaSetDevice(i);
-    //     cudaFree(gp[i].in);
-    //     cudaFree(gp[i].ref_l1);
-    //     cudaFree(gp[i].ref_l0);
-    //     cudaFree(gp[i].ref);
-    //     cudaFree(gp[i].tgt_l1);
-    //     cudaFree(gp[i].tgt_l0);
-    //     cudaFree(gp[i].corr);
-    //     cudaFree(gp[i].corr_buf);
-    //     cudaFree(gp[i].ref_sum);
-    //     cudaFree(gp[i].ref_var);
-    //     cudaFree(gp[i].tgt_sum);
-    //     cudaFree(gp[i].tgt_sum2);
-    //     cudaFree(gp[i].narray);
-    //     cudaMemcpy(loc3D(mbuf->out, mbuf->t, mbuf->h, mbuf->w, gp[i].t_start, 0, 0), gp[i].out, gp[i].delta_t * mbuf->h * mbuf->w * sizeof(float), cudaMemcpyDeviceToHost);
-    // }
-    
     delete [] gp;
 
     return mbuf->out;

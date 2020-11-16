@@ -1,5 +1,5 @@
 import cython
-
+from cython.view cimport array as cvarray
 import numpy as np
 from libcpp.string cimport string
 from libcpp cimport map
@@ -36,7 +36,7 @@ ctypedef s_out_list out_preprocess
 
 cdef extern from "wrapper.hpp":
     void* populate_parameters(void* allparams)
-    void vol_preprocess(int t, int w, int h, float *img, void *allparams, void *out)
+    void vol_preprocess(int t, int w, int h, float *img, void *allparams, void *out) except +
 
 from libc.stdlib cimport free
 from cpython cimport PyObject, Py_INCREF
@@ -77,11 +77,13 @@ def preprocess(np.ndarray[np.float32_t, ndim=3] image, dict mp):
     vol_preprocess(t, h, w, &image[0,0,0], params, &out)
 
     # Get the CPP buffer to numpy format
-    cdef float[:,:,:] arr = <float [:t, :h, :w]>out.mc_out
+    cdef cvarray arr = <float [:t, :h, :w]>out.mc_out
+    arr.free_data = True
     mc_out = np.asarray(arr)
 
     # cdef float[:,:,:,:] arr1 = <float [:out.t_out, :lis.out_dim, :lis.out_dim, :3]>out.proc_out
-    cdef float[:,:,:,:] arr1 = <float [:out.t_out, :lis.out_dim, :lis.out_dim, :3]>out.proc_out
+    cdef cvarray arr1 = <float [:out.t_out, :lis.out_dim, :lis.out_dim, :3]>out.proc_out
+    arr1.free_data = True
     proc_out = np.asarray(arr1)
 
     free(lis)

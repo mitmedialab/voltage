@@ -3,11 +3,12 @@ import time
 import gc
 import numpy as np
 import cv2
-from multiprocessing import Pool
-from sklearn.decomposition import NMF
+import multiprocessing
 from skimage.morphology import convex_hull_image
 from copy import deepcopy
-import ray
+from postprocess import postprocess
+import nvgpu
+from joblib import Parallel, delayed
 
 ### Cleaning NMF data
 min_area = 30
@@ -19,13 +20,15 @@ class roi:
     def __init__(self, ID, Nid):
         self.ID = ID
         self.Nid = Nid
-
-    def assign(self, mask, idx, sig):
+    
+    def assign(self, mask, idx):
         self.mask = np.array(mask)
         self.idx = np.array(idx)
+    
+    def assign_sig(self, sig):
         self.sig = np.array(sig)
             
-@ray.remote
+
 def parallel_process_NMfout(ctr, Wblis, vid):
     rois = []
     nctr = 0
@@ -92,26 +95,62 @@ def parallel_process_NMfout(ctr, Wblis, vid):
                 image = image.astype('uint8')
 
                 fmask = image.astype('float32')
-                sig = []
-                for j in range(TIME_FRAMES):
-                    sig.append(cv2.multiply(fmask, vid[j]).sum())
-                sig = np.array(sig)/fmask.sum()
-
                 idx = np.array(np.where(image==1))
                 idx = idx.transpose((1,0))
 
-                r.assign(image, idx, sig)
+                r.assign(image, idx)
                 rois.append(r)
 
-    return rois  
+    return rois
 
-@ray.remote
-def compute_NMF(X, n, ypred):
-    model = NMF(n_components=n, init='random', random_state=0)
+def find_NMF_size_req(ns, nf, nc):
+    return int(np.ceil((2*ns*nf + 5*ns*nc + 6*nf*nc + 2*nc*nc + ns + nf + 6)/1000000.0))
+
+def get_NMF_runs(X, N):
+    s_req = find_NMF_size_req(X.shape[0], X.shape[1], N[-1])
+    
+    g_info = nvgpu.gpu_info()
+    ng = len(g_info)
+    s = []
+    for i in range(ng):
+        s.append(g_info[i]['mem_total'] - g_info[i]['mem_used'])
+
+    r = 0
+    run = {}
+    tN = N
+    while True:
+
+        if(len(tN) == 0):
+            break
+        nN = []
+        run[r] = []
+        rm = np.zeros(ng)
+        for i in range(ng):
+            rm[i] = s[i]
+        for i in range(len(tN)):
+            n = tN[i]
+            j = i % ng
+            if(s_req < rm[j]):
+                run[r].append((n, j))
+                rm[j] -= s_req
+            else:
+                nN.append(n)
+        tN = nN
+        r += 1
+    return run
+
+def compute_NMF(X, n, ypred, gpu_n):
+    import os
+    from nmf_wrapper import NMF
+    os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_n)
+    model = NMF(n_components=n, init='random', random_state=0, max_iter=500, method=1)
     W = model.fit_transform(X)
     Wb = W.transpose((1,0))
     Wb = np.reshape(Wb, (n, ypred.shape[1], ypred.shape[2]))
-    return Wb
+    return Wb, n
+
+def postprocess_NMF(file, frames):
+    return postprocess(file, frames)
 
 def demix_neurons(file, ypred, en):
     file = file - file.min()
@@ -123,29 +162,28 @@ def demix_neurons(file, ypred, en):
     
     Nbar = en
     if (Nbar < 5):
-        N = list(range(1, Nbar + 2))
+        N = list(range(max(1, Nbar-1), Nbar + 1))
     else:
-        N = list(range(Nbar-4, Nbar+6))
-    print(N)
+        N = list(range(Nbar-2, Nbar+2))
+    # Nbar = en
+    # if (Nbar < 5):
+    #     N = list(range(1, Nbar + 2))
+    # else:
+    #     N = list(range(Nbar-4, Nbar+6))
     tic = time.time()
-    # Wblis = []
-    # Xnew = []
-    # for n in N:
-    #     model = NMF(n_components=n, init='random', random_state=0)
-    #     W = model.fit_transform(X)
-    #     model.components_
-    #     Wb = W.transpose((1,0))
-    #     Wb = np.reshape(Wb, (n, ypred.shape[1], ypred.shape[2]))
-    #     Wblis.append(Wb)
-    #     Wn = model.inverse_transform(W)
-    #     Wn = Wn.transpose((1,0))
-    #     Wn = np.reshape(Wn, ypred.shape)
-    #     Xnew.append(Wn)
+    runs = get_NMF_runs(X, N)
+    Wblis = []
+    Wbd = {}
+    for r in runs:
+        Wblis = Parallel(n_jobs=len(runs[r]))(delayed(compute_NMF)(X, n, ypred, gpu_n) for n, gpu_n in runs[r])
+        for ret in Wblis:
+            Wbd[ret[1]] = ret[0]
+    Wblis = []
+    for n in N:
+        Wblis.append(Wbd[n])
+    print("NMF len:", len(Wblis), runs)
+    # Wblis = Parallel(n_jobs=len(N))(delayed(compute_NMF)(X, n, ypred, int(n%2)) for n in N)
     
-    X_id = ray.put(X)
-    ypred_id = ray.put(ypred)
-    ret = [compute_NMF.remote(X_id, n, ypred_id) for n in N]
-    Wblis = ray.get(ret)
     time_NMF = time.time() - tic
     print("Finished computing NMF")
 
@@ -154,14 +192,27 @@ def demix_neurons(file, ypred, en):
         return cv2.multiply(fmask, vid[x]).sum()
 
     tic = time.time()
-#     pool = Pool()
-#     NMFout = pool.map(parallel_process_NMfout, range(len(N)))
-#     pool.close()
-#     pool.terminate()
-    Wbid = ray.put(Wblis)
-    file_id = ray.put(file)
-    ret = [parallel_process_NMfout.remote(ctr, Wbid, file_id) for ctr in range(len(N))]
-    NMFout = ray.get(ret)
+
+    NMFout = []
+    for ctr in range(len(N)):
+        NMFout.append(parallel_process_NMfout(ctr, Wblis, file))
+    frames = []
+    for rs in NMFout:
+        for r in rs:
+            frames.append(r.mask)
+    frames = np.array(frames, dtype='float32')
+    if(len(frames) > 0):
+        sigs = postprocess_NMF(file, frames)
+    else:
+        print("No frames to process. No neuron detected after NMF!")
+        sigs = []
+    
+    idx = 0
+    for rs in NMFout:
+        for r in rs:
+            r.sig = sigs[idx]
+            idx += 1
+
     time_NMFProcess = time.time() - tic
     
     bkup = deepcopy(NMFout)
@@ -303,7 +354,8 @@ def demix_neurons(file, ypred, en):
     demix_data = {}
     demix_data['mask'] = img
     demix_data['info'] = neu_data
-    
+    demix_data['NMF_time'] = time_NMF
+    demix_data['NMFProcess_time'] = time_NMFProcess
     print("NMF:", time_NMF, "NMFProcess:", time_NMFProcess)
 
     return demix_data

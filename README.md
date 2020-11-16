@@ -13,6 +13,9 @@ Follow below steps to create the conda environment required to run the pipeline
 # Create conda environment
 conda create -n VI_base python=3.6
 
+# Activate the conda environment
+codna activate VI_base
+
 # Install sklearn
 conda install -y -q scikit-learn
 
@@ -49,12 +52,12 @@ pip install nvgpu --progress-bar off
 conda install -y -q -c anaconda cython
 
 # Install Jupyter Notebook
-conda install -c conda-forge notebook
+conda install -y -q jupyter
 ```
 
 ## How to Run
 
-#### Build the pre-processing library
+#### Build all the required libraries
 ```bash
 bash build.sh
 ```
@@ -65,26 +68,26 @@ Make sure to update the `settings.txt` (global settings) and `file_params.txt` (
 
 To execute in file mode:
 ```bash
-python pipeline --file <tag>
+python run_pipeline.py --file <tag>
 
 #Example
-python pipeline --file 018
+python run_pipeline.py --file 018
 ```
 
 To execute in batch mode:
 
 ```bash
-python pipeline --batch
+python run_pipeline.py --batch
 ```
 
-The pipeline script assumes two GPUs. To run with a single GPU, replace the following line
-```
-@ray.remote(num_gpus=2)
-```
-
-with `num_gpus=1`, and use `--num-gpus` option as:
+Optional parameters:
 ```bash
-python pipeline --batch --num-gpus 1
+# Optional Paramters:
+# --new-project (To create new execution log files and discard any previous timing information)
+# --motion-correct-only (To run only motion correction on all files)
+# --evaluate (If ground truth is available, we can evalute the performance using this paramter)
 ```
+
+The pipeline script requires at least 1 GPU and will map all available GPUs.
 
 The results will be stored as per the paths set in `settings.txt` and `file_params.txt`.

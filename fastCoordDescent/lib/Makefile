@@ -2,13 +2,13 @@ CXX       = nvcc
 CXXFLAGS  = -O3 -std=c++14
 
 LDFLAGS   = -Xcompiler -fopenmp
-LDLIBS    = -lgomp -lm -lpthread -lcudart -lnppif
+LDLIBS    = -lgomp -lm -lpthread -lcudart -lnppif -lcublas
 
-default: libpreprocess.a
+default: libfastCoordDescent.a
 
 .SUFFIXES: .c .cpp .cu .o
 
-libpreprocess.a:  motion.o wrapper.o pre_unet.o
+libfastCoordDescent.a:  coord_descent.o wrapper.o
 	ar rcs $@ $^ 
 
 .c.o:
@@ -23,4 +23,4 @@ libpreprocess.a:  motion.o wrapper.o pre_unet.o
 
 
 clean:
-	rm *.o *.a
+	rm -f *.o *.a
