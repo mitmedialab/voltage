@@ -1,6 +1,7 @@
 import time
 tic_init = time.time()
 import multiprocessing
+import h5py
 import tifffile as tiff
 import sys
 import ntpath
@@ -16,8 +17,9 @@ from multiprocessing import Pool
 from cell_demix import demix_neurons
 import nvgpu
 from preprocess import preprocess
-from evaluate import evaluate_each
-
+from file_helper import fread, fwrite
+from evaluate_each import get_f1_score
+import pathlib
 save_queue = queue.Queue()
 
 def path_leaf(path):
@@ -48,7 +50,7 @@ def parallel_save():
         file = save_queue.get()
         if(file is None):
             return
-        tiff.imsave(file['name'], file['data'])
+        fwrite(file['name'], file['data'])
 
 def chunkIt(seqlen, num):
     avg = seqlen / float(num)
@@ -73,9 +75,9 @@ class pipeline:
             params = json.load(file)
 
         self.param = params[tag]
-        self.fpath = self.param['filename']
-        self.fname = path_leaf(self.fpath)
-        self.tag = self.fname[:-4]
+        self.fpath = self.settings['input_base_path'] + '/' + self.param['filename']
+        self.fname = self.param['filename']
+        self.tag = tag
         self.outpath_base = self.settings['output_base_path'] + '/'
 
         self.mc_file = {}
@@ -92,11 +94,11 @@ class pipeline:
 
         self.dmix_file = {}
         self.dmix_file['path'] = self.outpath_base + self.settings['cell_demixing_result_path'] + '/'
-        self.dmix_file['json'] = self.dmix_file['path'] + tag + '.json'
+        self.dmix_file['json'] = self.dmix_file['path'] + pathlib.Path(self.fname).stem + '.json'
         self.dmix_file['mask'] = self.dmix_file['path'] + self.fname
 
         self.log_path = self.settings['output_base_path'] + '/' + self.settings['log_path'] + '/'
-        self.timing_file = self.log_path + 'file_timing.info'
+        self.execution_info_file = self.log_path + 'execution.info'
 
         self.eval_path = self.outpath_base + self.settings['evaluation_result_path'] + '/'
         self.eval_check_file = self.eval_path + self.fname
@@ -118,8 +120,6 @@ class pipeline:
         if not os.path.exists(self.eval_path):
             os.mkdir(self.eval_path)
 
-
-
         self.time_saving = 0
         self.time_preprocess = 0
         self.time_pred = 0
@@ -132,7 +132,7 @@ class pipeline:
             if(os.path.exists(self.seg_file['name'])):
                 self.run_segmentation = False
                 tic = time.time()
-                self.seg_file['data'] = tiff.imread(self.seg_file['name'])
+                self.seg_file['data'] = fread(self.seg_file['name'])
                 self.time_pred += time.time() - tic
             else:
                 self.run_segmentation = True
@@ -152,25 +152,25 @@ class pipeline:
             else:
                 self.run_demix = True
 
-            if(os.path.exists(self.eval_check_file)):
-                self.run_eval = False
-            else:
-                self.run_eval = True
-                
+        else:
+            self.run_demix = False
+            self.run_segmentation = False
+
+        self.run_eval = is_evaluate
 
 
         # Check existing preprocessed data
         if(os.path.exists(self.mc_file['name']) and os.path.exists(self.pre_file['name'])):
             self.run_preprocessing = False
             tic = time.time()
-            self.mc_file['data'] = tiff.imread(self.mc_file['name'])
-            self.pre_file['data'] = tiff.imread(self.pre_file['name'])
+            self.mc_file['data'] = fread(self.mc_file['name'])
+            self.pre_file['data'] = fread(self.pre_file['name'])
             self.T, self.H, self.W = self.mc_file['data'].shape
             self.time_preprocess += time.time() - tic
         else:
             self.run_preprocessing = True
             tic = time.time()
-            self.file = tiff.imread(self.param['filename']).astype('float32')
+            self.file = fread(self.fpath).astype('float32')
             self.time_fileread += time.time() - tic
             self.T, self.H, self.W = self.file.shape
 
@@ -246,7 +246,7 @@ class pipeline:
         if(self.run_segmentation):
             printd("Starting prediction")
             tic = time.time()
-            self.pred_q.put(self.pre_file['data'])
+            self.pred_q.put((self.pre_file['data'] * 255).astype('uint8'))
             self.pred_q.close()
             self.pred_q.join_thread()
             self.pred_proc.join()
@@ -269,28 +269,32 @@ class pipeline:
             demix_data = demix_neurons(self.mc_file['data'], self.seg_file['data'], self.param['expected_neurons'])
             with open(self.dmix_file['json'], "w") as write_file:
                 json.dump(demix_data['info'], write_file)
-            tiff.imsave(self.dmix_file['mask'], demix_data['mask']) 
+            fwrite(self.dmix_file['mask'], demix_data['mask']) 
             self.time_demix += time.time() - tic
 
-    def dump_timing_info(self):
-        timing_info = {}
-        timing_info['time'] = str(datetime.datetime.now())
-        timing_info['tag'] = self.fname
-        timing_info['info'] = 'T: ' + str("%5d" %self.T) + ' | H: ' + str("%3d" %self.H) + ' | W: ' + str("%3d" %self.W)
-        timing_info['file_read'] = str(round(self.time_fileread, 2))
-        timing_info['preprocess'] = str(round(self.time_preprocess, 2))
-        timing_info['prediction'] = str(round(self.time_pred, 2))
-        timing_info['demix'] = str(round(self.time_demix, 2))
-        timing_info['eval'] = str(round(self.time_eval, 2))
+    def dump_execution_info(self):
+        execution_info = {}
+        execution_info['time'] = str(datetime.datetime.now())
+        execution_info['tag'] = self.tag
+        execution_info['info'] = 'T: ' + str("%5d" %self.T) + ' | H: ' + str("%3d" %self.H) + ' | W: ' + str("%3d" %self.W)
+        execution_info['file_read'] = str(round(self.time_fileread, 2))
+        execution_info['preprocess'] = str(round(self.time_preprocess, 2))
+        execution_info['prediction'] = str(round(self.time_pred, 2))
+        execution_info['demix'] = str(round(self.time_demix, 2))
+        if(self.run_eval):
+            execution_info['eval'] = str(round(self.time_eval, 2))
+            execution_info['f1'] = str(round(self.f1_at_T, 2))
+
         time_full = time.time() - tic_init
-        timing_info['total'] = str(round(time_full, 2))
-        with open(self.timing_file, 'a+') as f:
-            f.write(json.dumps(timing_info) + '\n')
+        execution_info['total'] = str(round(time_full, 2))
+        with open(self.execution_info_file, 'a+') as f:
+            f.write(json.dumps(execution_info) + '\n')
 
     def evaluate(self):
         if(self.run_eval):
             tic = time.time()
-            evaluate_each(self.dmix_file['path'], self.eval_path, self.tag)
+            self.eval_info = get_f1_score(self.settings, self.fname)
+            self.f1_at_T = self.eval_info['consensus_f1'][np.where(self.eval_info['consensus_thresholds'] == 0.4)][0]
             self.time_eval += time.time() - tic
 
 
@@ -329,7 +333,7 @@ def main():
     if(is_evaluate):
         p.evaluate()
 
-    p.dump_timing_info()
+    p.dump_execution_info()
     save_queue.put(None)
     t.join()
 

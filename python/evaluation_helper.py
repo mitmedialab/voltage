@@ -4,7 +4,10 @@
 
 import numpy as np
 from read_roi import read_roi_zip, read_roi_file
+import pandas as pd
+import json
 import tifffile as tiff
+from scipy.ndimage import center_of_mass
 from skimage import draw as skdraw
 from skimage.segmentation import find_boundaries
 from scipy.sparse import csr_matrix
@@ -23,6 +26,7 @@ def roi2masks(roi_dict, image_shape):
         num_masks = 1
     mask_images = np.zeros((num_masks, ) + image_shape, dtype=bool)
     contour_image = np.zeros(image_shape, dtype=bool)
+    roi_idxs = []
     for i, key in enumerate(roi_dict):
         roi = roi_dict[key]
         r = np.array(roi['y'])
@@ -34,7 +38,10 @@ def roi2masks(roi_dict, image_shape):
         rr, cc = skdraw.polygon_perimeter(r, c, image_shape)
         contour_image[rr, cc] = True
 
-    return mask_images, contour_image
+        contour = find_boundaries(mask_images[i], mode='outer')
+        roi_idxs.append(np.where(contour == True))
+
+    return mask_images, contour_image, roi_idxs
 
 
 def roi2masks_from_demix_result(roi_dict, image_shape):
@@ -43,16 +50,18 @@ def roi2masks_from_demix_result(roi_dict, image_shape):
         num_masks = 1
     mask_images = np.zeros((num_masks, ) + image_shape, dtype=bool)
     contour_image = np.zeros(image_shape, dtype=bool)
+    roi_idxs = []
     for i, key in enumerate(roi_dict):
         roi = roi_dict[key]
-        c = np.array(roi['idxy'].strip('][').split(', '), dtype=int) # convert text string
-        r = np.array(roi['idxx'].strip('][').split(', '), dtype=int) # to a list of int
+        c = json.loads(roi['idxy'])
+        r = json.loads(roi['idxx'])
         mask_images[i][r, c] = True
 
         contour = find_boundaries(mask_images[i], mode='outer')
+        roi_idxs.append(np.where(contour == True))
         contour_image = np.logical_or(contour_image, contour)
 
-    return mask_images, contour_image
+    return mask_images, contour_image, roi_idxs
 
 
 def load_roi(roi_path, roi_base, image_shape):
@@ -67,10 +76,12 @@ def load_roi(roi_path, roi_base, image_shape):
     elif(os.path.isfile(roi_tiff)):
         mask_images = tiff.imread(roi_tiff).astype(bool)
         contour_image = np.zeros(image_shape, dtype=bool)
+        roi_idxs = []
         for mask in mask_images:
             contour = find_boundaries(mask, mode='outer')
+            roi_idxs.append(np.where(contour == True))
             contour_image = np.logical_or(contour_image, contour)
-        return mask_images, contour_image
+        return mask_images, contour_image, roi_idxs
     else:
         print('file not found: ' + roi_path + '/' + roi_base + '.{roi,zip,tif}')
         roi_dict = {}
@@ -165,40 +176,4 @@ def calc_f1_scores(counts):
     recall = true_pos / (true_pos + false_neg)
     f1 = np.divide(2 * precision * recall, precision + recall, out=np.zeros_like(recall), where=(true_pos > 0))
     return f1, precision, recall
-
-
-def evaluate_each(outdir_demix, outdir_eval, basename):
-    with open('python/evaluate_each.ipynb') as f:
-        data = f.read()
-    data = data.replace('@@@DEMIX_DIR', outdir_demix)
-    data = data.replace('@@@EVAL_DIR',  outdir_eval)
-    data = data.replace('@@@BASENAME',  basename)
-    nb = nbformat.reads(data, nbformat.NO_CONVERT)
-    
-    ep = ExecutePreprocessor(timeout=None)
-    ep.preprocess(nb)
-    with open(outdir_eval + '/' + basename + '.ipynb', 'w', encoding='utf-8') as f:
-        nbformat.write(nb, f)
-
-    he = HTMLExporter()
-    he.template_name = 'classic'
-    (body, resources) = he.from_notebook_node(nb)
-    with open(outdir_eval + '/' + basename + '.html', 'w', encoding='utf-8') as f:
-        f.write(body)
-
-
-def evaluate_all(outdir):
-    with open('python/evaluate_all.ipynb') as f:
-        nb = nbformat.read(f, nbformat.NO_CONVERT)
-    
-    ep = ExecutePreprocessor(timeout=None)
-    ep.preprocess(nb)
-    with open(outdir + '/all.ipynb', 'w', encoding='utf-8') as f:
-        nbformat.write(nb, f)
-
-    he = HTMLExporter()
-    he.template_name = 'classic'
-    (body, resources) = he.from_notebook_node(nb)
-    with open(outdir + '/all.html', 'w', encoding='utf-8') as f:
-        f.write(body)
 

@@ -1,5 +1,5 @@
 {
-    "input_base_path": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/",
+    "input_base_path": "/home/ramdas/Documents/Voltage_Imaging/WholeTifs/TIFF/uint16/",
     "output_base_path": "/home/ramdas/Documents/Voltage_Imaging/Output/",
     "log_path": "logs",
     "motion_correction_result_path": "motion_corrected",
@@ -7,12 +7,13 @@
     "segmentation_result_path": "segmented",
     "cell_demixing_result_path": "demixed",
     "evaluation_result_path": "evaluated",
-    "weight_base_path": "/home/ramdas/Documents/Voltage_Imaging/Improvements/Nov20/max_med_9/",
+    "weight_base_path": "/home/ramdas/Documents/Voltage_Imaging/Improvements/Nov20/GL3/",
     "weight_file": "single_gpu_model.hdf5",
     "summary_image_dir": "/home/ramdas/Documents/Voltage_Imaging/GT_comparison/MIP/",
     "consensus_gt_dir": "/home/ramdas/Documents/Voltage_Imaging/GT_comparison/GTs_rev20201027/consensus/",
     "individual_gt_dir": "/home/ramdas/Documents/Voltage_Imaging/GT_comparison/GTs/",
     "individual_gt_ids": ["Atsushi", "Ram", "Bandy"],
-    "representative_iou": 0.4
+    "representative_iou": 0.4,
+    "dash_port":52361
 }
 
