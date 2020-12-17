@@ -103,8 +103,9 @@ def evaluate_file(settings, fname, save=True):
     annotations = []
     for j in range(len(eval_roi_idxs)):
         roi_idxs = eval_roi_idxs[j]
-        for i in range(1):
-            annotations.append((roi_idxs[0][-1], roi_idxs[1][-1], 'Pred_' + str(j)))
+        if(len(roi_idxs[0]) > 0):
+            for i in range(1):
+                annotations.append((roi_idxs[0][-1], roi_idxs[1][-1], 'Pred_' + str(j)))
 
     eval_data['num_eval_masks'] = len(eval_mask_images)
     overlay = create_contour_overlay(eval_contour_image, 'yellow')
@@ -115,8 +116,9 @@ def evaluate_file(settings, fname, save=True):
     annotations = []
     for j in range(len(gt_roi_idxs)):
         roi_idxs = gt_roi_idxs[j]
-        for i in range(1):
-            annotations.append((roi_idxs[0][i], roi_idxs[1][i], 'GT_' + str(j)))
+        if(len(roi_idxs[0]) > 0):
+            for i in range(1):
+                annotations.append((roi_idxs[0][i], roi_idxs[1][i], 'GT_' + str(j)))
 
     eval_data['num_gt_masks'] = len(gt_mask_images)
     overlay = create_contour_overlay(gt_contour_image, 'cyan')
@@ -158,8 +160,9 @@ def evaluate_file(settings, fname, save=True):
         annotations = []
         for j in range(len(gt_roi_idxs)):
             roi_idxs = gt_roi_idxs[j]
-            for i in range(1):
-                annotations.append((roi_idxs[0][i], roi_idxs[1][i], 'GT_' + str(j)))
+            if(len(roi_idxs[0]) > 0):
+                for i in range(1):
+                    annotations.append((roi_idxs[0][i], roi_idxs[1][i], 'GT_' + str(j)))
 
         overlay = create_contour_overlay(gt_contour_image, 'cyan')
         overlay2 = blend_images(summary_image, overlay)

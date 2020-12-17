@@ -120,8 +120,9 @@ class pipeline_info:
 
     def check_evaluate(self):
         if(self.evaluate == True and self.is_batch == True):
-            prepare_evaluate_all_notebook(self.evaluate_path)
+            F1 = prepare_evaluate_all_notebook(self.evaluate_path)
             printd("Finished batch evaluation")
+            printd("Overall F1 score:", F1)
 
     def signal_finished(self):
         execution = {}

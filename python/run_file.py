@@ -20,6 +20,7 @@ from preprocess import preprocess
 from file_helper import fread, fwrite
 from evaluate_each import get_f1_score
 import pathlib
+from postprocess import exp_spreading
 save_queue = queue.Queue()
 
 def path_leaf(path):
@@ -256,8 +257,11 @@ class pipeline:
             res = []
             for i in range(self.data.shape[0]):
                 res.append(cv2.resize(self.data[i], (self.W, self.H)))
-            self.seg_file['data'] = np.array(res, 'float32')
-
+            ypred = np.array(res, 'float32')
+            ypred = exp_spreading(ypred)
+            ypred = ypred - ypred.min()
+            ypred = ypred / ypred.max() 
+            self.seg_file['data'] = ypred
             self.time_pred += (time.time() - tic)
             tic = time.time()
             sq.put(self.seg_file)

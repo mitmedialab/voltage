@@ -75,6 +75,23 @@ def aggregate_scores(settings, eval_info, filter_func=lambda x: True, suffix='st
     
     return f1_rep, df_sum, df_each, unique_mags
 
+def get_overall_f1():
+    try:
+        with open('settings.txt') as f:
+            settings = json.load(f) 
+    except:
+        with open('../settings.txt') as f:
+            settings = json.load(f) 
+
+    eval_info = {}
+
+    eval_info['gt_ids'] = settings['individual_gt_ids']
+    eval_info['representative_iou'] = settings['representative_iou']    
+    f1_rep, _, _, _ = aggregate_scores(settings, eval_info)
+
+    return f1_rep
+
+
 def evaluate_all(save = True):
 
     try:
@@ -138,3 +155,5 @@ def prepare_evaluate_all_notebook(outdir):
     (body, resources) = he.from_notebook_node(nb)
     with open(outdir + '/all.html', 'w', encoding='utf-8') as f:
         f.write(body)   
+
+    return round(get_overall_f1(), 2)

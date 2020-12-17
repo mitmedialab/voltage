@@ -10,6 +10,7 @@ cimport numpy as np
 
 cdef extern from "wrapper.hpp":
     void postprocess_frames(float *image, float *masks, int t, int h, int w, int n, float **sig)
+    void exp_spread(float *image, int t, int h, int w, float **out)
 
 from libc.stdlib cimport free
 from cpython cimport PyObject, Py_INCREF
@@ -35,3 +36,18 @@ def postprocess(np.ndarray[np.float32_t, ndim=3] image, np.ndarray[np.float32_t,
 
     return signp
 
+def exp_spreading(np.ndarray[np.float32_t, ndim=3] image):
+
+    cdef float *out
+
+    t, h, w = image.shape[0], image.shape[1], image.shape[2]
+    image = np.ascontiguousarray(image)
+
+    exp_spread(&image[0,0,0], t, h, w, &out)
+
+    # Get the CPP buffer to numpy format
+    cdef cvarray arr = <float [:t, :h, :w]>out
+    arr.free_data = True
+    outnp = np.asarray(arr)
+
+    return outnp

@@ -201,3 +201,35 @@ float* get_signals(float *image, float *masks, int t, int h, int w, int n)
 
 	return out;
 }
+
+
+__global__ 
+void __exp_spread(float *data, int N)
+{
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride = blockDim.x * gridDim.x;
+
+    for(int i = index; i < N; i += stride) {
+        if(i < N)
+            data[i] = log(1 - (data[i] * 0.99999)) * -1;
+    }
+}
+
+float* _exp_spread(float *img, int t, int h, int w)
+{
+    int N = t * h * w;
+    float *out = (float *) malloc(N * sizeof(float));
+    float *gdata;
+    checkCudaErrors(cudaMalloc((void **) &gdata, N * sizeof(float)));
+    checkCudaErrors(cudaMemcpy(gdata, img, N * sizeof(float), cudaMemcpyHostToDevice));
+
+    dim3 A(h, w);
+    int blockSize = 256;
+    int numBlocks = (N + blockSize - 1) / blockSize;
+
+    __exp_spread<<<numBlocks, blockSize>>>(gdata, N);
+    cudaDeviceSynchronize();
+    checkCudaErrors(cudaMemcpy(out, gdata, N * sizeof(float), cudaMemcpyDeviceToHost));
+
+    return out;
+}

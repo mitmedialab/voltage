@@ -27,5 +27,5 @@ inline double* loc2D(double *img, int h, int w, int i, int j)
 }
 
 void postprocess_frames(float *image, float *masks, int t, int h, int w, int n, float **sig);
-
+void exp_spread(float *image, int t, int h, int w, float **out);
 #endif
