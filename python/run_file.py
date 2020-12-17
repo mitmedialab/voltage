@@ -76,6 +76,7 @@ class pipeline:
             params = json.load(file)
 
         self.param = params[tag]
+        self.exp_spread = bool(self.settings['exponential_spreading'])
         self.fpath = self.settings['input_base_path'] + '/' + self.param['filename']
         self.fname = self.param['filename']
         self.tag = tag
@@ -258,9 +259,10 @@ class pipeline:
             for i in range(self.data.shape[0]):
                 res.append(cv2.resize(self.data[i], (self.W, self.H)))
             ypred = np.array(res, 'float32')
-            ypred = exp_spreading(ypred)
-            ypred = ypred - ypred.min()
-            ypred = ypred / ypred.max() 
+            if(self.exp_spread == True):
+                ypred = exp_spreading(ypred)
+                ypred = ypred - ypred.min()
+                ypred = ypred / ypred.max() 
             self.seg_file['data'] = ypred
             self.time_pred += (time.time() - tic)
             tic = time.time()

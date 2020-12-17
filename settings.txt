@@ -14,6 +14,7 @@
     "individual_gt_dir": "/home/ramdas/Documents/Voltage_Imaging/GT_comparison/GTs/",
     "individual_gt_ids": ["Atsushi", "Ram", "Bandy"],
     "representative_iou": 0.4,
-    "dash_port":52361
+    "dash_port":52361,
+    "exponential_spreading":1
 }
 
