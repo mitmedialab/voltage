@@ -225,13 +225,17 @@ class pipeline:
         from model import initialize_unet
         import os
         os.environ['LD_LIBRARY_PATH']='/usr/local/cuda/lib64'
-        gpus = tf.config.experimental.list_physical_devices('GPU')
-        if gpus:
-          try:
-            for gpu in gpus:
-              tf.config.experimental.set_memory_growth(gpu, True)
-          except RuntimeError as e:
-            print(e)
+        if(int(tf.__version__[0]) > 1):
+            gpus = tf.config.experimental.list_physical_devices('GPU')
+            if gpus:
+                try:
+                    for gpu in gpus:
+                        tf.config.experimental.set_memory_growth(gpu, True)
+                except RuntimeError as e:
+                    print(e)
+        else:
+            session_config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+            tf.Session(config = session_config)
         try:
             model = initialize_unet()
             model.load_weights(self.weight_path)
