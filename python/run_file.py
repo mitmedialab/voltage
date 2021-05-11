@@ -5,6 +5,7 @@ import h5py
 import tifffile as tiff
 import sys
 import ntpath
+import math
 import json
 import os
 import threading
@@ -14,7 +15,7 @@ import cv2
 import numpy as np
 import gc
 from multiprocessing import Pool
-from cell_demix import demix_neurons
+from cell_demix import demix_neurons, spatial_demix
 import nvgpu
 from preprocess import preprocess
 from file_helper import fread, fwrite
@@ -65,8 +66,9 @@ def chunkIt(seqlen, num):
         last += avg
     return si, ei   
 
+# Filemode = 0 - temporal; 1 - spatial
 class pipeline:
-    def __init__(self, tag, is_motion_correction_only=False, is_evaluate=False):
+    def __init__(self, tag, is_motion_correction_only=False, is_evaluate=False, file_mode=0):
 
         self.gsize = get_minium_size_for_gpu()
         with open('settings.txt') as file:
@@ -76,6 +78,7 @@ class pipeline:
             params = json.load(file)
 
         self.param = params[tag]
+        self.magnification = self.param['magnification']
         self.exp_spread = bool(self.settings['exponential_spreading'])
         self.fpath = self.settings['input_base_path'] + '/' + self.param['filename']
         self.fname = self.param['filename']
@@ -105,7 +108,11 @@ class pipeline:
         self.eval_path = self.outpath_base + self.settings['evaluation_result_path'] + '/'
         self.eval_check_file = self.eval_path + self.fname
 
-        self.weight_path = self.settings['weight_base_path'] + '/' + self.settings['weight_file']
+        self.file_mode = file_mode
+        if(self.file_mode == 0):
+            self.weight_path = self.settings['temporal_weight_base_path'] + '/' + self.settings['temporal_weight_file']
+        else:
+            self.weight_path = self.settings['spatial_weight_base_path'] + '/' + self.settings['spatial_weight_file']
 
         if not os.path.exists(self.mc_file['path']):
             os.mkdir(self.mc_file['path'])
@@ -222,8 +229,9 @@ class pipeline:
 
     def segment_data(self):
         import tensorflow as tf
-        from model import initialize_unet
+        from model import initialize_unet, initialize_unet_spatial
         import os
+        print("File mode internal:", self.file_mode)
         os.environ['LD_LIBRARY_PATH']='/usr/local/cuda/lib64'
         if(int(tf.__version__[0]) > 1):
             gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -237,34 +245,105 @@ class pipeline:
             session_config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
             tf.Session(config = session_config)
         try:
-            model = initialize_unet()
+            if(self.file_mode == 0):
+                model = initialize_unet()
+            else:
+                model = initialize_unet_spatial()
             model.load_weights(self.weight_path)
         except:
             print("[Error]: Tensorflow caught an exception")
             return
         data = self.pred_q.get()
         if(data is None):
+
             return
-        print("\nData:", data.shape)
-        self.return_dict['ypred'] = model.predict(data)
+
+        if(self.file_mode == 1):
+            med = np.median(data, axis=0)
+            H, W = med.shape
+            img = med[2:-2,:]
+            if(self.magnification == 40):
+                kernel = np.zeros((64, 64), dtype='float32')
+                kernel[6:-6, 6:-6] = 1
+                gk = kernel
+                SPACING = 1
+                test = gk
+            else:
+                kernel = np.zeros((64, 64), dtype='float32')
+                kernel[8:-8, :] = 1
+                gk = kernel
+                SPACING = 1
+                test = gk
+            wrk = np.zeros((64, 192), dtype='float32')
+            ei = 64
+            si = 0
+            while (ei <= 192):
+                wrk[:,si:ei] += test
+                si = si + SPACING
+                ei = si + 64
+            wrk[wrk == 0] = 1
+
+            img = cv2.resize(img, (64*3, 64))
+            img = img - img.min()
+            img = img / img.max()
+            ei = 64
+            si = 0
+            xs = []
+            while (ei <= 192):
+                xs.append(img[:,si:ei])
+                si = si + SPACING
+                ei = si + 64
+            xs = np.array(xs, dtype='float32')
+            x = np.expand_dims(xs, axis=3)
+            ypred = model.predict(x)
+            out = np.zeros((64, 192), dtype='float32')
+            ei = 64
+            si = 0
+            ctr = 0
+            while (ei <= 192):
+                out[:,si:ei] += cv2.multiply(ypred[ctr, :,:, 0], test)
+                si = si + SPACING
+                ei = si + 64
+                ctr += 1
+
+            out = cv2.divide(out, wrk)
+            out = out - out.min()
+            out = out / out.max()
+
+            print("Finishing spatial prediction")
+            self.return_dict['ypred'] = cv2.resize(out, (W, H))
+
+        else: # temporal
+            print("\nData:", data.shape)
+            self.return_dict['ypred'] = model.predict(data)
 
     def prediction(self, sq):
         if(self.run_segmentation):
             printd("Starting prediction")
             tic = time.time()
-            self.pred_q.put((self.pre_file['data'] * 255).astype('uint8'))
+            if(self.file_mode == 0):
+                self.pred_q.put((self.pre_file['data'] * 255).astype('uint8'))
+            else:
+                self.pred_q.put(self.mc_file['data'])
             self.pred_q.close()
             self.pred_q.join_thread()
             self.pred_proc.join()
             self.data = self.return_dict['ypred']
             self.pred_proc.terminate()
             print(self.data.shape)
-            res = []
-            for i in range(self.data.shape[0]):
-                res.append(cv2.resize(self.data[i], (self.W, self.H)))
-            ypred = np.array(res, 'float32')
+            if(self.file_mode == 0):
+                res = []
+                for i in range(self.data.shape[0]):
+                    res.append(cv2.resize(self.data[i], (self.W, self.H)))
+                ypred = np.array(res, 'float32')
             if(self.exp_spread == True):
-                ypred = exp_spreading(ypred)
+                if(self.file_mode == 0):
+                    ypred = exp_spreading(ypred)
+                else:
+                    ypred = np.zeros(self.data.shape, dtype='float32')
+                    for i in range(len(self.data)):
+                        for j in range(len(self.data[0])):
+                            ypred[i, j] = math.log(1 - (self.data[i, j] * 0.9999)) * -1
                 ypred = ypred - ypred.min()
                 ypred = ypred / ypred.max() 
             self.seg_file['data'] = ypred
@@ -276,7 +355,10 @@ class pipeline:
     def cell_demix(self):
         if(self.run_demix):
             tic = time.time()
-            demix_data = demix_neurons(self.mc_file['data'], self.seg_file['data'], self.param['expected_neurons'])
+            if(self.file_mode == 0):
+                demix_data = demix_neurons(self.mc_file['data'], self.seg_file['data'], self.param['expected_neurons'])
+            else:
+                demix_data = spatial_demix(self.mc_file['data'], self.seg_file['data'], self.magnification)
             with open(self.dmix_file['json'], "w") as write_file:
                 json.dump(demix_data['info'], write_file)
             fwrite(self.dmix_file['mask'], demix_data['mask']) 
@@ -313,6 +395,7 @@ def main():
     tag = sys.argv[1]
     is_motion_correction_only = bool(int(sys.argv[2]))
     is_evaluate = bool(int(sys.argv[3]))
+    fmode = int(sys.argv[4])
 
     print("\n\n")
     printd("Executing pipeline for file:", tag)
@@ -321,7 +404,7 @@ def main():
     run_prediction = True
     run_demix = True
 
-    p = pipeline(tag, is_motion_correction_only, is_evaluate)
+    p = pipeline(tag, is_motion_correction_only, is_evaluate, fmode)
 
     
     t = threading.Thread(target=parallel_save, daemon=True)

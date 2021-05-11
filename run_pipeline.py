@@ -27,7 +27,7 @@ class pipeline_info:
     def __init__(self, task='batch', 
                 is_motion_correct_only=False, 
                 is_evaluate=False, is_gui=False, 
-                num_attempts=3):
+                mode="temporal", num_attempts=3):
 
 
         if(task == 'batch'):
@@ -63,6 +63,7 @@ class pipeline_info:
         self.num_attempts = num_attempts
         self.dash_port = self.settings['dash_port']
         self.gui = is_gui
+        self.mode = mode
 
     def run_file(self, tag=None):
         global shutdown
@@ -71,7 +72,18 @@ class pipeline_info:
             tag = self.file_tag
 
         printd("Executing pipeline for file:", str(tag))
-        cmd = 'python python/run_file.py ' + str(tag) + ' ' + str(int(self.motion_correct_only)) + ' ' + str(int(self.evaluate))
+
+        if(self.mode == "temporal"):
+            fmode = 0
+        elif(self.mode == "spatial"):
+            fmode = 1
+        else:
+            mag = self.params[tag]['magnification']
+            if(mag == 16):
+                fmode = 0
+            else:
+                fmode = 1
+        cmd = 'python python/run_file.py ' + str(tag) + ' ' + str(int(self.motion_correct_only)) + ' ' + str(int(self.evaluate)) + ' ' + str(fmode)
         for retries in range(self.num_attempts):
             try:
                 subprocess.run(cmd, 
@@ -122,9 +134,14 @@ class pipeline_info:
 
     def check_evaluate(self):
         if(self.evaluate == True and self.is_batch == True):
-            F1 = prepare_evaluate_all_notebook(self.evaluate_path)
+            eval_info = prepare_evaluate_all_notebook(self.evaluate_path)
+            F1 = round(eval_info['rep'][0], 2)
+            F116 = round(eval_info['rep'][1], 2)
+            F120 = round(eval_info['rep'][2], 2)
+            F140 = round(eval_info['rep'][3], 2)
             printd("Finished batch evaluation")
-            printd("Overall F1 score:", F1)
+            printd("Overall F1 score: %0.4f" %F1)
+            printd("F1 score info: 16x: %0.4f, 20x: %0.4f, 40x: %0.4f" %(F116, F120, F140))
 
     def signal_finished(self):
         execution = {}
@@ -143,6 +160,10 @@ def get_args():
     group2 = parser.add_mutually_exclusive_group(required=False)
     group2.add_argument('--motion-correct-only', action='store_true')
     group2.add_argument('--evaluate',action='store_true')
+    group3 = parser.add_mutually_exclusive_group(required=True)
+    group3.add_argument('--temporal', action='store_true')
+    group3.add_argument('--spatial', action='store_true')
+    group3.add_argument('--mix', action='store_true')
     parser.add_argument('--gui', action='store_true', required=False)
     args = parser.parse_args()
 
@@ -151,7 +172,12 @@ def get_args():
     else:
         task = args.file
 
-    p = pipeline_info(task, args.motion_correct_only, args.evaluate, args.gui)
+    mode = "temporal"
+    if(args.spatial == True):
+        mode = "spatial"
+    elif(args.mix == True):
+        mode = "mix"
+    p = pipeline_info(task, args.motion_correct_only, args.evaluate, args.gui, mode)
 
     return p
 

@@ -159,4 +159,4 @@ def prepare_evaluate_all_notebook(outdir):
     with open(outdir + '/all.html', 'w', encoding='utf-8') as f:
         f.write(body)   
 
-    return round(get_overall_f1(), 2)
+    return evaluate_all(save = False)

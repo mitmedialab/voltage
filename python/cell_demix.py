@@ -16,19 +16,17 @@ max_area = 900
 
 kernel = np.ones((5,5),np.uint8)
 
-class roi:
+class cROI:
     def __init__(self, ID, Nid):
         self.ID = ID
         self.Nid = Nid
     
-    def assign(self, mask, idx):
+    def assign(self, mask, idx, sig = None):
         self.mask = np.array(mask)
         self.idx = np.array(idx)
+        if(sig is not None):
+            self.sig = sig
     
-    def assign_sig(self, sig):
-        self.sig = np.array(sig)
-            
-
 def parallel_process_NMfout(ctr, Wblis, vid):
     rois = []
     nctr = 0
@@ -88,7 +86,7 @@ def parallel_process_NMfout(ctr, Wblis, vid):
             im = cv2.bitwise_not(image)
             keypoints = detector.detect(im)
             if(len(keypoints) > 0):
-                r = roi(nctr, ctr)
+                r = cROI(nctr, ctr)
                 nctr = nctr + 1               
 
                 image = image / 255
@@ -360,3 +358,138 @@ def demix_neurons(file, ypred, en):
 
     return demix_data
     
+def spatial_demix(vid, spatial, mag):
+
+    if(mag == 40):
+        min_area = 100
+        max_area = 2000
+        threshold_ratio = 0.5
+    elif(mag == 20):
+        min_area = 30
+        max_area = 550
+        threshold_ratio = 0.5
+    else:
+        min_area = 30
+        max_area = 350
+        threshold_ratio = 0.5
+
+    TIME_FRAMES = len(vid)
+    kernel = np.ones((5,5),np.uint8)
+
+    # Setup SimpleBlobDetector parameters.
+    params = cv2.SimpleBlobDetector_Params()
+
+    # Change thresholds
+    params.minThreshold = 0
+    params.maxThreshold = 255
+
+
+    # Filter by Circularity
+    params.filterByCircularity = True
+    params.minCircularity = 0.5
+
+    # Filter by Convexity
+    params.filterByConvexity = True
+    params.minConvexity = 0.6
+
+    # Filter by Inertia
+    params.filterByInertia = True
+    params.minInertiaRatio = 0.01
+
+    # Create a detector with the parameters
+    detector = cv2.SimpleBlobDetector_create(params)
+
+    rois = []
+    nctr = 0
+    ctr = 0
+
+    img = np.array(spatial)
+    img = img - img.min()
+    img = img / img.max()
+    img[img < threshold_ratio] = 0
+    img = img * 255
+    img = img.astype('uint8')
+    thresed = img
+    ret, markers = cv2.connectedComponents(thresed)
+    total_contours = markers.max()
+    lis_area = []
+    for i in range(0, total_contours+1):
+        check = np.array(thresed[markers == i])
+
+        val = int(check.sum()/255)
+        lis_area.append(val)
+    rem_idx = [index for index,value in enumerate(lis_area) if ((value < min_area) or (value > max_area))]
+
+    for i in rem_idx:
+        markers[markers == i] = 0
+    total_contours = len(np.unique(markers))
+
+    for i in np.unique(markers):
+        if (i == 0):
+            continue
+        image = markers.astype('uint8')
+        image[markers!=i]=0
+        image[markers==i]=255
+
+        if(mag == 40):
+            extended_image = np.zeros((image.shape[0] + 2, image.shape[1] + 2), dtype='uint8')
+            extended_image[1:-1, 1:-1] = image
+            extended_image = convex_hull_image(extended_image).astype('uint8') * 255
+            im = cv2.bitwise_not(extended_image)
+        else:
+            im = cv2.bitwise_not(image)
+        keypoints = detector.detect(im)
+        if(len(keypoints) > 0):
+            r = cROI(nctr, ctr)
+            nctr = nctr + 1               
+
+            image = image / 255
+            image = image.astype('uint8')
+
+            fmask = image.astype('float32')
+            sig = []
+            for j in range(TIME_FRAMES):
+                sig.append(cv2.multiply(fmask, vid[j]).sum())
+            sig = np.array(sig)/fmask.sum()
+
+            idx = np.array(np.where(image==1))
+            idx = idx.transpose((1,0))
+
+            r.assign(image, idx, sig)
+            rois.append(r)
+    NMFout = rois
+
+    img = np.array(np.average(vid, axis=0))
+    img = img - img.min()
+    img = img / img.max()
+    img = (img).astype('float32')
+    kernel = np.ones((3,3), dtype='uint8')
+    final_rois = []
+    for roi in NMFout:
+        dilate = cv2.dilate(roi.mask, kernel, iterations=1)
+        edge = cv2.Canny(dilate, 0, 1)
+        idx = np.where(edge == 255)
+        y = idx[0][0]
+        x = idx[1][0]
+        idx = np.array(np.where(dilate==1))
+        idx = idx.transpose((1,0))
+        r = cROI(roi.ID, roi.Nid)
+        r.assign(dilate, idx, roi.sig)
+        final_rois.append(r)
+
+        edge = (cv2.bitwise_not(edge)/255).astype('float32')
+        img = cv2.multiply(img, edge)
+
+    neu_data = {}
+
+    for i in range(0, len(final_rois)):
+        idxx = [final_rois[i].idx[j][0] - 1 for j in range(len(final_rois[i].idx))]
+        idxy = [final_rois[i].idx[j][1] - 1 for j in range(len(final_rois[i].idx))]
+        neu_data[str("neuron_" + str(i))] = {"ID":str(final_rois[i].ID), "NID":str(final_rois[i].Nid), "idxx":str(list(idxx)), "idxy":str(list(idxy))}
+
+
+
+    demix_data = {}
+    demix_data['mask'] = img
+    demix_data['info'] = neu_data
+    return demix_data
