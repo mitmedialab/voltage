@@ -12,7 +12,7 @@ from joblib import Parallel, delayed
 
 ### Cleaning NMF data
 min_area = 30
-max_area = 700
+max_area = 900
 
 kernel = np.ones((5,5),np.uint8)
 

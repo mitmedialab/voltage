@@ -116,16 +116,19 @@ def evaluate_all(save = True):
     eval_info['df_each'] = df_each
     eval_info['unique_mags'] = unique_mags
     MAGNIFICATION_THRESH = 20
-    f1_rep_16x, df_sum_16x, df_each_16x, _ = aggregate_scores(settings, eval_info, lambda x: x['magnification'] <= MAGNIFICATION_THRESH)
+    f1_rep_16x, df_sum_16x, df_each_16x, _ = aggregate_scores(settings, eval_info, lambda x: x['magnification'] == 16)
+    f1_rep_20x, df_sum_20x, df_each_20x, _ = aggregate_scores(settings, eval_info, lambda x: x['magnification'] == 20)
     f1_rep_40x, df_sum_40x, df_each_40x, _ = aggregate_scores(settings, eval_info, lambda x: x['magnification'] > MAGNIFICATION_THRESH)
 
     eval_info['df'] = []
     eval_info['df'].append(df_sum)
     eval_info['df'].append(df_sum_16x)
+    eval_info['df'].append(df_sum_20x)
     eval_info['df'].append(df_sum_40x)
     eval_info['rep'] = []
     eval_info['rep'].append(f1_rep)
     eval_info['rep'].append(f1_rep_16x)
+    eval_info['rep'].append(f1_rep_20x)
     eval_info['rep'].append(f1_rep_40x)
     eval_info['thresholds'] = thresholds
 

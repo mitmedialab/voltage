@@ -99,7 +99,7 @@
         "expected_neurons": 1,
         "filename": "008.tif",
         "is_motion_correction": 1,
-        "magnification": 40,
+        "magnification": 20,
         "motion_correction": {
             "patch_offset": 7,
             "patch_size": 20,
@@ -171,7 +171,7 @@
         "expected_neurons": 1,
         "filename": "014.tif",
         "is_motion_correction": 1,
-        "magnification": 40,
+        "magnification": 20,
         "motion_correction": {
             "patch_offset": 7,
             "patch_size": 20,

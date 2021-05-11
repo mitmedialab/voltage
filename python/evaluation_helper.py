@@ -150,7 +150,10 @@ def count_matches(eval_masks, gt_masks, thresholds, remove_duplicates=True):
         for j, g_mask in enumerate(gt_masks):
             I = np.logical_and(e_mask, g_mask)
             U = np.logical_or(e_mask, g_mask)
-            IoU[i, j] = np.sum(I) / np.sum(U)
+            if(np.sum(U) > 0):
+                IoU[i, j] = np.sum(I) / np.sum(U)
+            else:
+                IoU[i, j] = 0;
 
     counts = []
     for th in thresholds:

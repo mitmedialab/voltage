@@ -222,7 +222,7 @@ class plot_all:
 
     def plot_accuracy_summary(eval_info, dash = False):
         
-        fig = make_subplots(rows=1, cols=3, subplot_titles=("All datsets", "16x datasets", "40x datasets"))
+        fig = make_subplots(rows=1, cols=4, subplot_titles=("All datsets", "16x datasets", "20x datasets", "40x datasets"))
         colors = [css_colors[x] for x in random.sample(range(1, len(css_colors)), 3)]
         layout = go.Layout(yaxis=dict(scaleanchor="x", scaleratio=1))
 
@@ -248,6 +248,7 @@ class plot_all:
         plot_f1_score(eval_info, 0, True)
         plot_f1_score(eval_info, 1, False)
         plot_f1_score(eval_info, 2, False)
+        plot_f1_score(eval_info, 3, False)
         
         
         fig.update_layout(

@@ -42,6 +42,8 @@ class pipeline_info:
         with open('file_params.txt') as file:
             self.params = json.load(file)
 
+        if not os.path.exists(self.settings['output_base_path']):
+            os.mkdir(self.settings['output_base_path'])
 
         self.log_path = self.settings['output_base_path'] + '/' + self.settings['log_path'] + '/'
         self.log_file = self.log_path + 'execution.log'
