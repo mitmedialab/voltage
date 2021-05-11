@@ -11,18 +11,22 @@ Follow below steps to create the conda environment required to run the pipeline
 
 ```bash
 # Create conda environment
-conda create -n VI_base python=3.6
+conda create -n voltage python=3.8
 
 # Activate the conda environment
-codna activate VI_base
+codna activate voltage
 
 # Install sklearn
 conda install -y -q scikit-learn
 
-# Install Tensorflow GPU version 1.13
-conda install -y -q tensorflow-gpu=1.13.1
+# Install Tensorflow GPU
+conda install -y -q tensorflow-gpu
+
 # Install Keras
 conda install -y -q keras
+
+# Install ND2 library
+pip install nd2reader  --progress-bar off
 
 # Install TIFF library
 pip install tifffile  --progress-bar off
@@ -32,6 +36,8 @@ pip install read_roi  --progress-bar off
 
 # Install ray
 pip install -U ray --progress-bar off
+Note: As of May 11, 2021, the latest ray 1.3 has some problems, so please install ray 1.2 using
+pip install -U ray==1.2 --progress-bar off
 
 # Install prettytable
 pip install PTable --progress-bar off
@@ -39,14 +45,24 @@ pip install PTable --progress-bar off
 # Install OpenCV
 pip install opencv-python --progress-bar off
 
+# Install NVGPU as nvidia-smi python interface and psutil
+pip install nvgpu --progress-bar off
+pip install psutil --progress-bar off
+
+# Install Webcolors package
+pip install webcolors --progress-bar off
+
+# Install DASH components
+pip install PTable plotly dash dash-core-components dash_html_components dash_table --progress-bar off
+
+# Install elastic deformation library
+pip install elasticdeform --progress-bar off
+
 # Install skimage
 conda install -y -q scikit-image
 
 # Install numba
 conda install -y -q numba
-
-# Install NVGPU
-pip install nvgpu --progress-bar off
 
 # Install cython
 conda install -y -q -c anaconda cython
@@ -66,28 +82,23 @@ bash build.sh
 
 Make sure to update the `settings.txt` (global settings) and `file_params.txt` (file-specific parameters) accordingly.
 
-To execute in file mode:
-```bash
-python run_pipeline.py --file <tag>
-
-#Example
-python run_pipeline.py --file 018
-```
-
 To execute in batch mode:
 
 ```bash
-python run_pipeline.py --batch
+python run_pipeline.py --batch --(temporal|spatial|mix)
+
+--temporal: Use temporal inference for 40x, 20x and 16x magnification
+--spatial: Use spatial inference for 40x, 20x and 16x magnification
+--mix: Use spatial inference for 40x and 20x, and, temporal inference for 16x datasets.
 ```
 
 Optional parameters:
 ```bash
 # Optional Paramters:
-# --new-project (To create new execution log files and discard any previous timing information)
 # --motion-correct-only (To run only motion correction on all files)
 # --evaluate (If ground truth is available, we can evalute the performance using this paramter)
 ```
 
-The pipeline script requires at least 1 GPU and will map all available GPUs.
+The pipeline script requires at least 1 GPU and will map all available GPUs for certain functionalities.
 
 The results will be stored as per the paths set in `settings.txt` and `file_params.txt`.
