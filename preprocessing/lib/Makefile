@@ -1,5 +1,5 @@
 CXX       = nvcc
-CXXFLAGS  = -O3 -std=c++14
+CXXFLAGS  = -O3 -std=c++11
 
 LDFLAGS   = -Xcompiler -fopenmp
 LDLIBS    = -lgomp -lm -lpthread -lcudart -lnppif
