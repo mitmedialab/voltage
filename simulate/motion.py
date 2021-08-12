@@ -1,0 +1,48 @@
+import math
+import random
+
+
+DAMPING = 0.2
+ANGLE_PERTURBATION = 0.2
+SCALE = 3.0
+
+
+def synthesize_motion(time_frames):
+
+    pi = math.pi
+    x = 0
+    y = 0
+    vx = 0
+    vy = 0
+    Xs = []
+    Ys = []
+
+    for i in range(time_frames):
+
+        Xs.append(SCALE * x)
+        Ys.append(SCALE * y)
+
+        if(x == 0 and y == 0):
+            angle = random.uniform(-pi, +pi) # pick direction randomly
+        else: # set the angle so the motion tends to stick around the origin
+            angle = math.atan2(y, x) # current angle from the origin
+            angle += pi # opposite direction to return to the origin
+            angle += random.uniform(-pi, +pi) * ANGLE_PERTURBATION
+
+        mag = random.random()
+        ax = mag * math.cos(angle) - DAMPING * vx
+        ay = mag * math.sin(angle) - DAMPING * vy
+
+        vx += ax
+        vy += ay
+        x += vx
+        y += vy
+
+    return Xs, Ys
+
+
+def _test():
+    Xs, Ys = synthesize_motion(1000)
+    import matplotlib.pyplot as plt
+    plt.plot(Xs, Ys)
+    plt.show()
