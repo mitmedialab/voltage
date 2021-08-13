@@ -6,8 +6,10 @@ from keras.utils import Sequence
 
 class VI_Sequence(Sequence):
 
-    def __init__(self, batch_size, img_size, input_img_paths, target_img_paths,
-                 num_darts=1, tiled=False, tile_strides=(1, 1), shuffle=False):
+    def __init__(self, batch_size, patch_shape,
+                 input_img_paths, target_img_paths,
+                 num_darts=1, tiled=False, tile_strides=(1, 1),
+                 shuffle=False):
         """
         Initializes VI_Sequence (Voltage Imaging) instance.
 
@@ -15,7 +17,7 @@ class VI_Sequence(Sequence):
         ----------
         batch_size : integer
             Batch size for training
-        img_size : tuple (height, width) of integers
+        patch_shape : tuple (height, width) of integers
             Image patch size to be extracted from image files.
             The size may be smaller than the images loaded from the files,
             but cannot be larger. It should be smaller if num_darts > 1.
@@ -54,7 +56,7 @@ class VI_Sequence(Sequence):
 
         """
         self.batch_size = batch_size
-        self.img_size = img_size
+        self.patch_shape = patch_shape
         self.input_img_paths = input_img_paths
         self.target_img_paths = target_img_paths
         self.num_darts = num_darts
@@ -83,20 +85,21 @@ class VI_Sequence(Sequence):
                 self.target_images[s:e] = tiff.imread(target_img_paths[i])
 
 
-        h = max(self.canvas_size[0] - self.img_size[0], 0)
-        w = max(self.canvas_size[1] - self.img_size[1], 0)
+        h = max(self.canvas_size[0] - self.patch_shape[0], 0)
+        w = max(self.canvas_size[1] - self.patch_shape[1], 0)
 
-        if(tiled):
+        if(tiled): # regular tiling
             y, x = np.mgrid[0:h+1:tile_strides[0], 0:w+1:tile_strides[1]]
             self.num_darts = x.size
+            # same tile positions for all the images
             self.Ys = np.tile(y.flatten(), num_frames)
             self.Xs = np.tile(x.flatten(), num_frames)
 
-        else:
+        else: # random dart throwing
             if(num_darts == 1): # center patch
                 self.Ys = [h // 2 for i in range(num_frames)]
                 self.Xs = [w // 2 for i in range(num_frames)]
-            elif(num_darts > 1):
+            elif(num_darts > 1): # randomly choose patch positions
                 self.Ys = np.random.randint(h, size=num_frames * num_darts)
                 self.Xs = np.random.randint(w, size=num_frames * num_darts)
 
@@ -109,8 +112,9 @@ class VI_Sequence(Sequence):
         """
         Calculate the number of batches in the sequence. If the number of
         samples is not divisible by the specified bach size, the result is
-        rounded down so a smaller batch will not be created for trainig in the
-        case of tiled=False, whereas it is rounded up so all the samples are
+        rounded down so that a batch having less samples than the batch size
+        will not be added to the end of the sequence for trainig in the case
+        of tiled=False, whereas it is rounded up so all the samples are
         evaluated in the case of tiled=True.
 
         Returns
@@ -127,7 +131,25 @@ class VI_Sequence(Sequence):
 
 
     def __getitem__(self, idx):
-        buf_size = (self.batch_size,) + self.img_size
+        """
+        Return the idx-th batch in the sequence.
+
+        Parameters
+        ----------
+        idx : integer
+            Index specifying a batch in the (possibly shuffled) sequence.
+
+        Returns
+        -------
+        inputs : 4D numpy.ndarray of float32
+            Input image patch data corresponding to the indexed batch.
+            The shape is batch_size x patch_height x patch_width x num_channels.
+        targets : 4D numpy.ndarray of float32
+            Target image patch data corresponding to the indexed batch.
+            The shape is batch_size x patch_height x patch_width x 1.
+
+        """
+        buf_size = (self.batch_size,) + self.patch_shape
         inputs = np.zeros(buf_size + (self.num_channels,), dtype='float32')
         targets = np.zeros(buf_size + (1,), dtype='float32')
         for i in range(self.batch_size):
@@ -138,8 +160,8 @@ class VI_Sequence(Sequence):
             img_idx = sample_idx // self.num_darts
             ys = self.Ys[sample_idx]
             xs = self.Xs[sample_idx]
-            ye = min(ys + self.img_size[0], self.canvas_size[0])
-            xe = min(xs + self.img_size[1], self.canvas_size[1])
+            ye = min(ys + self.patch_shape[0], self.canvas_size[0])
+            xe = min(xs + self.patch_shape[1], self.canvas_size[1])
             inputs[i, 0:ye-ys, 0:xe-xs] = self.input_images[img_idx, ys:ye, xs:xe]
             targets[i, 0:ye-ys, 0:xe-xs, 0] = self.target_images[img_idx, ys:ye, xs:xe]
 
@@ -147,11 +169,31 @@ class VI_Sequence(Sequence):
 
 
     def on_epoch_end(self):
+        """
+        Shuffle samples at the end of every epoch if shuffle=True.
+
+        Returns
+        -------
+        None.
+
+        """
         if(self.shuffle):
             random.shuffle(self.sample_indices)
 
 
     def get_tile_pos(self):
+        """
+        Return the top left corner positions of the tiles when patches are
+        tiled (i.e., tiled=True).
+
+        Returns
+        -------
+        Array of integer
+            Y coordinates of the tiled patches.
+        Array of integer
+            X coordinates of the tiled patches.
+
+        """
         if(self.tiled):
             return self.Ys[0:self.num_darts], self.Xs[0:self.num_darts]
         else:
