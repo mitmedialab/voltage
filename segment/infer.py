@@ -23,12 +23,13 @@ def predict_and_merge(model, data_seq, patch_shape,
         img_length = len(input_img[0])
         for j in range(img_length):
             for k, (ys, xs) in enumerate(zip(Ys, Xs)):
-                ye = ys + patch_shape[0]
-                xe = xs + patch_shape[1]
+                ye = min(ys + patch_shape[0], input_img[0].shape[1])
+                xe = min(xs + patch_shape[1], input_img[0].shape[2])
                 idx = (i * img_length + j) * len(Ys) + k
-                pred_img[j, ys:ye, xs:xe] += preds[idx, :, :, 0]
+                pred_img[j, ys:ye, xs:xe] += preds[idx, 0:ye-ys, 0:xe-xs, 0]
                 pred_count[j, ys:ye, xs:xe] += 1
     
+        pred_count[pred_count == 0] = 1 # to avoid zero division
         pred_img = pred_img / pred_count
         fname = ntpath.basename(paths[0])
         tiff.imsave(out_dir + '/' + fname,
