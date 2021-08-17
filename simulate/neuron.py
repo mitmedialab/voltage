@@ -22,6 +22,7 @@ SIGNAL_BOOST_FACTOR_MAX = 1.35
 NEURON_OPACITY = 0.5
 
 NON_SPIKING_CELL_RATIO = 0.3
+MIN_NUM_SPIKES_PER_FRAME = 0.005
 MAX_NUM_SPIKES_PER_FRAME = 0.02
 
 
@@ -81,7 +82,14 @@ class neuron:
 
 
     def set_spikes(self, time_frames):
-        num_spikes = random.randint(0, time_frames * MAX_NUM_SPIKES_PER_FRAME)
+        if(random.random() < NON_SPIKING_CELL_RATIO):
+            self.active = False
+            num_spikes = 0
+        else:
+            self.active = True
+            num_spikes = random.randint(time_frames * MIN_NUM_SPIKES_PER_FRAME,
+                                        time_frames * MAX_NUM_SPIKES_PER_FRAME)
+            
         spiking_frames = np.random.randint(0, time_frames, num_spikes)
         self.spiking_frames = np.sort(np.unique(spiking_frames))
         levels = np.random.uniform(SIGNAL_BOOST_FACTOR_MIN,
@@ -106,4 +114,3 @@ class neuron:
 
     def add_spatial_mask(self, image):
         return np.logical_or(image, self.mask)
-    

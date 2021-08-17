@@ -124,10 +124,15 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     # will cover a larger area
     canvas_shape = (image_shape[0] * 3 // 2, image_shape[1] * 3 // 2)
 
+    # set an ROI within which neuron centers to be generated
+    # to be a little smaller then the output image size,
+    # to avoid neurons occupying a very small area in the image
+    roi_shape = (image_shape[0] * 9 // 10, image_shape[1] * 9 // 10)
+    
     # create neurons
     neurons = []
     for i in range(num_neurons):
-        neu = neuron(i, canvas_shape, image_shape)
+        neu = neuron(i, canvas_shape, roi_shape)
         neu.set_spikes(time_frames)
         neurons.append(neu)
 
@@ -166,11 +171,13 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     tiff.imwrite(temporal_gt_dir + data_name + '.tif',
                  temporal_gt, photometric='minisblack')
 
-    spatial_gt = np.zeros((len(neurons),) + image_shape, dtype=bool)
-    for i, neu in enumerate(neurons):
-        canvas = np.zeros(canvas_shape, dtype=bool)
-        canvas = neu.add_spatial_mask(canvas)
-        spatial_gt[i] = add_motion(canvas, image_shape, 0, 0)
+    spatial_gt = np.zeros((0,) + image_shape, dtype=bool)
+    for neu in neurons:
+        if(neu.active): # skip non-spiking neurons
+            canvas = np.zeros(canvas_shape, dtype=bool)
+            canvas = neu.add_spatial_mask(canvas)
+            crop = add_motion(canvas, image_shape, 0, 0)
+            spatial_gt = np.append(spatial_gt, crop[np.newaxis], axis=0)
     
     tiff.imwrite(spatial_gt_dir + data_name + '.tif',
                  spatial_gt, photometric='minisblack')
