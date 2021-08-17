@@ -2,13 +2,13 @@ import math
 import numpy as np
 import tifffile as tiff
 from skimage import measure
-#from sklearn.decomposition import NMF
+from sklearn.decomposition import NMF
 
 
 MAX_NUM_OVERLAPPING_CELLS = 3
 ERROR_THRESH = 1e-3
 MAX_ITER = 10000
-UPDATE_STEP = 1.0e-3
+UPDATE_STEP = 1.0e-2
 ITER_THRESH = 1.0e-3
 
 
@@ -64,18 +64,23 @@ def compute_derivatives_z(num_cells, y, c, z):
     return dz
 
 
-def init_masks(image, num_cells):
-    #model = NMF(n_components=num_cells)
-    #return model.components_
-    num_frames, h, w = image.shape
-    return np.random.rand(num_cells, h * w)
+def init_masks(y, num_cells):
+    num_frames, num_pixels = y.shape
+    if(num_cells == 1):
+        return np.mean(y, axis=0)[np.newaxis]
+    else:
+        # probably init algorithm (such as nndsvd) for NMF should work
+        model = NMF(n_components=num_cells)
+        W = model.fit_transform(np.transpose(y))
+        return np.transpose(W)
+    #return np.random.rand(num_cells, num_pixels)
 
 
 def demix_cells_with_given_number(image, num_cells, component_id, save_images):
     num_frames, h, w = image.shape
     c = np.random.rand(num_cells, num_frames)
-    z = init_masks(image, num_cells)
     y = np.reshape(image, (num_frames, h * w))
+    z = init_masks(y, num_cells)
 
     # Alternate gradient descent, iterate until the masks no longer change
     # Important to clip values at [0, 1] as they represent probabilities
