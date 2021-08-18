@@ -103,7 +103,7 @@ def demix(in_dir, out_dir, filename):
         tiff.imwrite(out_file, masks.astype('float32'), photometric='minisblack')
 
 
-def evaluate(in_dir, gt_dir, out_dir, filename):
+def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
     if(filename):
         filenames = [os.path.join(in_dir, filename + '.tif')]
     else:
@@ -111,7 +111,8 @@ def evaluate(in_dir, gt_dir, out_dir, filename):
         filenames.sort()
     for in_file in filenames:
         gt_file = gt_dir + ntpath.basename(in_file)
-        run_ipynb_evaluate_each(in_file, gt_file, out_dir)
+        img_file = img_dir + ntpath.basename(in_file)
+        run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir)
     run_ipynb_evaluate_all(out_dir)
 
 
@@ -124,16 +125,16 @@ if(mode == 'toy'):
     data_dir = set_dir('data')
     temporal_gt_dir = set_dir('temporal_label')
     spatial_gt_dir = set_dir('spatial_label')
-    #simulate(NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
+    simulate(NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
 
     decimated_gt_dir = set_dir('temporal_label_%d' % TIME_SEGMENT_SIZE)
-    #decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or')
+    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or')
 
     demix_dir = set_dir('demixed')
     demix(decimated_gt_dir, demix_dir, filename)
 
     eval_dir = set_dir('evaluated')
-    evaluate(demix_dir, spatial_gt_dir, eval_dir, filename)
+    evaluate(demix_dir, spatial_gt_dir, data_dir, eval_dir, filename)
 
 elif(mode == 'train'):
     data_dir = set_dir('data')
@@ -160,7 +161,7 @@ elif(mode == 'train'):
     demix(segment_dir, demix_dir)
 
     eval_dir = set_dir('evaluated')
-    evaluate(demix_dir, spatial_gt_dir, eval_dir)
+    evaluate(demix_dir, spatial_gt_dir, average_dir, eval_dir, filename)
     
 elif(mode == 'run'):
     data_dir = DATA_PATH
@@ -182,5 +183,5 @@ elif(mode == 'run'):
     """
     eval_dir = set_dir('evaluated')
     spatial_gt_dir = GT_PATH
-    evaluate(demix_dir, spatial_gt_dir, eval_dir)
+    evaluate(demix_dir, spatial_gt_dir, average_dir, eval_dir, filename)
     """

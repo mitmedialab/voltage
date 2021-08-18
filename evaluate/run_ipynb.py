@@ -25,10 +25,11 @@ def _run_ipynb(data, out_dir, basename):
         f.write(body)
 
 
-def run_ipynb_evaluate_each(in_file, gt_file, out_dir):
+def run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir):
     data = read_text(templates, 'evaluate_each.ipynb')
     data = data.replace('@@@IN_FILE', in_file)
     data = data.replace('@@@GT_FILE', gt_file)
+    data = data.replace('@@@IMG_FILE', img_file)
     data = data.replace('@@@OUT_DIR', out_dir)
     _run_ipynb(data, out_dir, Path(in_file).stem)
 
