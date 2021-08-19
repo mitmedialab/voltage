@@ -127,7 +127,7 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     # set an ROI within which neuron centers to be generated
     # to be a little smaller then the output image size,
     # to avoid neurons occupying a very small area in the image
-    roi_shape = (image_shape[0] * 9 // 10, image_shape[1] * 9 // 10)
+    roi_shape = (image_shape[0] * 4 // 5, image_shape[1] * 4 // 5)
     
     # create neurons
     neurons = []
@@ -165,7 +165,7 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     for t in range(time_frames):
         canvas = np.zeros(canvas_shape, dtype=bool)
         for neu in neurons:
-            canvas = neu.add_temporal_mask(canvas, t)
+            canvas = neu.add_mask_image(canvas, t)
         temporal_gt[t] = add_motion(canvas, image_shape, 0, 0)
 
     tiff.imwrite(temporal_gt_dir + data_name + '.tif',
@@ -175,7 +175,7 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     for neu in neurons:
         if(neu.active): # skip non-spiking neurons
             canvas = np.zeros(canvas_shape, dtype=bool)
-            canvas = neu.add_spatial_mask(canvas)
+            canvas = neu.add_mask_image(canvas)
             crop = add_motion(canvas, image_shape, 0, 0)
             spatial_gt = np.append(spatial_gt, crop[np.newaxis], axis=0)
     

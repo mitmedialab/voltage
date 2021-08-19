@@ -29,6 +29,26 @@ MAX_NUM_SPIKES_PER_FRAME = 0.02
 class neuron:
 
     def __init__(self, ID, image_shape, roi_shape, deform=True):
+        """
+        Initialize neuron instance.
+
+        Parameters
+        ----------
+        ID : integer
+            ID of the neuron.
+        image_shape : 2-tuple of integers
+            Shape (H x W) of the image where the neuron will be placed.
+        roi_shape : 2-tuple of integers
+            Shape (H x W) of the region-of-interest (ROI)
+        deform : boolean, optional
+            Whether or not to deform the base elliptic neuron shape
+            in order to make it more realistic. The default is True.
+
+        Returns
+        -------
+        None.
+
+        """
         self.ID = ID
         self.image_shape = image_shape
         self._set_shape(roi_shape, deform)
@@ -36,6 +56,19 @@ class neuron:
 
 
     def _set_shape(self, roi_shape, deform):
+        """
+        Set the shape of the neuron. It is a rotated and deformed ellipse
+        whose center is within the ROI.
+
+        Parameters
+        ----------
+        See __init__().
+
+        Returns
+        -------
+        None.
+
+        """
         # Randomly choose the center coordinates within the region of interest
         y = random.randint(0, roi_shape[0]) + (self.image_shape[0] - roi_shape[0]) // 2
         x = random.randint(0, roi_shape[1]) + (self.image_shape[1] - roi_shape[1]) // 2
@@ -61,6 +94,14 @@ class neuron:
 
     # ToDo: add texture like perlin noise
     def _set_image(self):
+        """
+        Set the image of the neuron by assigning intensity over its footprint.
+
+        Returns
+        -------
+        None.
+
+        """
         # Initalize image with baseline brightness to cope with
         # the subsequent gaussian filtering and alpha composition
         baseline_brightness = random.uniform(BASELINE_BRIGHTNESS_MIN,
@@ -82,7 +123,22 @@ class neuron:
 
 
     def set_spikes(self, time_frames):
-        if(random.random() < NON_SPIKING_CELL_RATIO):
+        """
+        Set a spiking/firing pattern of the neuron.
+
+        Parameters
+        ----------
+        time_frames : integer
+            The number of time frames over which to generate a spike profile.
+
+        Returns
+        -------
+        None.
+
+        """
+        # first neuron (ID = 0) is always active to avoid synthesizing
+        # data with no active neuron
+        if(self.ID > 0 and random.random() < NON_SPIKING_CELL_RATIO):
             self.active = False
             num_spikes = 0
         else:
@@ -95,22 +151,52 @@ class neuron:
         levels = np.random.uniform(SIGNAL_BOOST_FACTOR_MIN,
                                    SIGNAL_BOOST_FACTOR_MAX,
                                    len(self.spiking_frames))
-        self.spike_levels = np.ones(time_frames)
+        self.spike_levels = np.ones(time_frames) # base level is one
         self.spike_levels[self.spiking_frames] = levels
 
 
     def add_cell_image(self, image, t):
+        """
+        Add the neuron to a given image.
+
+        Parameters
+        ----------
+        image : 2D numpy.ndarray of float
+            An image on which to draw the neuron.
+        t : integer
+            Time frame number.
+
+        Returns
+        -------
+        2D numpy.ndarray of float
+            Output image.
+
+        """
         background = (1 - self.alpha) * image
         foreground = self.alpha * self.image * self.spike_levels[t]
         return foreground + background
 
 
-    def add_temporal_mask(self, image, t):
-        if(t in self.spiking_frames):
+    def add_mask_image(self, image, t=-1):
+        """
+        Add the neuron mask to a given image.
+
+        Parameters
+        ----------
+        image : 2D numpy.ndarray of boolean
+            An image on which to draw the mask.
+        t : integer, optional
+            Time frame number. If the neuron is spiking at time t, the mask
+            will be added. Otherwise the input image will be returned as-is.
+            The default is -1, in which case the mask will always be added.
+
+        Returns
+        -------
+        2D numpy.ndarray of boolean
+            Output image.
+
+        """
+        if(t < 0 or t in self.spiking_frames):
             return np.logical_or(image, self.mask)
         else:
             return image
-
-
-    def add_spatial_mask(self, image):
-        return np.logical_or(image, self.mask)
