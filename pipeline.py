@@ -13,9 +13,10 @@ from evaluate import run_ipynb_evaluate_each, run_ipynb_evaluate_all
 IMAGE_SHAPE = (128, 128)
 TIME_FRAMES = 1000
 TIME_SEGMENT_SIZE = 50
-NUM_VIDEOS = 10
-BASE_PATH = '/media/bandy/nvme_work/voltage/sim/test'
-#BASE_PATH = '/media/bandy/nvme_work/voltage/real'
+NUM_VIDEOS = 1000
+#BASE_PATH = '/media/bandy/nvme_work/voltage/test'
+BASE_PATH = '/media/bandy/nvme_work/voltage/real'
+MODEL_PATH = '/media/bandy/nvme_work/voltage/test/model'
 DATA_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/WholeTifs'
 GT_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs_rev20201027/consensus'
 
@@ -23,7 +24,13 @@ PATCH_SHAPE = (64, 64)
 NUM_DARTS = 10
 BATCH_SIZE = 128
 EPOCHS = 10
-TILE_STRIDES = (16, 16)
+# WARNING: too small tile strides can lead to many samples to be fed into
+# the U-Net for prediction, which can cause GPU out-of-memory error.
+# For some reason, GPU memory consumption seems to pile up as more samples
+# are input, no matter how small the batch size is set to.
+# To avoid this, we might need to split a single input video into multiple
+# time segments or even perform prediction on a frame-by-frame basis.
+TILE_STRIDES = (8, 8)
 
 
 def set_dir(dirname):
@@ -85,8 +92,8 @@ def train(in_dirs, target_dir, model_dir, out_dir, ref_dir):
                    PATCH_SHAPE, TILE_STRIDES, BATCH_SIZE)
 
 
-def segment(in_dirs, model_dir, out_dir, ref_dir):
-    apply_model(in_dirs, model_dir, out_dir, ref_dir,
+def segment(in_dirs, model_dir, out_dir, ref_dir, filename):
+    apply_model(in_dirs, model_dir, out_dir, ref_dir, filename,
                 PATCH_SHAPE, TILE_STRIDES, BATCH_SIZE)
 
 
@@ -110,15 +117,15 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
         filenames = glob.glob(in_dir + '*.tif')
         filenames.sort()
     for in_file in filenames:
-        gt_file = gt_dir + ntpath.basename(in_file)
-        img_file = img_dir + ntpath.basename(in_file)
+        gt_file = os.path.join(gt_dir, ntpath.basename(in_file))
+        img_file = os.path.join(img_dir, ntpath.basename(in_file))
         run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir)
     run_ipynb_evaluate_all(out_dir)
 
 
 
 
-mode = 'toy'
+mode = 'run'
 filename = ''
 
 if(mode == 'toy'):
@@ -158,7 +165,7 @@ elif(mode == 'train'):
           segment_dir, validate_dir)
 
     demix_dir = set_dir('demixed')
-    demix(segment_dir, demix_dir)
+    demix(segment_dir, demix_dir, filename)
 
     eval_dir = set_dir('evaluated')
     evaluate(demix_dir, spatial_gt_dir, average_dir, eval_dir, filename)
@@ -167,21 +174,20 @@ elif(mode == 'run'):
     data_dir = DATA_PATH
     preprocess_dir = set_dir('preprocessed')
     correction_dir = set_dir('corrected')
-    #preprocess(data_dir, preprocess_dir, correction_dir)
+    preprocess(data_dir, preprocess_dir, correction_dir)
     
     average_dir = set_dir('average_%d' % TIME_SEGMENT_SIZE)
     decimate(correction_dir, average_dir, 'mean')
     #model_dir = set_dir('model')
-    model_dir = '/media/bandy/nvme_work/voltage/sim/test/model/'
+    model_dir = MODEL_PATH
     segment_dir = set_dir('segmented')
     reference_dir = set_dir('reference')
-    #segment([preprocess_dir, average_dir], model_dir,
-    #        segment_dir, reference_dir)
+    segment([preprocess_dir, average_dir], model_dir,
+            segment_dir, reference_dir, filename)
     
     demix_dir = set_dir('demixed')
-    demix(segment_dir, demix_dir)
-    """
+    demix(segment_dir, demix_dir, filename)
+    
     eval_dir = set_dir('evaluated')
     spatial_gt_dir = GT_PATH
     evaluate(demix_dir, spatial_gt_dir, average_dir, eval_dir, filename)
-    """

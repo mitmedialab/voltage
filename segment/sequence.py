@@ -1,6 +1,8 @@
 import random
+import math
 import numpy as np
 import tifffile as tiff
+from skimage.transform import resize
 from keras.utils import Sequence
 
 
@@ -19,8 +21,10 @@ class VI_Sequence(Sequence):
             Batch size for training
         patch_shape : tuple (height, width) of integers
             Image patch size to be extracted from image files.
-            The size may be smaller than the images loaded from the files,
-            but cannot be larger. It should be smaller if num_darts > 1.
+            The size should be equal to (when num_darts=1) or smaller than
+            (when num_darts>1) the input images for training. For inference,
+            the input images may be smaller than the patch size, in which case
+            the input images will be magnified.
         input_img_paths : list of list of strings
             List of file paths to input images to be fed into the U-Net.
             Each element of the list is a list of file paths corresponding
@@ -30,7 +34,7 @@ class VI_Sequence(Sequence):
         target_img_paths : list of strings
             List of file paths to target images specifing expected outputs
             from the U-Net. Each file (tiff) must contain the same number of
-            images as the corresponding input file.
+            images of the same size as the corresponding input file.
         num_darts : integer, optional
             The number of darts to be thrown per image to extract patches
             from the image. If num_darts=1 (default), one image patch is
@@ -57,53 +61,62 @@ class VI_Sequence(Sequence):
         """
         self.batch_size = batch_size
         self.patch_shape = patch_shape
-        self.input_img_paths = input_img_paths
-        self.target_img_paths = target_img_paths
         self.num_darts = num_darts
         self.tiled = tiled
         self.shuffle = shuffle
 
         self.num_channels = len(input_img_paths[0])
         tmp = tiff.imread(input_img_paths[0][0])
-        self.img_length = tmp.shape[0]
-        self.canvas_size = tmp.shape[1:]
+        self.num_frames = tmp.shape[0]
+        self.image_shape = tmp.shape[1:]
+        # handle cases where input images are smaller than the patch
+        ratio_y = patch_shape[0] / self.image_shape[0]
+        ratio_x = patch_shape[1] / self.image_shape[1]
+        if(ratio_y > 1 or ratio_x > 1):
+            self.needs_resizing = True
+            ratio = max(ratio_y, ratio_x)
+            h = math.floor(self.image_shape[0] * ratio + 0.5)
+            w = math.floor(self.image_shape[1] * ratio + 0.5)
+            self.image_shape = (h, w)
+        else:
+            self.needs_resizing = False
 
-        num_frames = len(input_img_paths) * self.img_length
-        buf_size = (num_frames,) + self.canvas_size
-        self.input_images = np.zeros(buf_size + (self.num_channels,),
+        num_images = len(input_img_paths) * self.num_frames
+        buf_shape = (num_images,) + self.image_shape
+        self.input_images = np.zeros(buf_shape + (self.num_channels,),
                                      dtype='float32')
-        self.target_images = np.zeros(buf_size, dtype='uint8')
-        img = np.zeros((self.img_length,) + self.canvas_size
-                       + (self.num_channels,), dtype='float32')
-        for i in range(len(input_img_paths)):
-            s = i * self.img_length
-            e = s + self.img_length
-            for j, path in enumerate(input_img_paths[i]):
-                img[:, :, :, j] = tiff.imread(path)
-            self.input_images[s:e] = img
+        self.target_images = np.zeros(buf_shape, dtype='uint8')
+        for i, paths in enumerate(input_img_paths):
+            s = i * self.num_frames
+            e = s + self.num_frames
+            for j, path in enumerate(paths):
+                tmp = tiff.imread(path)
+                if(self.needs_resizing):
+                    tmp = resize(tmp, (self.num_frames,) + self.image_shape)
+                self.input_images[s:e, :, :, j] = tmp
             if(target_img_paths is not None):
                 self.target_images[s:e] = tiff.imread(target_img_paths[i])
 
 
-        h = max(self.canvas_size[0] - self.patch_shape[0], 0)
-        w = max(self.canvas_size[1] - self.patch_shape[1], 0)
+        h = max(self.image_shape[0] - self.patch_shape[0], 0)
+        w = max(self.image_shape[1] - self.patch_shape[1], 0)
 
         if(tiled): # regular tiling
             y, x = np.mgrid[0:h+1:tile_strides[0], 0:w+1:tile_strides[1]]
             self.num_darts = x.size
             # same tile positions for all the images
-            self.Ys = np.tile(y.flatten(), num_frames)
-            self.Xs = np.tile(x.flatten(), num_frames)
+            self.Ys = np.tile(y.flatten(), num_images)
+            self.Xs = np.tile(x.flatten(), num_images)
 
         else: # random dart throwing
             if(num_darts == 1): # center patch
-                self.Ys = [h // 2 for i in range(num_frames)]
-                self.Xs = [w // 2 for i in range(num_frames)]
+                self.Ys = [h // 2 for i in range(num_images)]
+                self.Xs = [w // 2 for i in range(num_images)]
             elif(num_darts > 1): # randomly choose patch positions
-                self.Ys = np.random.randint(h, size=num_frames * num_darts)
-                self.Xs = np.random.randint(w, size=num_frames * num_darts)
+                self.Ys = np.random.randint(h+1, size=num_images * num_darts)
+                self.Xs = np.random.randint(w+1, size=num_images * num_darts)
 
-        self.sample_indices = list(range(num_frames * self.num_darts))
+        self.sample_indices = list(range(num_images * self.num_darts))
         if(shuffle):
             random.shuffle(self.sample_indices)
 
@@ -149,9 +162,9 @@ class VI_Sequence(Sequence):
             The shape is batch_size x patch_height x patch_width x 1.
 
         """
-        buf_size = (self.batch_size,) + self.patch_shape
-        inputs = np.zeros(buf_size + (self.num_channels,), dtype='float32')
-        targets = np.zeros(buf_size + (1,), dtype='float32')
+        buf_shape = (self.batch_size,) + self.patch_shape
+        inputs = np.zeros(buf_shape + (self.num_channels,), dtype='float32')
+        targets = np.zeros(buf_shape + (1,), dtype='float32')
         for i in range(self.batch_size):
             ofs = self.batch_size * idx + i
             if(ofs >= len(self.sample_indices)):
@@ -160,10 +173,10 @@ class VI_Sequence(Sequence):
             img_idx = sample_idx // self.num_darts
             ys = self.Ys[sample_idx]
             xs = self.Xs[sample_idx]
-            ye = min(ys + self.patch_shape[0], self.canvas_size[0])
-            xe = min(xs + self.patch_shape[1], self.canvas_size[1])
-            inputs[i, 0:ye-ys, 0:xe-xs] = self.input_images[img_idx, ys:ye, xs:xe]
-            targets[i, 0:ye-ys, 0:xe-xs, 0] = self.target_images[img_idx, ys:ye, xs:xe]
+            ye = ys + self.patch_shape[0] # no greater than self.image_shape[0]
+            xe = xs + self.patch_shape[1] # no greater than self.image_shape[1]
+            inputs[i] = self.input_images[img_idx, ys:ye, xs:xe]
+            targets[i, :, :, 0] = self.target_images[img_idx, ys:ye, xs:xe]
 
         return inputs, targets
 
