@@ -8,6 +8,42 @@ from .model import get_model
 def train_model(input_dir_list, target_dir, model_dir,
                 seed, validation_ratio,
                 patch_shape, num_darts, batch_size, epochs):
+    """
+    Train the U-Net for cell segmentation.
+
+    Parameters
+    ----------
+    input_dir_list : list of string
+        List of directory paths containing input files. Each directory path
+        corresponds to one channel of the input.
+    target_dir : string
+        Directory path containing target files.
+    model_dir : string
+        Directory path in which the trained model will be saved.
+    seed : integer
+        Seed for randomized splitting into traning and validation data.
+    validation_ratio : integer
+        What fraction of the inputs are used for validation. If there are
+        N inputs, N/validation_ratio of them will be used for validation,
+        while the rest will be used for training.
+    patch_shape : tuple (height, width) of integer
+        Size of patches to be extracted from images. Training will be
+        performed on a patch-wise manner.
+    num_darts : integer
+        The number of darts to be thrown per image to extract patches
+        from the image. If num_darts=1, one image patch is extracted from
+        the center of the image. If num_darts>1, each dart randomly picks
+        a patch location within the image.
+    batch_size : integer
+        Batch size for training.
+    epochs : integer
+        The number of epochs to run.
+
+    Returns
+    -------
+    None.
+
+    """
     
     data = get_training_data(input_dir_list, target_dir,
                              seed, validation_ratio)
