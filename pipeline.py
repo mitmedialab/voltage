@@ -53,13 +53,13 @@ def simulate(num_videos, data_dir, temporal_gt_dir, spatial_gt_dir):
     pool.close()
 
 
-def decimate(in_dir, out_dir, mode):
+def decimate(in_dir, out_dir, mode, size):
     filenames = glob.glob(in_dir + '/*.tif')
     filenames.sort()
     args = []
     for in_file in filenames:
         out_file = out_dir + ntpath.basename(in_file)
-        args.append((in_file, out_file, TIME_SEGMENT_SIZE, mode))
+        args.append((in_file, out_file, mode, size))
     
     pool = mp.Pool(mp.cpu_count())
     pool.starmap(decimate_video, args)
@@ -135,7 +135,7 @@ if(mode == 'toy'):
     simulate(NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
 
     decimated_gt_dir = set_dir('temporal_label_%d' % TIME_SEGMENT_SIZE)
-    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or')
+    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or', TIME_SEGMENT_SIZE)
 
     demix_dir = set_dir('demixed')
     demix(decimated_gt_dir, demix_dir, filename)
@@ -150,14 +150,14 @@ elif(mode == 'train'):
     simulate(NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
 
     decimated_gt_dir = set_dir('temporal_label_%d' % TIME_SEGMENT_SIZE)
-    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or')
+    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or', TIME_SEGMENT_SIZE)
 
     preprocess_dir = set_dir('preprocessed')
     correction_dir = set_dir('corrected')
     preprocess(data_dir, preprocess_dir, correction_dir)
 
     average_dir = set_dir('average_%d' % TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean')
+    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE)
     model_dir = set_dir('model')
     segment_dir = set_dir('segmented')
     validate_dir = set_dir('validate')
@@ -177,7 +177,7 @@ elif(mode == 'run'):
     preprocess(data_dir, preprocess_dir, correction_dir)
     
     average_dir = set_dir('average_%d' % TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean')
+    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE)
     #model_dir = set_dir('model')
     model_dir = MODEL_PATH
     segment_dir = set_dir('segmented')

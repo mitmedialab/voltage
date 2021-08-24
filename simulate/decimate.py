@@ -2,7 +2,7 @@ import numpy as np
 import tifffile as tiff
 
 
-def decimate_video(in_file, out_file, size, mode):
+def decimate_video(in_file, out_file, mode, size=0):
     """
     Decimate video (time-varying 2D image) along time.
 
@@ -12,11 +12,13 @@ def decimate_video(in_file, out_file, size, mode):
         File name of the input video.
     out_file : string
         File name of the output video.
-    size : integer
-        Window size for decimation. The number of frames in the output video
-        will be the number of frames in the input video divided by this size.
     mode : string
         Decimation mode. The options are 'logical_or', 'mean', and 'median'.
+    size : integer, optional
+        Window size for decimation. The number of frames in the output video
+        will be the number of frames in the input video divided by this size.
+        If size is zero (default), the entire video will be decimated into
+        a single frame.
         
     Returns
     -------
@@ -25,6 +27,8 @@ def decimate_video(in_file, out_file, size, mode):
     """
     in_video = tiff.imread(in_file)
     num_in_frames = len(in_video)
+    if(size <= 0):
+        size = num_in_frames
     num_out_frames = (num_in_frames + size - 1) // size
     out_video = np.zeros((num_out_frames,) + in_video[0].shape,
                          dtype=in_video.dtype)
