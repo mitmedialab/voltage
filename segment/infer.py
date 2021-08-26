@@ -54,7 +54,7 @@ def predict_and_merge(model, data_seq, patch_shape,
                      pred_img.astype('float32'), photometric='minisblack')
         
         # reference output for visual inspection
-        video = np.zeros(pred_img.shape[:2] + (0,), dtype='float32')
+        video = np.zeros(pred_img.shape[:2] + (0,))
         for img in input_imgs:
             video = np.append(video, img / np.max(img), axis=2)
         if(target_paths is not None):
@@ -62,7 +62,7 @@ def predict_and_merge(model, data_seq, patch_shape,
             video = np.append(video, target_img, axis=2)
         video = np.append(video, pred_img, axis=2)
         tiff.imwrite(os.path.join(ref_dir, fname),
-                     video, photometric='minisblack')
+                     video.astype('float32'), photometric='minisblack')
 
 
 def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
