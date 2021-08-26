@@ -1,0 +1,11 @@
+TOPTARGETS := all clean
+
+SUBDIRS := preproc demix
+
+$(TOPTARGETS): $(SUBDIRS)
+
+$(SUBDIRS):
+	$(MAKE) -C $@ $(MAKECMDGOALS)
+
+.PHONY: $(TOPTARGETS) $(SUBDIRS)
+
