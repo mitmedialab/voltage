@@ -1,87 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-
 import numpy as np
-from read_roi import read_roi_zip, read_roi_file
-import json
-import tifffile as tiff
-from skimage import draw as skdraw
-from skimage.segmentation import find_boundaries
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import maximum_bipartite_matching
-import os
-
-
-
-def roi2masks(roi_dict, image_shape):
-    num_masks = len(roi_dict.keys())
-    if(num_masks == 0):
-        num_masks = 1
-    mask_images = np.zeros((num_masks, ) + image_shape, dtype=bool)
-    contour_image = np.zeros(image_shape, dtype=bool)
-    roi_idxs = []
-    for i, key in enumerate(roi_dict):
-        roi = roi_dict[key]
-        r = np.array(roi['y'])
-        c = np.array(roi['x'])
-
-        rr, cc = skdraw.polygon(r, c, image_shape)
-        mask_images[i][rr, cc] = True
-
-        rr, cc = skdraw.polygon_perimeter(r, c, image_shape)
-        contour_image[rr, cc] = True
-
-        contour = find_boundaries(mask_images[i], mode='outer')
-        roi_idxs.append(np.where(contour == True))
-
-    return mask_images, contour_image, roi_idxs
-
-
-def roi2masks_from_demix_result(roi_dict, image_shape):
-    num_masks = len(roi_dict.keys())
-    if(num_masks == 0):
-        num_masks = 1
-    mask_images = np.zeros((num_masks, ) + image_shape, dtype=bool)
-    contour_image = np.zeros(image_shape, dtype=bool)
-    roi_idxs = []
-    for i, key in enumerate(roi_dict):
-        roi = roi_dict[key]
-        c = json.loads(roi['idxy'])
-        r = json.loads(roi['idxx'])
-        mask_images[i][r, c] = True
-
-        contour = find_boundaries(mask_images[i], mode='outer')
-        roi_idxs.append(np.where(contour == True))
-        contour_image = np.logical_or(contour_image, contour)
-
-    return mask_images, contour_image, roi_idxs
-
-
-def load_roi(roi_path, roi_base, image_shape):
-    roi_file = roi_path + '/' + roi_base + '.roi'
-    roi_zip  = roi_path + '/' + roi_base + '.zip'
-    roi_tiff = roi_path + '/' + roi_base + '.tif'
-
-    if(os.path.isfile(roi_file)):
-        roi_dict = read_roi_file(roi_file)
-    elif(os.path.isfile(roi_zip)):
-        roi_dict = read_roi_zip(roi_zip)
-    elif(os.path.isfile(roi_tiff)):
-        mask_images = tiff.imread(roi_tiff).astype(bool)
-        contour_image = np.zeros(image_shape, dtype=bool)
-        roi_idxs = []
-        for mask in mask_images:
-            contour = find_boundaries(mask, mode='outer')
-            roi_idxs.append(np.where(contour == True))
-            contour_image = np.logical_or(contour_image, contour)
-        return mask_images, contour_image, roi_idxs
-    else:
-        print('file not found: ' + roi_path + '/' + roi_base + '.{roi,zip,tif}')
-        roi_dict = {}
-
-    return roi2masks(roi_dict, image_shape)
-
 
 
 def remove_duplicate_matches(matches):
@@ -174,4 +93,3 @@ def calc_f1_scores(counts):
     f1 = np.divide(2 * precision * recall, precision + recall,
                    out=np.zeros_like(recall), where=(true_pos > 0))
     return f1, precision, recall
-
