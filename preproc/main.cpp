@@ -65,9 +65,9 @@ int main(int argc, char *argv[])
     motion_param.y_range = 1.0;
     motion_param.a_stdev = 1.0;
     motion_param.m_stdev = 3.0;
-    motion_param.thresh_xy = 1.0;
+    motion_param.thresh_xy = 10.0;
     motion_param.length = 2000;
-    motion_param.thresh_c = 0.4;
+    motion_param.thresh_c = 1.0;
 
     shading_param_t shading_param;
     shading_param.period = 1000;
