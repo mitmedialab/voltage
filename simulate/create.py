@@ -102,12 +102,12 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
         Number of frames to synthesize.
     num_neurons : int
         Number of neurons in the image.
-    data_dir : string
+    data_dir : pathlib.Path
         Directory path where the simulated data will be saved.
-    temporal_gt_dir : string
+    temporal_gt_dir : pathlib.Path
         Directory path where the temporal ground truth labeling will be saved,
         where each image represents the areas of active neurons at one frame.
-    spatial_gt_dir : string
+    spatial_gt_dir : pathlib.Path
         Directory path where the spatial ground truth labeling will be saved,
         where each image represents the footprint of one neuron.
     data_name : string
@@ -156,7 +156,7 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
         frame = add_read_noise(frame, SENSOR_READ_NOISE)
         video[t] = frame
 
-    tiff.imwrite(data_dir + data_name + '.tif',
+    tiff.imwrite(data_dir.joinpath(data_name + '.tif'),
                  video.astype('float32'), photometric='minisblack')
 
 
@@ -168,7 +168,7 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
             canvas = neu.add_mask_image(canvas, t)
         temporal_gt[t] = add_motion(canvas, image_shape, 0, 0)
 
-    tiff.imwrite(temporal_gt_dir + data_name + '.tif',
+    tiff.imwrite(temporal_gt_dir.joinpath(data_name + '.tif'),
                  temporal_gt, photometric='minisblack')
 
     spatial_gt = np.zeros((0,) + image_shape, dtype=bool)
@@ -179,6 +179,6 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
             crop = add_motion(canvas, image_shape, 0, 0)
             spatial_gt = np.append(spatial_gt, crop[np.newaxis], axis=0)
     
-    tiff.imwrite(spatial_gt_dir + data_name + '.tif',
+    tiff.imwrite(spatial_gt_dir.joinpath(data_name + '.tif'),
                  spatial_gt, photometric='minisblack')
     

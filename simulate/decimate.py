@@ -8,9 +8,9 @@ def decimate_video(in_file, out_file, mode, size=0):
 
     Parameters
     ----------
-    in_file : string
+    in_file : pathlib.Path
         File name of the input video.
-    out_file : string
+    out_file : pathlib.Path
         File name of the output video.
     mode : string
         Decimation mode. The options are 'logical_or', 'mean', and 'median'.

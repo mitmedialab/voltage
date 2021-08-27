@@ -1,10 +1,7 @@
-import os
 import random
-import glob
-import ntpath
 
 
-def _get_file_list(input_dir_list, target_dir):
+def _get_file_list(input_dir_list, target_dir=None):
     """
     Get lists of input and target file paths.
 
@@ -15,21 +12,20 @@ def _get_file_list(input_dir_list, target_dir):
     Returns
     -------
     input_files : see get_inference_data().
-    target_files : list of string
+    target_files : list of pathlib.Path
         List of paths to the target files in target_dir.
 
     """
     input_files = []
     target_files = []
-    filenames = glob.glob(input_dir_list[0] + '/*.tif')
-    filenames.sort()
+    filenames = sorted(input_dir_list[0].glob('*.tif'))
     for filename in filenames:
-        basename = ntpath.basename(filename)
         inputs = []
         for input_dir in input_dir_list:
-            inputs.append(os.path.join(input_dir, basename))
+            inputs.append(input_dir.joinpath(filename.name))
         input_files.append(inputs)
-        target_files.append(os.path.join(target_dir, basename))
+        if(target_dir is not None):
+            target_files.append(target_dir.joinpath(filename.name))
 
     return input_files, target_files
 
@@ -42,10 +38,10 @@ def get_training_data(input_dir_list, target_dir, seed, validation_ratio):
 
     Parameters
     ----------
-    input_dir_list : list of string
+    input_dir_list : list of pathlib.Path
         List of directory paths containing input files. Each directory path
         corresponds to one channel of the input.
-    target_dir : string
+    target_dir : pathlib.Path
         Directory path containing target files.
     seed : integer
         Random seed for shuffling data before splitting.
@@ -56,15 +52,15 @@ def get_training_data(input_dir_list, target_dir, seed, validation_ratio):
 
     Returns
     -------
-    train_inputs : list of list of string
+    train_inputs : list of list of pathlib.Path
         List of paths to input files for training. Each item in the list is
         a file list corresponding to multiple channels of the input.
-    train_targets : list of string
+    train_targets : list of pathlib.Path
         List of paths to target files for training.
-    valid_inputs : list of list of string
+    valid_inputs : list of list of pathlib.Path
         List of paths to input files for validation. Each item in the list is
         a file list corresponding to multiple channels of the input.
-    valid_targets : list of string
+    valid_targets : list of pathlib.Path
         List of paths to target files for validation.
 
     """
@@ -86,13 +82,13 @@ def get_inference_data(input_dir_list):
 
     Parameters
     ----------
-    input_dir_list : list of string
+    input_dir_list : list of pathlib.Path
         List of directory paths containing input files. Each directory path
         corresponds to one channel of the input.
 
     Returns
     -------
-    input_files : list of list of string
+    input_files : list of list of pathlib.Path
         List of paths to input files. Each item in this list is a file list
         corresponding to multiple channels of the input. That is, each file
         path in the file list corresponds to one input file in one of the
@@ -100,5 +96,5 @@ def get_inference_data(input_dir_list):
         is the i-th file in the directory input_dir_list[j].
 
     """
-    input_files, _ = _get_file_list(input_dir_list, '')
+    input_files, _ = _get_file_list(input_dir_list)
     return input_files

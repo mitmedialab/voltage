@@ -13,12 +13,12 @@ def train_model(input_dir_list, target_dir, model_dir,
 
     Parameters
     ----------
-    input_dir_list : list of string
+    input_dir_list : list of pathlib.Path
         List of directory paths containing input files. Each directory path
         corresponds to one channel of the input.
-    target_dir : string
+    target_dir : pathlib.Path
         Directory path containing target files.
-    model_dir : string
+    model_dir : pathlib.Path
         Directory path in which the trained model will be saved.
     seed : integer
         Seed for randomized splitting into traning and validation data.
@@ -68,11 +68,11 @@ def train_model(input_dir_list, target_dir, model_dir,
     model.compile(optimizer="rmsprop", loss='binary_crossentropy')
     
     callbacks = [
-        keras.callbacks.ModelCheckpoint(model_dir + '/weight.h5',
+        keras.callbacks.ModelCheckpoint(model_dir.joinpath('weight.h5'),
                                         save_best_only=True)
     ]
     
     model.fit(train_seq, validation_data=valid_seq,
               epochs=epochs, callbacks=callbacks)
     
-    model.save(model_dir + '/model.h5')
+    model.save(model_dir.joinpath('model.h5'))

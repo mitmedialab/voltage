@@ -25,13 +25,13 @@ class VI_Sequence(Sequence):
             (when num_darts>1) the input images for training. For inference,
             the input images may be smaller than the patch size, in which case
             the input images will be magnified.
-        input_img_paths : list of list of strings
+        input_img_paths : list of list of pathlib.Path
             List of file paths to input images to be fed into the U-Net.
             Each element of the list is a list of file paths corresponding
             to multiple channels.
             Each file (tiff) can contain multiple images. The number of images
             per file and the image size must be the same for all the files.
-        target_img_paths : list of strings
+        target_img_paths : list of pathlib.Path
             List of file paths to target images specifing expected outputs
             from the U-Net. Each file (tiff) must contain the same number of
             images of the same size as the corresponding input file.

@@ -1,8 +1,5 @@
-import os
-import ntpath
 import numpy as np
 import tifffile as tiff
-from pathlib import Path
 from skimage.transform import resize
 from scipy.signal.windows import gaussian
 from keras import models
@@ -49,8 +46,7 @@ def predict_and_merge(model, data_seq, patch_shape,
         if(data_seq.needs_resizing):
             pred_img = resize(pred_img, input_imgs[0].shape,
                               anti_aliasing=True)
-        fname = ntpath.basename(paths[0])
-        tiff.imwrite(os.path.join(out_dir, fname),
+        tiff.imwrite(out_dir.joinpath(paths[0].name),
                      pred_img.astype('float32'), photometric='minisblack')
         
         # reference output for visual inspection
@@ -61,7 +57,7 @@ def predict_and_merge(model, data_seq, patch_shape,
             target_img = tiff.imread(target_paths[i])
             video = np.append(video, target_img, axis=2)
         video = np.append(video, pred_img, axis=2)
-        tiff.imwrite(os.path.join(ref_dir, fname),
+        tiff.imwrite(ref_dir.joinpath(paths[0].name),
                      video.astype('float32'), photometric='minisblack')
 
 
@@ -78,7 +74,7 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
                             valid_input_paths, valid_target_paths,
                             tiled=True, tile_strides=tile_strides)
 
-    model = models.load_model(model_dir + '/model.h5')
+    model = models.load_model(model_dir.joinpath('model.h5'))
 
     predict_and_merge(model, valid_seq, patch_shape,
                       valid_input_paths, valid_target_paths, out_dir, ref_dir)
@@ -88,9 +84,9 @@ def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
                 patch_shape, tile_strides, batch_size):
 
     input_files = get_inference_data(input_dir_list)
-    model = models.load_model(model_dir + '/model.h5')
+    model = models.load_model(model_dir.joinpath('model.h5'))
     for paths in input_files:
-        if(filename and Path(paths[0]).stem != filename):
+        if(filename and paths[0].stem != filename):
             continue
         
         data_seq = VI_Sequence(batch_size, patch_shape,

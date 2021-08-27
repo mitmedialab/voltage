@@ -1,7 +1,6 @@
-import glob
+import pathlib
 import numpy as np
 import pandas as pd
-from pathlib import Path
 
 from .f1score import calc_f1_scores
 
@@ -9,7 +8,7 @@ from .f1score import calc_f1_scores
 REPRESENTATIVE_IOU = 0.4
 
 
-def aggregate_scores(out_dir, filter_func=lambda x: True):
+def _aggregate_scores(out_dir, filter_func=lambda x: True):
 
     dataset_ids = []
     precision_each = []
@@ -17,15 +16,14 @@ def aggregate_scores(out_dir, filter_func=lambda x: True):
     f1_each = []
 
     first = True
-    filenames = glob.glob(out_dir + '/*.html')
-    filenames.sort()
+    filenames = sorted(out_dir.glob('*.html'))
     for in_file in filenames:
         #if(not filter_func(param)):
         #    continue
-        basename = Path(in_file).stem
+        basename = in_file.stem
         if(basename == 'all'): # skip preexisting aggregation result
             continue
-        df = pd.read_csv(out_dir + '/' + basename + '_counts.csv')
+        df = pd.read_csv(out_dir.joinpath(basename + '_counts.csv'))
         if(first):
             df_sum = df[['TruePos', 'FalsePos', 'FalseNeg']]
             thresholds = df['IoU_Thresh']
@@ -47,7 +45,7 @@ def aggregate_scores(out_dir, filter_func=lambda x: True):
     df_sum['Precision'] = precision_all
     df_sum['Recall'] = recall_all
     df_sum['F1'] = f1_all
-    df_sum.to_csv(out_dir + '/all_counts.csv', index=False)
+    df_sum.to_csv(out_dir.joinpath('all_counts.csv'), index=False)
     
     df_each = pd.DataFrame(dataset_ids, columns=['Dataset'])
     #df_each['MagnificationValue'] = magnifications
@@ -60,11 +58,10 @@ def aggregate_scores(out_dir, filter_func=lambda x: True):
 
 
 def evaluate_all(out_dir):
-    
-    eval_data = {}
-    
-    f1_rep, df_sum, df_each = aggregate_scores(out_dir)
+        
+    f1_rep, df_sum, df_each = _aggregate_scores(pathlib.Path(out_dir))
 
+    eval_data = {}
     eval_data['representative f1'] = f1_rep
     
     eval_data['thresholds'] = df_sum['IoU_Thresh']
