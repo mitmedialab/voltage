@@ -363,8 +363,10 @@ float ***extract_signal(signal_param_t &param,
                 recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
             }
             const size_t m = frames.size() / 2;
-            for(int i = w_start; i < w_end; i++)
-            for(int j = h_start; j < h_end; j++)
+            //for(int i = w_start; i < w_end; i++)
+            //for(int j = h_start; j < h_end; j++)
+            for(int i = 0; i < width; i++)
+            for(int j = 0; j < height; j++)
             {
                 std::vector<float> v;
                 float max = 0;
