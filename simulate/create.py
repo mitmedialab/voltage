@@ -7,7 +7,7 @@ from skimage.util import random_noise
 
 from .neuron import neuron
 from .motion import synthesize_motion
-
+from .blood import blood
 
 
 # Todo: these should vary to some extent
@@ -141,6 +141,7 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     temporal_profile = synthesize_illumination_fluctuation(time_frames)
     focus_offset = synthesize_focus_flucturation(time_frames)
     Xs, Ys = synthesize_motion(time_frames)
+    bld = blood(canvas_shape)
     
     # synthesize video
     video = np.zeros((time_frames,) + image_shape)
@@ -148,6 +149,7 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
         canvas = np.zeros(canvas_shape)
         for neu in neurons:
             canvas = neu.add_cell_image(canvas, t)
+        canvas = bld.add_image(canvas, t)
         canvas += bg
         frame = add_motion(canvas, image_shape, Xs[t], Ys[t])
         frame = add_illumination(frame, LASER_SPOT_SIGMA, temporal_profile[t])
