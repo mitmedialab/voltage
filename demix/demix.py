@@ -168,16 +168,13 @@ def compute_masks(in_file, out_file, save_images=False):
 
     probability_maps = tiff.imread(in_file).astype(float)
 
-    # downsample to make it faster
+    # sum probability maps (at the downsampled size to reduce clutter )
     down = rescale(probability_maps, (1, 0.25, 0.25), anti_aliasing=True)
-    cell_img = demix_cells_incrementally(down, 'cpu', save_images, 4)
-    cell_img = resize(cell_img, (cell_img.shape[0],) + probability_maps.shape[1:])
-    
-    # sum demixed cells to get a single image with all active cells
-    sum_image = np.sum(cell_img, axis=0)
+    sum_image = np.mean(down, axis=0)
+    sum_image = resize(sum_image, probability_maps.shape[1:])
 
     # separate them into connected components
-    threshold = filters.threshold_li(sum_image)
+    threshold = filters.threshold_otsu(sum_image)
     binary_image = sum_image > threshold
     label_image = measure.label(binary_image)
     components = measure.regionprops(label_image)
@@ -192,8 +189,8 @@ def compute_masks(in_file, out_file, save_images=False):
     for c in components:
         component_id = c.label
         
-        if(c.area < 10 or h * w / 10 < c.area):
-            continue
+        #if(c.area < 10 or h * w / 10 < c.area):
+        #    continue
         
         ymin, xmin, ymax, xmax = c.bbox
         if(xmin==0 and xmax < 10):
@@ -218,6 +215,7 @@ def compute_masks(in_file, out_file, save_images=False):
         label = label_image[ymin:ymax, xmin:xmax]
         self_or_background = np.logical_or(label == component_id, label == 0)
         crop = np.multiply(crop, self_or_background)
+        # this should be excluded from the equation rather than setting it to zero
         
         # Here we could demix cells in the subimage
         # but for now use the connected component as-is
@@ -231,8 +229,12 @@ def compute_masks(in_file, out_file, save_images=False):
         
         if(save_images):
             tiff.imwrite('comp%2.2d.tif' % component_id,
-                         crop, photometric='minisblack')
+                         crop.astype('float32'), photometric='minisblack')
             tiff.imwrite('mask%2.2d.tif' % component_id,
                          masks.astype('float32'), photometric='minisblack')
-    
+
+    # if no mask, add a blank mask so the image will have at least one page
+    if(out.shape[0] == 0):
+        out = np.zeros((1, h, w))
+
     tiff.imwrite(out_file, out.astype('float32'), photometric='minisblack')
