@@ -14,17 +14,17 @@
 
 ## Environment Setup
 
-$ conda create -n voltage python=3.8
-$ conda activate voltage
-$ conda install tiffile
-$ conda install scipy
-$ conda install scikit-image
-$ conda install keras
-$ conda install tensorflow-gpu
-$ conda install nbformat
-$ conda install nbconvert
-$ conda install pandas
-$ pip install elasticdeform
+$ conda create -n voltage python=3.8  
+$ conda activate voltage  
+$ conda install tiffile  
+$ conda install scipy  
+$ conda install scikit-image  
+$ conda install keras  
+$ conda install tensorflow-gpu  
+$ conda install nbformat  
+$ conda install nbconvert  
+$ conda install pandas  
+$ pip install elasticdeform  
 
 
 ## Building Libraries
@@ -32,7 +32,7 @@ $ pip install elasticdeform
 $ cd lib/tiff-4.1.0_mod  
 $ ./configure  
 $ make  
-$ cd ../..
+$ cd ../..  
 $ make  
 
 Building tiff-4.1.0_mod allows much faster saving of multipage tiffs, but one could also use standard libtiff instead.
@@ -47,5 +47,5 @@ To train the U-Net cell segmentation network, set mode = 'train' in pipeline.py 
 $ python pipeline.py
 
 This will create synthetic data and train the network. The trained U-Net model will be stored in MODEL_PATH. 
-To run the pipeline for real data sets using the trained model, set mode = 'run' and run the pipeline.py.
 
+To run the pipeline for real data sets using the trained model, set mode = 'run' and run the pipeline.py.
