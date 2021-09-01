@@ -35,7 +35,7 @@ VALIDATION_TILE_STRIDES = (16, 16)
 
 # real data parameters
 INFERENCE_TILE_STRIDES = (8, 8)
-REAL_PATH = '/media/bandy/nvme_work/voltage/tmp'
+REAL_PATH = '/media/bandy/nvme_work/voltage/real'
 DATA_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/WholeTifs'
 GT_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs_rev20201027/consensus'
 
@@ -61,8 +61,11 @@ def simulate(num_videos, data_dir, temporal_gt_dir, spatial_gt_dir):
     pool.close()
 
 
-def decimate(in_dir, out_dir, mode, size):
-    filenames = sorted(in_dir.glob('*.tif'))
+def decimate(in_dir, out_dir, mode, size, filename):
+    if(filename):
+        filenames = [in_dir.joinpath(filename + '.tif')]
+    else:
+        filenames = sorted(in_dir.glob('*.tif'))
     args = []
     for in_file in filenames:
         out_file = out_dir.joinpath(in_file.name)
@@ -73,8 +76,11 @@ def decimate(in_dir, out_dir, mode, size):
     pool.close()
 
 
-def preprocess(in_dir, out_dir, correction_dir):
-    filenames = sorted(in_dir.glob('*.tif'))
+def preprocess(in_dir, out_dir, correction_dir, filename):
+    if(filename):
+        filenames = [in_dir.joinpath(filename + '.tif')]
+    else:
+        filenames = sorted(in_dir.glob('*.tif'))
     for in_file in filenames:
         command = 'preproc/main -db -ms 5 -sm 1 -sc 0 -ss 2 -sw %d' % TIME_SEGMENT_SIZE
         command += ' %s %s' % (in_file, out_dir)
@@ -157,14 +163,14 @@ elif(mode == 'train'):
     simulate(NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
 
     decimated_gt_dir = set_dir(SIM_PATH, 'temporal_label_%d' % TIME_SEGMENT_SIZE)
-    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or', TIME_SEGMENT_SIZE)
+    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or', TIME_SEGMENT_SIZE, filename)
 
     preprocess_dir = set_dir(SIM_PATH, 'preprocessed')
     correction_dir = set_dir(SIM_PATH, 'corrected')
-    preprocess(data_dir, preprocess_dir, correction_dir)
+    preprocess(data_dir, preprocess_dir, correction_dir, filename)
 
     average_dir = set_dir(SIM_PATH, 'average_%d' % TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE)
+    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE, filename)
     model_dir = pathlib.Path(MODEL_PATH)
     segment_dir = set_dir(SIM_PATH, 'segmented')
     validate_dir = set_dir(SIM_PATH, 'validate')
@@ -181,10 +187,10 @@ elif(mode == 'run'):
     data_dir = pathlib.Path(DATA_PATH)
     preprocess_dir = set_dir(REAL_PATH, 'preprocessed')
     correction_dir = set_dir(REAL_PATH, 'corrected')
-    preprocess(data_dir, preprocess_dir, correction_dir)
+    preprocess(data_dir, preprocess_dir, correction_dir, filename)
     
     average_dir = set_dir(REAL_PATH, 'average_%d' % TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE)
+    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE, filename)
     model_dir = pathlib.Path(MODEL_PATH)
     segment_dir = set_dir(REAL_PATH, 'segmented')
     reference_dir = set_dir(REAL_PATH, 'reference')
