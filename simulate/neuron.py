@@ -7,12 +7,13 @@ from scipy.ndimage import gaussian_filter
 from elasticdeform import deform_grid
 
 
-NEURON_SIZE_MEAN = 10
-NEURON_SIZE_VARIANCE = 10
+NEURON_SIZE_MIN = 10
+NEURON_SIZE_MAX = 30
+NEURON_ECCENTRICITY = 0.3 # used differently from mathematical definition
 MEMBRANE_THICKNESS_MIN = 3
 MEMBRANE_THICKNESS_MAX = 5
 
-BASELINE_BRIGHTNESS_MIN = 0.10 # 0.02
+BASELINE_BRIGHTNESS_MIN = 0.10
 BASELINE_BRIGHTNESS_MAX = 0.25
 CYTOSOL_DEPRESSION_MIN = 0.1
 CYTOSOL_DEPRESSION_MAX = 1.0
@@ -75,9 +76,9 @@ class neuron:
 
         # Model neuron shape as an ellipse
         angle = random.uniform(-math.pi, +math.pi)
-        var_half = NEURON_SIZE_VARIANCE / 2
-        axis1 = NEURON_SIZE_MEAN + random.randint(-var_half, +var_half)
-        axis2 = NEURON_SIZE_MEAN + random.randint(-var_half, +var_half)
+        axis1 = random.uniform(NEURON_SIZE_MIN, NEURON_SIZE_MAX) / 2
+        axis2 = axis1 * random.uniform(1 - NEURON_ECCENTRICITY,
+                                       1 + NEURON_ECCENTRICITY)
         Ys, Xs = draw.ellipse(y, x, axis1, axis2, self.image_shape, angle)
 
         self.mask = np.zeros(self.image_shape, dtype=bool)
