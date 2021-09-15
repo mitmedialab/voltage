@@ -200,7 +200,7 @@ class blood:
             im[iy+1, ix]   += mag * fy * (1 - fx)
             im[iy+1, ix+1] += mag * fy * fx
             
-        # Turn the thin sharp curve into thick smooth one
-        im = gaussian_filter(im, self.width)
+        # Turn the thin sharp curve into a thick smooth one by blurring
+        # while compensating for the intensity reduction
+        im = gaussian_filter(im, self.width) * self.width
         return image + im
-        
