@@ -82,7 +82,7 @@ def preprocess(in_dir, out_dir, correction_dir, filename):
     else:
         filenames = sorted(in_dir.glob('*.tif'))
     for in_file in filenames:
-        command = 'preproc/main -db -ms 5 -sm 1 -sc 0 -ss 2 -sw %d' % TIME_SEGMENT_SIZE
+        command = 'preproc/main -db -ms 5 -sm 1 -sc 0 -ss 3 -sw %d' % TIME_SEGMENT_SIZE
         command += ' %s %s' % (in_file, out_dir)
         print(command)
         os.system(command)
@@ -114,14 +114,16 @@ def segment(in_dirs, model_dir, out_dir, ref_dir, filename):
                 PATCH_SHAPE, INFERENCE_TILE_STRIDES, BATCH_SIZE)
 
 
-def demix(in_dir, out_dir, filename):
+def demix(in_dir, out_dir, correction_dir, filename):
     if(filename):
         filenames = [in_dir.joinpath(filename + '.tif')]
     else:
         filenames = sorted(in_dir.glob('*.tif'))
     for in_file in filenames:
+        print('demixing ' + in_file.stem)
         out_file = out_dir.joinpath(in_file.name)
-        compute_masks(in_file, out_file)
+        corr_file = correction_dir.joinpath(in_file.name)
+        compute_masks(in_file, corr_file, out_file)
 
 
 def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
@@ -130,6 +132,7 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
     else:
         filenames = sorted(in_dir.glob('*.tif'))
     for in_file in filenames:
+        print('evaluating ' + in_file.stem)
         gt_file = gt_dir.joinpath(in_file.name)
         img_file = img_dir.joinpath(in_file.name)
         run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir)
@@ -178,7 +181,7 @@ elif(mode == 'train'):
           segment_dir, validate_dir)
 
     demix_dir = set_dir(SIM_PATH, 'demixed')
-    demix(segment_dir, demix_dir, filename)
+    demix(segment_dir, demix_dir, correction_dir, filename)
 
     eval_dir = set_dir(SIM_PATH, 'evaluated')
     evaluate(demix_dir, spatial_gt_dir, average_dir, eval_dir, filename)
@@ -198,7 +201,7 @@ elif(mode == 'run'):
             segment_dir, reference_dir, filename)
     
     demix_dir = set_dir(REAL_PATH, 'demixed')
-    demix(segment_dir, demix_dir, filename)
+    demix(segment_dir, demix_dir, correction_dir, filename)
     
     gt_dir = pathlib.Path(GT_PATH)
     eval_dir = set_dir(REAL_PATH, 'evaluated')

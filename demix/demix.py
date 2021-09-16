@@ -2,8 +2,9 @@ import math
 import numpy as np
 import tifffile as tiff
 from skimage import measure
-import skimage.filters as filters
 from skimage.transform import resize, rescale
+from scipy.ndimage import gaussian_filter
+from scipy.ndimage.morphology import binary_fill_holes
 
 
 MAX_NUM_OVERLAPPING_CELLS = 6
@@ -164,43 +165,72 @@ def demix_cells_incrementally(probability_maps,
     return z.reshape((num_cells, h, w))
 
 
-def compute_masks(in_file, out_file, save_images=False):
+def compute_masks(in_file, data_file, out_file, save_images=False):
 
     probability_maps = tiff.imread(in_file).astype(float)
+    # remove the last frame, which tends to be errorneous
+    # probably because the last segment can be shorter than specified length
+    # ToDo: this should be dealt with at the preprocessing step
+    probability_maps = probability_maps[0:-1]
 
-    # sum probability maps (at the downsampled size to reduce clutter )
+    # average probability maps (at the downsampled size to reduce clutter)
     down = rescale(probability_maps, (1, 0.25, 0.25), anti_aliasing=True)
-    sum_image = np.mean(down, axis=0)
-    sum_image = resize(sum_image, probability_maps.shape[1:])
+    avg_prob = np.mean(down, axis=0)
+    avg_prob = resize(avg_prob, probability_maps.shape[1:])
 
-    # separate them into connected components
-    threshold = filters.threshold_otsu(sum_image)
-    binary_image = sum_image > threshold
-    label_image = measure.label(binary_image)
+    # extract high probabilty regions compared with their surroundings
+    th = gaussian_filter(avg_prob, 10)
+    active_areas = avg_prob - th > 0.001
+
+
+    # motion/shading corrected input data
+    data = tiff.imread(data_file).astype(float)
+    avg_data = np.mean(data, axis=0)
+    background = gaussian_filter(avg_data, 10)
+    data -= background # subtract background intensity
+    foreground_mask = binary_fill_holes(avg_data - background > 0.01)
+
+
+    # separate active areas within the foreground into connected components
+    active_foreground = np.logical_and(foreground_mask, active_areas)
+    label_image = measure.label(active_foreground)
     components = measure.regionprops(label_image)
     if(save_images):
-        tiff.imwrite('sum.tif', sum_image.astype('float32'), photometric='minisblack')
-        tiff.imwrite('binary.tif', binary_image, photometric='minisblack')
-            
+        tiff.imwrite('avg_prob.tif', avg_prob.astype('float32'),
+                     photometric='minisblack')
+        tiff.imwrite('active_areas.tif', active_areas,
+                     photometric='minisblack')
+        tiff.imwrite('avg_data.tif', avg_data.astype('float32'),
+                     photometric='minisblack')
+        tiff.imwrite('foreground_mask.tif', foreground_mask,
+                     photometric='minisblack')
+        tiff.imwrite('active_foreground.tif',
+                     active_foreground.astype('float32'),
+                     photometric='minisblack')
+    
     # Process each component
-    h, w = binary_image.shape
+    h, w = active_foreground.shape
     out = np.zeros((0, h, w))
     margin = 0
+    
+    activity_levels = []
+    
     for c in components:
         component_id = c.label
         
-        #if(c.area < 10 or h * w / 10 < c.area):
-        #    continue
+        if(c.area < 50):
+            continue
         
         ymin, xmin, ymax, xmax = c.bbox
-        if(xmin==0 and xmax < 10):
+        if(xmax < 10):
             continue
-        if(xmax==w and xmin > w-10):
+        if(xmin > w-10):
             continue
-        if(ymin==0 and ymax < 10):
+        if(ymax < 10):
             continue
-        if(ymax==h and ymin > h-10):
+        if(ymin > h-10):
             continue
+        
 
         # Crop a subimage (bounding box plus some margin to
         # include background pixels) from the probability maps
@@ -208,18 +238,29 @@ def compute_masks(in_file, out_file, save_images=False):
         xmin = max(xmin - margin, 0)
         ymax = min(ymax + margin, h)
         xmax = min(xmax + margin, w)
-        crop = probability_maps[:, ymin:ymax, xmin:xmax]
+        crop_prob = probability_maps[:, ymin:ymax, xmin:xmax]
         
         # Execlude other non-overlapping components that might
         # be within the bounding box
         label = label_image[ymin:ymax, xmin:xmax]
         self_or_background = np.logical_or(label == component_id, label == 0)
-        crop = np.multiply(crop, self_or_background)
+        crop_prob = np.multiply(crop_prob, self_or_background)
         # this should be excluded from the equation rather than setting it to zero
-        
+
+        crop_data = data[:, ymin:ymax, xmin:xmax]
+            
         # Here we could demix cells in the subimage
         # but for now use the connected component as-is
         masks = c.image[np.newaxis]
+        
+        # Waveform from the (motion/shading corrected & background-subtracted)
+        # input video by averaging the pixel values within the mask 
+        wave_data = np.mean(crop_data, axis=(1, 2), where=masks)
+        # Wavefrom from the probability maps
+        wave_prob = np.mean(crop_prob, axis=(1, 2), where=masks)
+        # Define activity level as the product of the mean intensity
+        # and the mean firing probability
+        activity_levels.append(np.mean(wave_data) * np.mean(wave_prob))
 
         # Put the resultant masks back in the original image shape
         uncrop = np.zeros((len(masks), h, w))
@@ -229,9 +270,18 @@ def compute_masks(in_file, out_file, save_images=False):
         
         if(save_images):
             tiff.imwrite('comp%2.2d.tif' % component_id,
-                         crop.astype('float32'), photometric='minisblack')
+                         crop_prob.astype('float32'), photometric='minisblack')
             tiff.imwrite('mask%2.2d.tif' % component_id,
                          masks.astype('float32'), photometric='minisblack')
+
+    # Remove candidate cells that have less than a fraction of the maximum
+    # activity level found in the data
+    tmp = np.zeros((0, h, w))
+    max_activity = max(activity_levels)
+    for i, al in enumerate(activity_levels):
+        if(al > max_activity / 9):
+            tmp = np.concatenate((tmp, out[np.newaxis, i]), axis=0)
+    out = tmp
 
     # if no mask, add a blank mask so the image will have at least one page
     if(out.shape[0] == 0):
