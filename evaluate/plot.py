@@ -32,6 +32,8 @@ def _plot_IoU_sub(IoU):
     plt.grid(which='minor')
     plt.xticks(list(range(IoU.shape[1])))
     plt.yticks(list(range(IoU.shape[0])))
+    if(IoU.shape[0] == 0): # in case there is no predicted cell
+        IoU = np.zeros((1, IoU.shape[1]))
     plt.imshow(IoU, aspect='equal', vmin=0, vmax=1, cmap='inferno')
     plt.colorbar()
     plt.xlabel('Ground Truth')

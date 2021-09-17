@@ -188,7 +188,7 @@ def compute_masks(in_file, data_file, out_file, save_images=False):
     avg_data = np.mean(data, axis=0)
     background = gaussian_filter(avg_data, 10)
     data -= background # subtract background intensity
-    foreground_mask = binary_fill_holes(avg_data - background > 0.01)
+    foreground_mask = binary_fill_holes(avg_data - background > 0.001)
 
 
     # separate active areas within the foreground into connected components
@@ -210,7 +210,7 @@ def compute_masks(in_file, data_file, out_file, save_images=False):
     
     # Process each component
     h, w = active_foreground.shape
-    out = np.zeros((0, h, w))
+    out = np.zeros((0, h, w), dtype=bool)
     margin = 0
     
     activity_levels = []
@@ -274,17 +274,18 @@ def compute_masks(in_file, data_file, out_file, save_images=False):
             tiff.imwrite('mask%2.2d.tif' % component_id,
                          masks.astype('float32'), photometric='minisblack')
 
-    # Remove candidate cells that have less than a fraction of the maximum
-    # activity level found in the data
-    tmp = np.zeros((0, h, w))
-    max_activity = max(activity_levels)
+    # Remove candidate cells whose activity level is either less than
+    # a fraction of the maximum level found in the data or is very small
+    tmp = np.zeros((0, h, w), dtype=bool)
+    if(activity_levels):
+        max_activity = max(activity_levels)
     for i, al in enumerate(activity_levels):
-        if(al > max_activity / 9):
+        if(al > max_activity / 9 and al > 0.0001):
             tmp = np.concatenate((tmp, out[np.newaxis, i]), axis=0)
     out = tmp
 
     # if no mask, add a blank mask so the image will have at least one page
     if(out.shape[0] == 0):
-        out = np.zeros((1, h, w))
+        out = np.zeros((1, h, w), dtype=bool)
 
-    tiff.imwrite(out_file, out.astype('float32'), photometric='minisblack')
+    tiff.imwrite(out_file, out.astype('uint8') * 255, photometric='minisblack')

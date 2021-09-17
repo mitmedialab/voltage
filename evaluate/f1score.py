@@ -88,8 +88,18 @@ def calc_f1_scores(counts):
     true_pos  = np.array(counts)[:, 0]
     false_pos = np.array(counts)[:, 1]
     false_neg = np.array(counts)[:, 2]
-    precision = true_pos / (true_pos + false_pos)
-    recall = true_pos / (true_pos + false_neg)
-    f1 = np.divide(2 * precision * recall, precision + recall,
-                   out=np.zeros_like(recall), where=(true_pos > 0))
+    shape = (len(counts),)
+    
+    num_predicted = true_pos + false_pos
+    precision = np.divide(true_pos, num_predicted,
+                          out=np.zeros(shape), where=(num_predicted > 0))
+    
+    num_gt = true_pos + false_neg
+    recall = np.divide(true_pos, num_gt,
+                       out=np.zeros(shape), where=(num_gt > 0))
+    
+    denom = precision + recall
+    f1 = np.divide(2 * precision * recall, denom,
+                   out=np.zeros(shape), where=(denom > 0))
+    
     return f1, precision, recall

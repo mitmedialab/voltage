@@ -12,8 +12,12 @@ def evaluate_each(in_file, gt_file, img_file, out_dir):
 
     eval_data = {}
 
-    eval_masks = tiff.imread(in_file) > 0.5
-    gt_masks = tiff.imread(gt_file)
+    eval_masks = tiff.imread(in_file).astype(bool)
+    # If there is no predicted cell, the image has one black page,
+    # which should be removed in the subsequent evaluation.
+    if(len(eval_masks) == 1 and not np.any(eval_masks[0])):
+        eval_masks = np.zeros((0,) + eval_masks.shape[1:])
+    gt_masks = tiff.imread(gt_file).astype(bool)
     eval_data['eval_masks'] = eval_masks
     eval_data['gt_masks'] = gt_masks
     eval_data['thumbnail'] = tiff.imread(img_file, key=0) # first page
