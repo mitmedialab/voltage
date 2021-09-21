@@ -89,9 +89,12 @@ def _merge_patches(image_shape, patches, Xs, Ys,
 
 
 def predict_and_merge(model, data_seq, tile_strides,
-                      input_paths, target_paths, out_dir, ref_dir):
+                      input_paths, target_paths, out_dir, ref_dir, batch_size):
     
-    preds = model.predict(data_seq, verbose=1)
+    preds = np.zeros((batch_size * len(data_seq), 64, 64, 1), np.float32)
+    for i in range(len(data_seq)):
+        preds[i * batch_size : (i * batch_size) + batch_size] = model.predict(data_seq.__getitem__(i)[0], batch_size=batch_size)
+
     preds = preds[:, :, :, 0] # remove last dimension (its length is one)
     
     Ys, Xs = data_seq.get_tile_pos()
@@ -151,7 +154,7 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
     model = models.load_model(model_dir.joinpath('model.h5'))
 
     predict_and_merge(model, valid_seq, tile_strides,
-                      valid_input_paths, valid_target_paths, out_dir, ref_dir)
+                      valid_input_paths, valid_target_paths, out_dir, ref_dir, batch_size)
 
 
 def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
@@ -168,4 +171,4 @@ def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
                                tiled=True, tile_strides=tile_strides)
         
         predict_and_merge(model, data_seq, tile_strides,
-                          [paths], None, out_dir, ref_dir)
+                          [paths], None, out_dir, ref_dir, batch_size)
