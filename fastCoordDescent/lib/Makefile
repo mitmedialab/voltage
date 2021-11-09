@@ -1,8 +1,8 @@
 CXX       = nvcc
-CXXFLAGS  = -O3 -std=c++11
+CXXFLAGS  = -O3 -std=c++11 -I${CONDA_PREFIX}/include
 
 LDFLAGS   = -Xcompiler -fopenmp
-LDLIBS    = -lgomp -lm -lpthread -lcudart -lnppif -lcublas
+LDLIBS    = -lgomp -lm -lpthread -L${CONDA_PREFIX}/lib -lcudart -lnppif -lcublas
 
 default: libfastCoordDescent.a
 
