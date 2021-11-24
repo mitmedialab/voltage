@@ -1,6 +1,6 @@
 import keras
 from keras.models import Model, load_model
-from keras.layers import Conv2D, Activation, BatchNormalization, Input, MaxPooling2D, UpSampling2D, concatenate
+from keras.layers import Conv2D, Activation, BatchNormalization, Input, MaxPooling2D, UpSampling2D, concatenate, Dropout
 import ray
 import tensorflow as tf
 
