@@ -81,6 +81,10 @@ void vol_preprocess(int t, int h, int w, float *img, void* pm, void *out_v)
 	motion_buffer_t *mbuf = new motion_buffer_t(img, t, h, w);
 	if(params->is_motion_correction == true) {
 		out->mc_out = correct_motion(params->mp, mbuf);
+	} else {
+		out->mc_out = (float *) malloc (t * w * h * sizeof(float));
+		memcpy(out->mc_out, img, h * w * t * sizeof(float));
+		mbuf->out = out->mc_out;
 	}
 
 	out->proc_out = preprocess_unet(mbuf, params->magnification, &out->t_out, params->out_dim);
