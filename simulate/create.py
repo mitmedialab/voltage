@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import tifffile as tiff
 from scipy.interpolate import interp1d, interp2d
 from scipy.signal import windows
@@ -10,11 +11,16 @@ from .motion import synthesize_motion
 from .blood import blood
 
 
-# Todo: these should vary to some extent
-LASER_SPOT_SIGMA = 50
-SHOT_NOISE_SCALE = 1.0e4
-SENSOR_READ_NOISE = 0.005
-BACKGROUND_INTENSITY = 0.1
+MAX_NUM_OVERLAPS = 2
+
+LASER_SPOT_SIGMA_MIN = 40
+LASER_SPOT_SIGMA_MAX = 50
+SHOT_NOISE_SCALE_MIN = 1.0e4
+SHOT_NOISE_SCALE_MAX = 2.0e4
+SENSOR_READ_NOISE_MIN = 0.003
+SENSOR_READ_NOISE_MAX = 0.007
+BACKGROUND_INTENSITY_MIN = 0.1
+BACKGROUND_INTENSITY_MAX = 0.2
 
 MISFOCUS_RATE = 0.01  # how often it happens
 MISFOCUS_MAX = 50.0   # max spatial gaussian filter sigma
@@ -91,7 +97,8 @@ def add_read_noise(image, stdev):
     return random_noise(image, var=stdev**2)
 
 
-def create_synthetic_data(image_shape, time_frames, num_neurons,
+def create_synthetic_data(image_shape, time_frames, time_segment_size,
+                          num_neurons,
                           data_dir, temporal_gt_dir, spatial_gt_dir,
                           data_name):
     """
@@ -104,6 +111,13 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
         Image height and width.
     time_frames : int
         Number of frames to synthesize.
+    time_segment_size : int
+        Number of frames in the time segment used for preprocessing.
+        If a positive value is specified, different background noise components
+        are generated for every time segment in order to augment training data.
+        Preprocessing should use the same time segment size.
+        If zero is specified, noise components are generated only once at the
+        beginning and will be consistent throughout the data.
     num_neurons : int
         Number of neurons in the image.
     data_dir : pathlib.Path
@@ -133,15 +147,21 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     # to avoid neurons occupying a very small area in the image
     roi_shape = (image_shape[0] * 4 // 5, image_shape[1] * 4 // 5)
     
-    # create neurons
+    # create neurons while avoiding too many overlaps
+    count = np.zeros(canvas_shape, dtype=int)
     neurons = []
     for i in range(num_neurons):
-        neu = neuron(i, canvas_shape, roi_shape)
+        while(True):
+            neu = neuron(i, canvas_shape, roi_shape)
+            if(np.amax(count + neu.mask) <= MAX_NUM_OVERLAPS):
+                count += neu.mask
+                break
         neu.set_spikes(time_frames)
         neurons.append(neu)
 
-    # generate various synthetic components
-    bg = BACKGROUND_INTENSITY * synthesize_background_fluorescence(canvas_shape)
+    # generate one-time synthetic components
+    laser_spot_sigma = random.uniform(LASER_SPOT_SIGMA_MIN,
+                                      LASER_SPOT_SIGMA_MAX)
     temporal_profile = synthesize_illumination_fluctuation(time_frames)
     focus_offset = synthesize_focus_flucturation(time_frames)
     Xs, Ys = synthesize_motion(time_frames)
@@ -152,6 +172,18 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
     # synthesize video
     video = np.zeros((time_frames,) + image_shape)
     for t in range(time_frames):
+        # randomly change noisy background every time segment
+        # unless time_segment_size is zero
+        if((time_segment_size == 0 and t == 0)
+           or (time_segment_size > 0 and t % time_segment_size == 0)):
+            bg_val = random.uniform(BACKGROUND_INTENSITY_MIN,
+                                    BACKGROUND_INTENSITY_MAX)
+            bg = bg_val * synthesize_background_fluorescence(canvas_shape)
+            shot_noise_scale = random.uniform(SHOT_NOISE_SCALE_MIN,
+                                              SHOT_NOISE_SCALE_MAX)
+            sensor_read_noise = random.uniform(SENSOR_READ_NOISE_MIN,
+                                               SENSOR_READ_NOISE_MAX)
+
         canvas = np.zeros(canvas_shape)
         for neu in neurons:
             canvas = neu.add_cell_image(canvas, t)
@@ -159,10 +191,10 @@ def create_synthetic_data(image_shape, time_frames, num_neurons,
             canvas = bld.add_image(canvas, t)
         canvas += bg
         frame = add_motion(canvas, image_shape, Xs[t], Ys[t])
-        frame = add_illumination(frame, LASER_SPOT_SIGMA, temporal_profile[t])
+        frame = add_illumination(frame, laser_spot_sigma, temporal_profile[t])
         frame = add_occasional_misfocus(frame, focus_offset[t])
-        frame = add_shot_noise(frame, SHOT_NOISE_SCALE)
-        frame = add_read_noise(frame, SENSOR_READ_NOISE)
+        frame = add_shot_noise(frame, shot_noise_scale)
+        frame = add_read_noise(frame, sensor_read_noise)
         video[t] = frame
 
     tiff.imwrite(data_dir.joinpath(data_name + '.tif'),

@@ -1,4 +1,6 @@
 import os
+import sys
+import importlib
 import pathlib
 import multiprocessing as mp
 
@@ -8,36 +10,13 @@ from demix import compute_masks
 from evaluate import run_ipynb_evaluate_each, run_ipynb_evaluate_all
 
 
-# common parameters
-TIME_SEGMENT_SIZE = 50
-PATCH_SHAPE = (64, 64)
-MODEL_PATH = '/media/bandy/nvme_work/voltage/test/model'
+if(len(sys.argv) != 2):
+    print(sys.argv[0] + ' params(.py)')
+    sys.exit(0)
 
-# simulation parameters
-IMAGE_SHAPE = (128, 128)
-TIME_FRAMES = 1000
-NUM_VIDEOS = 1000
-NUM_CELLS_MIN = 5
-NUM_CELLS_MAX = 15
-SIM_PATH = '/media/bandy/nvme_work/voltage/test'
+params_name = pathlib.Path(sys.argv[1]).stem
+params = importlib.import_module(params_name)
 
-# training parameters
-NUM_DARTS = 10
-BATCH_SIZE = 128
-EPOCHS = 10
-# WARNING: too small tile strides can lead to many samples to be fed into
-# the U-Net for prediction, which can cause GPU out-of-memory error.
-# For some reason, GPU memory consumption seems to pile up as more samples
-# are input, no matter how small the batch size is set to.
-# To avoid this, we might need to split a single input video into multiple
-# time segments or even perform prediction on a frame-by-frame basis.
-VALIDATION_TILE_STRIDES = (16, 16)
-
-# real data parameters
-INFERENCE_TILE_STRIDES = (8, 8)
-REAL_PATH = '/media/bandy/nvme_work/voltage/real'
-DATA_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/WholeTifs'
-GT_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs_rev20201027/consensus'
 
 
 def set_dir(base_path, dirname):
@@ -48,12 +27,13 @@ def set_dir(base_path, dirname):
     
 
 def simulate(num_videos, data_dir, temporal_gt_dir, spatial_gt_dir):
-    num_neurons_list = list(range(NUM_CELLS_MIN, NUM_CELLS_MAX))
+    num_neurons_list = list(range(params.NUM_CELLS_MIN, params.NUM_CELLS_MAX))
     args = []
     for i in range(num_videos):
         name = '%4.4d' % i
         num_neurons = num_neurons_list[i % len(num_neurons_list)]
-        args.append((IMAGE_SHAPE, TIME_FRAMES, num_neurons,
+        args.append((params.IMAGE_SHAPE, params.TIME_FRAMES,
+                     params.TIME_SEGMENT_SIZE, num_neurons,
                      data_dir, temporal_gt_dir, spatial_gt_dir, name))
     
     pool = mp.Pool(mp.cpu_count())
@@ -81,9 +61,9 @@ def preprocess(in_dir, out_dir, correction_dir, filename):
         filenames = [in_dir.joinpath(filename + '.tif')]
     else:
         filenames = sorted(in_dir.glob('*.tif'))
+        #filenames = sorted(in_dir.glob('*/*.tif'))
     for in_file in filenames:
-        command = 'preproc/main -db -ms 5 -sm 1 -sc 0 -ss 3 -sw %d' % TIME_SEGMENT_SIZE
-        command += ' %s %s' % (in_file, out_dir)
+        command = params.PREPROC_COMMAND + ' %s %s' % (in_file, out_dir)
         print(command)
         os.system(command)
         
@@ -103,15 +83,18 @@ def train(in_dirs, target_dir, model_dir, out_dir, ref_dir):
     validation_ratio = 5
     train_model(in_dirs, target_dir, model_dir,
                 seed, validation_ratio,
-                PATCH_SHAPE, NUM_DARTS, BATCH_SIZE, EPOCHS)
+                params.PATCH_SHAPE, params.NUM_DARTS,
+                params.BATCH_SIZE, params.EPOCHS)
     validate_model(in_dirs, target_dir, model_dir, out_dir, ref_dir,
                    seed, validation_ratio,
-                   PATCH_SHAPE, VALIDATION_TILE_STRIDES, BATCH_SIZE)
+                   params.PATCH_SHAPE, params.VALIDATION_TILE_STRIDES,
+                   params.BATCH_SIZE)
 
 
 def segment(in_dirs, model_dir, out_dir, ref_dir, filename):
     apply_model(in_dirs, model_dir, out_dir, ref_dir, filename,
-                PATCH_SHAPE, INFERENCE_TILE_STRIDES, BATCH_SIZE)
+                params.PATCH_SHAPE, params.INFERENCE_TILE_STRIDES,
+                params.BATCH_SIZE)
 
 
 def demix(in_dir, out_dir, correction_dir, filename):
@@ -141,68 +124,86 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
 
 
 
-mode = 'run'
-filename = ''
+if(params.RUN_MODE == 'train'):
+    # simulate and create training data sets
+    data_dir = set_dir(params.BASE_PATH, 'data')
+    temporal_gt_dir = set_dir(params.BASE_PATH, 'temporal_label')
+    spatial_gt_dir = set_dir(params.BASE_PATH, 'spatial_label')
+    if(params.RUN_SIMULATE):
+        simulate(params.NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
 
-if(mode == 'toy'):
-    data_dir = set_dir(SIM_PATH, 'data')
-    temporal_gt_dir = set_dir(SIM_PATH, 'temporal_label')
-    spatial_gt_dir = set_dir(SIM_PATH, 'spatial_label')
-    simulate(NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
+    # decimate temporal labels
+    decimated_gt_dir = set_dir(params.BASE_PATH,
+                               'temporal_label_%d' % params.TIME_SEGMENT_SIZE)
+    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or',
+             params.TIME_SEGMENT_SIZE, params.FILENAME)
 
-    decimated_gt_dir = set_dir(SIM_PATH, 'temporal_label_%d' % TIME_SEGMENT_SIZE)
-    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or', TIME_SEGMENT_SIZE)
+    # preprocess images
+    preprocess_dir = set_dir(params.BASE_PATH, 'preprocessed')
+    correction_dir = set_dir(params.BASE_PATH, 'corrected')
+    if(params.RUN_PREPROC):
+        preprocess(data_dir, preprocess_dir, correction_dir, params.FILENAME)
 
-    demix_dir = set_dir(SIM_PATH, 'demixed')
-    demix(decimated_gt_dir, demix_dir, filename)
-
-    eval_dir = set_dir(SIM_PATH, 'evaluated')
-    evaluate(demix_dir, spatial_gt_dir, data_dir, eval_dir, filename)
-
-elif(mode == 'train'):
-    data_dir = set_dir(SIM_PATH, 'data')
-    temporal_gt_dir = set_dir(SIM_PATH, 'temporal_label')
-    spatial_gt_dir = set_dir(SIM_PATH, 'spatial_label')
-    simulate(NUM_VIDEOS, data_dir, temporal_gt_dir, spatial_gt_dir)
-
-    decimated_gt_dir = set_dir(SIM_PATH, 'temporal_label_%d' % TIME_SEGMENT_SIZE)
-    decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or', TIME_SEGMENT_SIZE, filename)
-
-    preprocess_dir = set_dir(SIM_PATH, 'preprocessed')
-    correction_dir = set_dir(SIM_PATH, 'corrected')
-    preprocess(data_dir, preprocess_dir, correction_dir, filename)
-
-    average_dir = set_dir(SIM_PATH, 'average_%d' % TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE, filename)
-    model_dir = pathlib.Path(MODEL_PATH)
-    segment_dir = set_dir(SIM_PATH, 'segmented')
-    validate_dir = set_dir(SIM_PATH, 'validate')
-    train([preprocess_dir, average_dir], decimated_gt_dir, model_dir,
-          segment_dir, validate_dir)
-
-    demix_dir = set_dir(SIM_PATH, 'demixed')
-    demix(segment_dir, demix_dir, correction_dir, filename)
-
-    eval_dir = set_dir(SIM_PATH, 'evaluated')
-    evaluate(demix_dir, spatial_gt_dir, average_dir, eval_dir, filename)
+    # decimate corrected images to produce average images
+    average_dir = set_dir(params.BASE_PATH,
+                          'average_%d' % params.TIME_SEGMENT_SIZE)
+    decimate(correction_dir, average_dir, 'mean',
+             params.TIME_SEGMENT_SIZE, params.FILENAME)
     
-elif(mode == 'run'):
-    data_dir = pathlib.Path(DATA_PATH)
-    preprocess_dir = set_dir(REAL_PATH, 'preprocessed')
-    correction_dir = set_dir(REAL_PATH, 'corrected')
-    preprocess(data_dir, preprocess_dir, correction_dir, filename)
+    # train the U-Net
+    model_dir = pathlib.Path(params.MODEL_PATH)
+    segment_dir = set_dir(params.BASE_PATH, 'segmented')
+    validate_dir = set_dir(params.BASE_PATH, 'validate')
+    if(params.RUN_TRAIN):
+        train([preprocess_dir, average_dir], decimated_gt_dir, model_dir,
+              segment_dir, validate_dir)
+
+    # demix cells from U-Net outputs
+    demix_dir = set_dir(params.BASE_PATH, 'demixed')
+    if(params.RUN_DEMIX):
+        demix(segment_dir, demix_dir, correction_dir, params.FILENAME)
+
+    # evaluate the accuracy of detections
+    eval_dir = set_dir(params.BASE_PATH, 'evaluated')
+    if(params.RUN_EVALUATE):
+        evaluate(demix_dir, spatial_gt_dir, average_dir, eval_dir,
+                 params.FILENAME)
+
+
+elif(params.RUN_MODE == 'run'):
+    # preprocess images
+    data_dir = pathlib.Path(params.INPUT_PATH)
+    preprocess_dir = set_dir(params.PREPROC_PATH, 'preprocessed')
+    correction_dir = set_dir(params.PREPROC_PATH, 'corrected')
+    if(params.RUN_PREPROC):
+        preprocess(data_dir, preprocess_dir, correction_dir, params.FILENAME)
     
-    average_dir = set_dir(REAL_PATH, 'average_%d' % TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean', TIME_SEGMENT_SIZE, filename)
-    model_dir = pathlib.Path(MODEL_PATH)
-    segment_dir = set_dir(REAL_PATH, 'segmented')
-    reference_dir = set_dir(REAL_PATH, 'reference')
-    segment([preprocess_dir, average_dir], model_dir,
-            segment_dir, reference_dir, filename)
+    # decimate corrected images to produce average images
+    average_dir = set_dir(params.BASE_PATH,
+                          'average_%d' % params.TIME_SEGMENT_SIZE)
+    decimate(correction_dir, average_dir, 'mean',
+             params.TIME_SEGMENT_SIZE, params.FILENAME)
+
+    # segment neurons
+    model_dir = pathlib.Path(params.MODEL_PATH)
+    segment_dir = set_dir(params.BASE_PATH, 'segmented')
+    reference_dir = set_dir(params.BASE_PATH, 'reference')
+    if(params.RUN_SEGMENT):
+        segment([preprocess_dir, average_dir], model_dir,
+                segment_dir, reference_dir, params.FILENAME)
     
-    demix_dir = set_dir(REAL_PATH, 'demixed')
-    demix(segment_dir, demix_dir, correction_dir, filename)
+    # demix cells from U-Net outputs
+    demix_dir = set_dir(params.BASE_PATH, 'demixed')
+    if(params.RUN_DEMIX):
+        demix(segment_dir, demix_dir, correction_dir, params.FILENAME)
     
-    gt_dir = pathlib.Path(GT_PATH)
-    eval_dir = set_dir(REAL_PATH, 'evaluated')
-    evaluate(demix_dir, gt_dir, average_dir, eval_dir, filename)
+    # evaluate the accuracy of detections
+    gt_dir = pathlib.Path(params.GT_PATH)
+    eval_dir = set_dir(params.BASE_PATH, 'evaluated')
+    if(params.RUN_EVALUATE):
+        evaluate(demix_dir, gt_dir, average_dir, eval_dir, params.FILENAME)
+
+
+else:
+    print('Unexpected RUN_MODE: ' + params.RUN_MODE)
+    sys.exit(1)
