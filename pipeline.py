@@ -1,4 +1,3 @@
-import os
 import sys
 import importlib
 import pathlib
@@ -65,7 +64,13 @@ def preprocess(in_dir, out_dir, correction_dir, filename):
     for in_file in filenames:
         out_file = out_dir.joinpath(in_file.name)
         correction_file = correction_dir.joinpath(in_file.name)
-        run_preprocessing(in_file, out_file, correction_file)
+        run_preprocessing(in_file, out_file, correction_file,
+                          motion_search_level=params.MOTION_SEARCH_LEVEL,
+                          motion_search_size=params.MOTION_SEARCH_SIZE,
+                          motion_patch_size=params.MOTION_PATCH_SIZE,
+                          motion_patch_offset=params.MOTION_PATCH_OFFSET,
+                          signal_period=params.TIME_SEGMENT_SIZE,
+                          signal_scale=params.SIGNAL_SCALE)
 
 
 def train(in_dirs, target_dir, model_dir, out_dir, ref_dir):

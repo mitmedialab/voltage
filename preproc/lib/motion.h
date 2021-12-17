@@ -22,8 +22,6 @@ typedef struct
     float x_range;    // width  * x_range around center will be searched (1 means entire width)
     float y_range;    // heigth * y_range around center will be searched (1 means entire height)
 
-    float a_stdev;    // standard deviation of acceleration [pixels/frame^2]
-    float m_stdev;    // standard deviation of motion estimation error [pixels]
     float thresh_xy;  // motion spatial error threshold [pixels]
     int length;       // length of running median for correlation values
     float thresh_c;   // motion correlation error threshold

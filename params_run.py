@@ -2,7 +2,13 @@
 TIME_SEGMENT_SIZE = 50
 PATCH_SHAPE = (64, 64)
 MODEL_PATH = '/media/bandy/nvme_work/voltage/test/model'
-PREPROC_COMMAND = 'preproc/main -db -ms 5 -sm 1 -sc 0 -ss 3 -sw %d' % TIME_SEGMENT_SIZE
+
+# preprocessing parameters
+MOTION_SEARCH_LEVEL = 2
+MOTION_SEARCH_SIZE = 5
+MOTION_PATCH_SIZE = 10
+MOTION_PATCH_OFFSET = 7
+SIGNAL_SCALE = 3.0
 
 
 # runtime parameters
