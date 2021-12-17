@@ -57,11 +57,8 @@ def decimate(in_dir, out_dir, mode, size, filename):
 
 
 def preprocess(in_dir, out_dir, correction_dir, filename):
-    if(filename):
-        filenames = [in_dir.joinpath(filename + '.tif')]
-    else:
-        filenames = sorted(in_dir.glob('*.tif'))
-    for in_file in filenames:
+    if(filename): # file mode, multi-threaded job for a single file
+        in_file = in_dir.joinpath(filename + '.tif')
         out_file = out_dir.joinpath(in_file.name)
         correction_file = correction_dir.joinpath(in_file.name)
         run_preprocessing(in_file, out_file, correction_file,
@@ -71,6 +68,22 @@ def preprocess(in_dir, out_dir, correction_dir, filename):
                           motion_patch_offset=params.MOTION_PATCH_OFFSET,
                           signal_period=params.TIME_SEGMENT_SIZE,
                           signal_scale=params.SIGNAL_SCALE)
+        
+    else: # batch mode, single-threaded jobs for multiple files (faster)
+        filenames = sorted(in_dir.glob('*.tif'))
+        args = []
+        for in_file in filenames:
+            out_file = out_dir.joinpath(in_file.name)
+            correction_file = correction_dir.joinpath(in_file.name)
+            args.append((in_file, out_file, correction_file,
+                         params.MOTION_SEARCH_LEVEL, params.MOTION_SEARCH_SIZE,
+                         params.MOTION_PATCH_SIZE, params.MOTION_PATCH_OFFSET,
+                         1000, 'max-med',
+                         params.TIME_SEGMENT_SIZE, params.SIGNAL_SCALE, 1))
+
+        pool = mp.Pool(mp.cpu_count())
+        pool.starmap(run_preprocessing, args)
+        pool.close()
 
 
 def train(in_dirs, target_dir, model_dir, out_dir, ref_dir):

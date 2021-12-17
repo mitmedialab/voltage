@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <omp.h>
 #include <vector>
+
 #include "malloc_util.h"
 #include "TimerUtil.h"
 #include "motion.h"
@@ -9,12 +11,12 @@
 #include "signal.h"
 
 
-static void normalize_intensity(int num_pages, int width, int height, float ***img)
+static void normalize_intensity(int num_frames, int width, int height, float ***img)
 {
-    float *lumi = malloc_float1d(num_pages);
+    float *lumi = malloc_float1d(num_frames);
     float max = 0;
     
-    for(int k = 0; k < num_pages; k++)
+    for(int k = 0; k < num_frames; k++)
     {
         lumi[k] = 0;
         for(int i = 0; i < width; i++)
@@ -26,7 +28,7 @@ static void normalize_intensity(int num_pages, int width, int height, float ***i
     }
 
     #pragma omp parallel for
-    for(int k = 0; k < num_pages; k++)
+    for(int k = 0; k < num_frames; k++)
     {
         float scale = lumi[0] / lumi[k] / max;
         for(int i = 0; i < width; i++)
@@ -34,6 +36,30 @@ static void normalize_intensity(int num_pages, int width, int height, float ***i
         {
             img[k][i][j] *= scale;
         }
+    }
+    
+    free_float1d(lumi);
+}
+
+static void copy1d_to_3d(int num_frames, int width, int height, float *in, float ***out)
+{
+    int n = 0;
+    for(int k = 0; k < num_frames; k++)
+    for(int j = 0; j < height; j++)
+    for(int i = 0; i < width; i++)
+    {
+        out[k][i][j] = in[n++];
+    }
+}
+
+static void copy3d_to_1d(int num_frames, int width, int height, float ***in, float *out)
+{
+    int n = 0;
+    for(int k = 0; k < num_frames; k++)
+    for(int j = 0; j < height; j++)
+    for(int i = 0; i < width; i++)
+    {
+        out[n++] = in[k][i][j];
     }
 }
 
@@ -45,8 +71,14 @@ int preprocess_cpu(int num_frames, int height, int width,
                    int motion_search_level, int motion_search_size,
                    int motion_patch_size, int motion_patch_offset,
                    int shading_period,
-                   int signal_method, int signal_period, double signal_scale)
+                   int signal_method, int signal_period, double signal_scale,
+                   int num_threads)
 {
+    if(num_threads > 0)
+    {
+        omp_set_num_threads(num_threads);
+    }
+    
     const int t = num_frames;
     const int h = height;
     const int w = width;
@@ -80,10 +112,8 @@ int preprocess_cpu(int num_frames, int height, int width,
     bool skip_shading_correction = false;
     bool skip_signal_extraction = false;
 
-
-    float ***img = malloc_float3d(t, h, w);
-    const int data_size = t * h * w * sizeof(float);
-    memcpy(img[0][0], in_image, data_size);
+    float ***img = malloc_float3d(t, w, h);
+    copy1d_to_3d(t, w, h, in_image, img);
     
     TimerUtil *tu;
 
@@ -137,12 +167,12 @@ int preprocess_cpu(int num_frames, int height, int width,
     }
     
     *out_image = malloc_float1d(t * h * w);
-    memcpy(*out_image, img[0][0], data_size);
+    copy3d_to_1d(t, w, h, img, *out_image);
     free_float3d(img);
     if(out != NULL)
     {
         *out_temporal = malloc_float1d(num_out * h * w);
-        memcpy(*out_temporal, out[0][0], num_out * h * w * sizeof(float));
+        copy3d_to_1d(num_out, w, h, out, *out_temporal);
         free_float3d(out);
     }
     return num_out;

@@ -6,7 +6,8 @@ def run_preprocessing(in_file, out_file, correction_file,
                       motion_patch_size=10, motion_patch_offset=7,
                       shading_period=1000,
                       signal_method='max-med', signal_period=100,
-                      signal_scale=0):
+                      signal_scale=0,
+                      num_threads=0):
     """
     Preprocess images, which includes motion correction, shading correction,
     and signal extraction.
@@ -46,6 +47,9 @@ def run_preprocessing(in_file, out_file, correction_file,
         Signal extraction will be performed after smoothing the corrected
         video with a spatial Gaussian filter of this scale (standard
         deviation). The default is 0 (no smoothing).
+    num_threads : int, optional
+        The number of threads to run the preprocessing on. The default is 0,
+        in which case all the available cores will be used.
 
     Returns
     -------
@@ -63,7 +67,8 @@ def run_preprocessing(in_file, out_file, correction_file,
                                           motion_patch_size, motion_patch_offset,
                                           shading_period,
                                           signal_method_id, signal_period,
-                                          signal_scale)
+                                          signal_scale,
+                                          num_threads)
         
     tiff.imwrite(out_file, signal, photometric='minisblack')
     tiff.imwrite(correction_file, corrected, photometric='minisblack')

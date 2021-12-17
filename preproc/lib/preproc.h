@@ -13,7 +13,8 @@ int preprocess_cpu(int num_frames, int height, int width,
                    int motion_search_level, int motion_search_size,
                    int motion_patch_size, int motion_patch_offset,
                    int shading_period,
-                   int signal_method, int signal_period, double signal_scale);
+                   int signal_method, int signal_period, double signal_scale,
+                   int num_threads);
 
 #endif
 

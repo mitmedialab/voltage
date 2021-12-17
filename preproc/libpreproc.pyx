@@ -14,14 +14,16 @@ cdef extern from "preproc.h":
                        int motion_patch_size, int motion_patch_offset,
                        int shading_period,
                        int signal_method, int signal_period,
-                       double signal_scale) nogil
+                       double signal_scale,
+                       int num_threads) nogil
 
 def preprocess_cython(np.ndarray[np.float32_t, ndim=3] in_image,
                       int motion_search_level, int motion_search_size,
                       int motion_patch_size, int motion_patch_offset,
                       int shading_period,
                       int signal_method, int signal_period,
-                      double signal_scale):
+                      double signal_scale,
+                      int num_threads):
     """
     Binder function to call a C++ implementation of preprocess().
     Refer to preprocess() in preproc.py for parameter definitions.
@@ -43,7 +45,8 @@ def preprocess_cython(np.ndarray[np.float32_t, ndim=3] in_image,
                                  motion_search_level, motion_search_size,
                                  motion_patch_size, motion_patch_offset,
                                  shading_period,
-                                 signal_method, signal_period, signal_scale)
+                                 signal_method, signal_period, signal_scale,
+                                 num_threads)
     
     cdef cvarray arr_i = <float [:t, :h, :w]>out_image
     cdef cvarray arr_t = <float [:num_out, :h, :w]>out_temporal
