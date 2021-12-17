@@ -5,6 +5,7 @@ import pathlib
 import multiprocessing as mp
 
 from simulate import create_synthetic_data, decimate_video
+from preproc import run_preprocessing
 from segment import train_model, validate_model, apply_model
 from demix import compute_masks
 from evaluate import run_ipynb_evaluate_each, run_ipynb_evaluate_all
@@ -61,22 +62,11 @@ def preprocess(in_dir, out_dir, correction_dir, filename):
         filenames = [in_dir.joinpath(filename + '.tif')]
     else:
         filenames = sorted(in_dir.glob('*.tif'))
-        #filenames = sorted(in_dir.glob('*/*.tif'))
     for in_file in filenames:
-        command = params.PREPROC_COMMAND + ' %s %s' % (in_file, out_dir)
-        print(command)
-        os.system(command)
-        
-        sig_file = out_dir.joinpath('signal.tif')
         out_file = out_dir.joinpath(in_file.name)
-        command = 'mv %s %s' % (sig_file, out_file)
-        os.system(command)
-        
-        cor_file = out_dir.joinpath('corrected.tif')
-        out_file = correction_dir.joinpath(in_file.name)
-        command = 'mv %s %s' % (cor_file, out_file)
-        os.system(command)
-        
+        correction_file = correction_dir.joinpath(in_file.name)
+        run_preprocessing(in_file, out_file, correction_file)
+
 
 def train(in_dirs, target_dir, model_dir, out_dir, ref_dir):
     seed = 0
