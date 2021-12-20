@@ -10,6 +10,7 @@ cdef extern from "preproc.h":
                        float *in_image,
                        float **out_image,
                        float **out_temporal,
+                       float **out_spatial,
                        int motion_search_level, int motion_search_size,
                        int motion_patch_size, int motion_patch_offset,
                        int shading_period,
@@ -30,6 +31,7 @@ def preprocess_cython(np.ndarray[np.float32_t, ndim=3] in_image,
     """
     cdef float *out_image
     cdef float *out_temporal
+    cdef float *out_spatial
     cdef int num_out
     
     cdef int t = in_image.shape[0]
@@ -42,14 +44,17 @@ def preprocess_cython(np.ndarray[np.float32_t, ndim=3] in_image,
                                  &in_image[0, 0, 0],
                                  &out_image,
                                  &out_temporal,
+                                 &out_spatial,
                                  motion_search_level, motion_search_size,
                                  motion_patch_size, motion_patch_offset,
                                  shading_period,
                                  signal_method, signal_period, signal_scale,
                                  num_threads)
     
-    cdef cvarray arr_i = <float [:t, :h, :w]>out_image
+    cdef cvarray arr_c = <float [:t, :h, :w]>out_image
     cdef cvarray arr_t = <float [:num_out, :h, :w]>out_temporal
-    arr_i.free_data = True
+    cdef cvarray arr_s = <float [:num_out, :h, :w]>out_spatial
+    arr_c.free_data = True
     arr_t.free_data = True
-    return np.asarray(arr_i), np.asarray(arr_t)
+    arr_s.free_data = True
+    return np.asarray(arr_c), np.asarray(arr_t), np.asarray(arr_s)

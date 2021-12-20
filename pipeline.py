@@ -56,12 +56,13 @@ def decimate(in_dir, out_dir, mode, size, filename):
     pool.close()
 
 
-def preprocess(in_dir, out_dir, correction_dir, filename):
+def preprocess(in_dir, correction_dir, temporal_dir, spatial_dir, filename):
     if(filename): # file mode, multi-threaded job for a single file
         in_file = in_dir.joinpath(filename + '.tif')
-        out_file = out_dir.joinpath(in_file.name)
         correction_file = correction_dir.joinpath(in_file.name)
-        run_preprocessing(in_file, out_file, correction_file,
+        temporal_file = temporal_dir.joinpath(in_file.name)
+        spatial_file = spatial_dir.joinpath(in_file.name)
+        run_preprocessing(in_file, correction_file, temporal_file, spatial_file,
                           motion_search_level=params.MOTION_SEARCH_LEVEL,
                           motion_search_size=params.MOTION_SEARCH_SIZE,
                           motion_patch_size=params.MOTION_PATCH_SIZE,
@@ -73,9 +74,10 @@ def preprocess(in_dir, out_dir, correction_dir, filename):
         filenames = sorted(in_dir.glob('*.tif'))
         args = []
         for in_file in filenames:
-            out_file = out_dir.joinpath(in_file.name)
             correction_file = correction_dir.joinpath(in_file.name)
-            args.append((in_file, out_file, correction_file,
+            temporal_file = temporal_dir.joinpath(in_file.name)
+            spatial_file = spatial_dir.joinpath(in_file.name)
+            args.append((in_file, correction_file, temporal_file, spatial_file,
                          params.MOTION_SEARCH_LEVEL, params.MOTION_SEARCH_SIZE,
                          params.MOTION_PATCH_SIZE, params.MOTION_PATCH_OFFSET,
                          1000, 'max-med',
@@ -147,16 +149,13 @@ if(params.RUN_MODE == 'train'):
              params.TIME_SEGMENT_SIZE, params.FILENAME)
 
     # preprocess images
-    preprocess_dir = set_dir(params.BASE_PATH, 'preprocessed')
     correction_dir = set_dir(params.BASE_PATH, 'corrected')
-    if(params.RUN_PREPROC):
-        preprocess(data_dir, preprocess_dir, correction_dir, params.FILENAME)
-
-    # decimate corrected images to produce average images
+    preprocess_dir = set_dir(params.BASE_PATH, 'preprocessed')
     average_dir = set_dir(params.BASE_PATH,
                           'average_%d' % params.TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean',
-             params.TIME_SEGMENT_SIZE, params.FILENAME)
+    if(params.RUN_PREPROC):
+        preprocess(data_dir, correction_dir, preprocess_dir, average_dir,
+                   params.FILENAME)
     
     # train the U-Net
     model_dir = pathlib.Path(params.MODEL_PATH)
@@ -181,17 +180,14 @@ if(params.RUN_MODE == 'train'):
 elif(params.RUN_MODE == 'run'):
     # preprocess images
     data_dir = pathlib.Path(params.INPUT_PATH)
-    preprocess_dir = set_dir(params.PREPROC_PATH, 'preprocessed')
     correction_dir = set_dir(params.PREPROC_PATH, 'corrected')
-    if(params.RUN_PREPROC):
-        preprocess(data_dir, preprocess_dir, correction_dir, params.FILENAME)
-    
-    # decimate corrected images to produce average images
+    preprocess_dir = set_dir(params.PREPROC_PATH, 'preprocessed')
     average_dir = set_dir(params.BASE_PATH,
                           'average_%d' % params.TIME_SEGMENT_SIZE)
-    decimate(correction_dir, average_dir, 'mean',
-             params.TIME_SEGMENT_SIZE, params.FILENAME)
-
+    if(params.RUN_PREPROC):
+        preprocess(data_dir, correction_dir, preprocess_dir, average_dir,
+                   params.FILENAME)
+    
     # segment neurons
     model_dir = pathlib.Path(params.MODEL_PATH)
     segment_dir = set_dir(params.BASE_PATH, 'segmented')

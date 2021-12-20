@@ -21,9 +21,10 @@ typedef struct
 } signal_param_t;
 
 
-float ***extract_signal(signal_param_t &param,
-                        int num_pages, int width, int height, float ***img,
-                        std::vector<motion_t> motion, motion_range_t range, int *num_out);
+int extract_signal(signal_param_t &param,
+                   int num_pages, int width, int height, float ***img,
+                   std::vector<motion_t> motion, motion_range_t range,
+                   float ****temporal, float ****spatial);
 
 
 #endif

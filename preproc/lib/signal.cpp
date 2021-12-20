@@ -252,9 +252,10 @@ static float ***temporal_filter(int start, int end,
     return out;
 }
 
-float ***extract_signal(signal_param_t &param,
-                        int num_pages, int width, int height, float ***img,
-                        std::vector<motion_t> motion, motion_range_t range, int *num_out)
+int extract_signal(signal_param_t &param,
+                   int num_pages, int width, int height, float ***img,
+                   std::vector<motion_t> motion, motion_range_t range,
+                   float ****temporal, float ****spatial)
 
 {
     const int method = param.method;
@@ -295,13 +296,15 @@ float ***extract_signal(signal_param_t &param,
     }
     free_float2d(one);
 
-    const int n = (num_pages + period - 1) / period;
+    const int n = num_pages / period;
     float ***out = malloc_float3d(n, width, height);
+    float ***avg = malloc_float3d(n, width, height);
     
     #pragma omp parallel for
 	for(int k = 0; k < n; k++)
 	{
         memset(out[k][0], 0, width * height * sizeof(float));
+        memset(avg[k][0], 0, width * height * sizeof(float));
 
         std::vector<int> frames;
         int start_frame = k * period;
@@ -321,6 +324,22 @@ float ***extract_signal(signal_param_t &param,
         float ***buf = temporal_filter(start_frame, end_frame,
                                        num_pages, width, height, img, temp_stdev);
 
+        // spatial signal extraction (average)
+        for(auto f : frames)
+        {
+            for(int i = 0; i < width; i++)
+            for(int j = 0; j < height; j++)
+            {
+                avg[k][i][j] += buf[f][i][j];
+            }
+        }
+        for(int i = 0; i < width; i++)
+        for(int j = 0; j < height; j++)
+        {
+            avg[k][i][j] /= frames.size();
+        }
+
+        // temporal signal extraction
         if(method == 0) // PCA
         {
             // below cannot be parallelized as-is because destination out[][][]
@@ -380,13 +399,14 @@ float ***extract_signal(signal_param_t &param,
                 out[k][i][j] = max - v[m];
             }
         }
-        
+
         free_float3d(buf);
 	}
 
     free_float2d(cnt);
     
-    *num_out = n;
-    return out;
+    *temporal = out;
+    *spatial = avg;
+    return n;
 }
 

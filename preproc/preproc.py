@@ -1,7 +1,7 @@
 import tifffile as tiff
 from libpreproc import preprocess_cython
 
-def run_preprocessing(in_file, out_file, correction_file,
+def run_preprocessing(in_file, correction_file, temporal_file, spatial_file,
                       motion_search_level=2, motion_search_size=5,
                       motion_patch_size=10, motion_patch_offset=7,
                       shading_period=1000,
@@ -17,11 +17,13 @@ def run_preprocessing(in_file, out_file, correction_file,
     in_file : string
         Input file path of a multi-page tiff containig time-varying voltage
         imaging images.
-    out_file : string
-        Output tiff file path to which extracted signal will be saved.
     correction_file : string
         Output tiff file path to which motion/shading-corrected video will be
         saved.
+    temporal_file : string
+        Output tiff file path to which extracted temporal signal will be saved.
+    spatial_file : string
+        Output tiff file path to which extracted spatial signal will be saved.
     motion_search_level : int, optional
         Max level of multiresolution motion correction. The default is 2.
     motion_search_size : int, optional
@@ -62,13 +64,14 @@ def run_preprocessing(in_file, out_file, correction_file,
         signal_method_id = 1
 
     in_image = tiff.imread(in_file).astype('float32')
-    corrected, signal = preprocess_cython(in_image,
-                                          motion_search_level, motion_search_size,
-                                          motion_patch_size, motion_patch_offset,
-                                          shading_period,
-                                          signal_method_id, signal_period,
-                                          signal_scale,
-                                          num_threads)
-        
-    tiff.imwrite(out_file, signal, photometric='minisblack')
-    tiff.imwrite(correction_file, corrected, photometric='minisblack')
+    c, t, s = preprocess_cython(in_image,
+                                motion_search_level, motion_search_size,
+                                motion_patch_size, motion_patch_offset,
+                                shading_period,
+                                signal_method_id, signal_period,
+                                signal_scale,
+                                num_threads)
+
+    tiff.imwrite(correction_file, c, photometric='minisblack')
+    tiff.imwrite(temporal_file, t, photometric='minisblack')
+    tiff.imwrite(spatial_file, s, photometric='minisblack')

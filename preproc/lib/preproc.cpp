@@ -68,6 +68,7 @@ int preprocess_cpu(int num_frames, int height, int width,
                    float *in_image,
                    float **out_image,
                    float **out_temporal,
+                   float **out_spatial,
                    int motion_search_level, int motion_search_size,
                    int motion_patch_size, int motion_patch_offset,
                    int shading_period,
@@ -154,7 +155,8 @@ int preprocess_cpu(int num_frames, int height, int width,
     }
     
     int num_out = 0;
-    float ***out = NULL;
+    float ***temporal = NULL;
+    float ***spatial = NULL;
     if(skip_signal_extraction)
     {
         printf("signal extraction skipped\n");
@@ -162,18 +164,22 @@ int preprocess_cpu(int num_frames, int height, int width,
     else
     {
         tu = new TimerUtil("signal extraction");
-        out = extract_signal(signal_param, t, w, h, img, motion_list, range, &num_out);
+        num_out = extract_signal(signal_param, t, w, h, img, motion_list, range, &temporal, &spatial);
         delete tu;
     }
     
     *out_image = malloc_float1d(t * h * w);
     copy3d_to_1d(t, w, h, img, *out_image);
     free_float3d(img);
-    if(out != NULL)
+    if(num_out > 0)
     {
         *out_temporal = malloc_float1d(num_out * h * w);
-        copy3d_to_1d(num_out, w, h, out, *out_temporal);
-        free_float3d(out);
+        copy3d_to_1d(num_out, w, h, temporal, *out_temporal);
+        free_float3d(temporal);
+
+        *out_spatial = malloc_float1d(num_out * h * w);
+        copy3d_to_1d(num_out, w, h, spatial, *out_spatial);
+        free_float3d(spatial);
     }
     return num_out;
 }
