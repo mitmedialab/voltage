@@ -30,6 +30,20 @@ NUM_BLOOD_VESSELS = 3
 
 
 def synthesize_background_fluorescence(image_shape):
+    """
+    Synthesize a Perlin-noise-like background image.
+
+    Parameters
+    ----------
+    image_shape : 2-tuple of int
+        Height and width of the image to be synthesized.
+
+    Returns
+    -------
+    bg : 2D numpy.ndarray of float
+        Synthesized background image.
+
+    """
     bg = np.ones(image_shape)
     ratio = image_shape[1] / image_shape[0]
     for i in range(image_shape[0] // 10, image_shape[0] // 4):
@@ -45,6 +59,20 @@ def synthesize_background_fluorescence(image_shape):
 
 
 def synthesize_illumination_fluctuation(time_frames):
+    """
+    Synthesize a Perlin-noise-like 1D array modeling fluctuating illumination.
+
+    Parameters
+    ----------
+    time_frames : int
+        The number of time frames (the length of the array) to be synthesized.
+
+    Returns
+    -------
+    temporal_profile : 1D numpy.ndarray of float
+        A sequence of values modeling temporal illumination fluctuation.
+
+    """
     temporal_profile = np.ones(time_frames)
     for i in range(time_frames // 100, time_frames):
         x = np.arange(0, i)
@@ -57,6 +85,25 @@ def synthesize_illumination_fluctuation(time_frames):
 
 
 def synthesize_focus_flucturation(time_frames):
+    """
+    Synthesize a 1D array modeling lens focus fluctuation (occasional defocus).
+    Each value in the array represents a degree of defocus (0 means in-focus),
+    and occasional defocus is modeled as random numbers in [0, MISFOCUS_MAX)
+    at some frames ocurring at a probability of MISFOCUS_RATE. To make the
+    transitions smooth from in-focus to defocus and back to in-focus, the array
+    will be Gaussian-filtered with a standard deviation of MISFOCUS_SPREAD.
+
+    Parameters
+    ----------
+    time_frames : int
+        The number of time frames (the length of the array) to be synthesized.
+
+    Returns
+    -------
+    1D numpy.ndarray of float
+        A sequence of values modeling focus fluctuation.
+
+    """
     misfocus_frames = np.random.random(time_frames) < MISFOCUS_RATE
     # let first 10 frames stay in focus for motion correction
     misfocus_frames[0:min(10, time_frames)] = False
@@ -68,6 +115,30 @@ def synthesize_focus_flucturation(time_frames):
 
 
 def add_motion(image, out_shape, x, y):
+    """
+    Add motion to an image by shifting it by specified offsets, and crop it
+    so that the output image will have a specified shape. The reason for
+    cropping is because we model a larger image than we want to synthesize
+    (image.shape should be larger than out_shape) so that the output image
+    will not contain undefined (outside of the input image) values.
+
+    Parameters
+    ----------
+    image : 2D numpy.ndarray of float
+        Input image.
+    out_shape : 2-tuple of int
+        Height and width of the output image.
+    x : float
+        Offset (motion vector) in X.
+    y : float
+        Offset (motion vector) in Y.
+
+    Returns
+    -------
+    2D numpy.ndarray of float
+        Shifted and cropped image.
+
+    """
     yofs = (image.shape[0] - out_shape[0]) // 2
     ys = int(yofs + y)
     ye = ys + out_shape[0]
@@ -78,22 +149,90 @@ def add_motion(image, out_shape, x, y):
 
 
 def add_illumination(image, sigma, scale):
+    """
+    Add illumination effects to an image using a 2D Gaussian, modeling
+    a bright center and dark periphery that a laser spot would produce.
+
+    Parameters
+    ----------
+    image : 2D numpy.ndarray of float
+        Input image.
+    sigma : float
+        Standard deviation of the 2D Gaussian modeling the laser spot width.
+    scale : float
+        Illumination intensity.
+
+    Returns
+    -------
+    2D numpy.ndarray of float
+        Output image.
+
+    """
     window_h = windows.gaussian(image.shape[0], sigma)
     window_w = windows.gaussian(image.shape[1], sigma)
     return image * window_h[:, np.newaxis] * window_w * scale
 
 
 def add_occasional_misfocus(image, sigma):
+    """
+    Add occasional misfocus effects to an image. Misfocus is modeled by
+    a 2D Gaussian filter.
+
+    Parameters
+    ----------
+    image : 2D numpy.ndarray of float
+        Input image.
+    sigma : float
+        Standard deviation of the 2D Gaussian modeling misfocus.
+
+    Returns
+    -------
+    2D numpy.ndarray of float
+        Output image.
+
+    """
     return gaussian_filter(image, sigma)
 
 
 def add_shot_noise(image, scale):
+    """
+    Add shot noise to an image, which is modeled as Poisson noise.
+
+    Parameters
+    ----------
+    image : 2D numpy.ndarray of float
+        Input image.
+    scale : float
+        Scaling constant converting a pixel value into the number of photons.
+
+    Returns
+    -------
+    2D numpy.ndarray of float
+        Output image.
+
+    """
     photon_counts = image * scale
     noisy = np.random.poisson(photon_counts)
     return noisy / scale
 
 
 def add_read_noise(image, stdev):
+    """
+    Add sensor read noise to an image, which is modeled as Gaussian noise.
+
+    Parameters
+    ----------
+    image : 2D numpy.ndarray of float
+        Input image.
+    stdev : float
+        Standard deviation of the Gaussian noise.
+
+    Returns
+    -------
+    2D numpy.ndarray of float
+        Output image.
+
+    """
     return random_noise(image, var=stdev**2)
 
 
@@ -136,6 +275,8 @@ def create_synthetic_data(image_shape, time_frames, time_segment_size,
     None.
 
     """
+
+    print('synthesizing ' + data_name)
 
     # set a canvas to draw neurons and other sythetic components on
     # to be larger than the output image size, because simulated motion
