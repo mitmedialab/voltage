@@ -1,26 +1,24 @@
-# common parameters
+# common parameters (must be consistent with inference)
 TIME_SEGMENT_SIZE = 50
 PATCH_SHAPE = (64, 64)
-MODEL_PATH = '/media/bandy/nvme_work/voltage/test/model'
 
 # preprocessing parameters
 MOTION_SEARCH_LEVEL = 2
 MOTION_SEARCH_SIZE = 5
 MOTION_PATCH_SIZE = 10
 MOTION_PATCH_OFFSET = 7
-SIGNAL_SCALE = 3.0
+SIGNAL_SCALE = 3.0 # must be consistent with inference
 
 
 # runtime parameters
-RUN_MODE = 'train'
+RUN_MODE = 'train' # run the pipeline for training
 RUN_SIMULATE = True
 RUN_PREPROC = True
 RUN_TRAIN = True
-RUN_DEMIX = False
-RUN_EVALUATE = False
+RUN_DEMIX = True
+RUN_EVALUATE = True
 
-FILENAME = ''
-BASE_PATH = '/media/bandy/nvme_work/voltage/test'
+FILENAME = '' # if non-empty, only the specified file will be processed
 
 
 # simulation parameters
@@ -42,3 +40,8 @@ EPOCHS = 10
 # To avoid this, we might need to split a single input video into multiple
 # time segments or even perform prediction on a frame-by-frame basis.
 VALIDATION_TILE_STRIDES = (16, 16)
+
+DATA_PATH = '/media/bandy/nvme_work/voltage/train/synthetic'
+PREPROC_PATH = '/media/bandy/nvme_work/voltage/train/preproc'
+MODEL_PATH = '/media/bandy/nvme_work/voltage/train/model'
+OUTPUT_PATH = '/media/bandy/nvme_work/voltage/train'
