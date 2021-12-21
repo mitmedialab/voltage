@@ -8,6 +8,26 @@ SCALE = 3.0
 
 
 def synthesize_motion(time_frames):
+    """
+    Synthesize motion to be introduced to simulated microscope video.
+    To keep motion vectors from going too far away from the origin,
+    the force is exerted toward the origin with some angle perturbation.
+    The motion is simulated by double integration of acceleration with
+    damping applied to velocity.
+
+    Parameters
+    ----------
+    time_frames : int
+        The number of time frames for which motion vectors to be synthesized.
+
+    Returns
+    -------
+    Xs : list of float
+        X coordinates of motion vectors
+    Ys : list of float
+        Y coordinates of motion vectors
+
+    """
 
     pi = math.pi
     x = 0
