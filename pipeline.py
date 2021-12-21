@@ -1,4 +1,5 @@
 import sys
+import time
 import importlib
 import pathlib
 import multiprocessing as mp
@@ -27,6 +28,8 @@ def set_dir(base_path, dirname):
     
 
 def simulate(num_videos, data_dir, temporal_gt_dir, spatial_gt_dir):
+    tic = time.perf_counter()
+    
     num_neurons_list = list(range(params.NUM_CELLS_MIN, params.NUM_CELLS_MAX))
     args = []
     for i in range(num_videos):
@@ -39,24 +42,36 @@ def simulate(num_videos, data_dir, temporal_gt_dir, spatial_gt_dir):
     pool = mp.Pool(mp.cpu_count())
     pool.starmap(create_synthetic_data, args)
     pool.close()
+    
+    toc = time.perf_counter()
+    print('%.1f seconds to simulate' % (toc - tic))
 
 
 def decimate(in_dir, out_dir, mode, size, filename):
+    tic = time.perf_counter()
+    
     if(filename):
-        filenames = [in_dir.joinpath(filename + '.tif')]
+        in_file = in_dir.joinpath(filename + '.tif')
+        out_file = out_dir.joinpath(in_file.name)
+        decimate_video(in_file, out_file, mode, size)
     else:
         filenames = sorted(in_dir.glob('*.tif'))
-    args = []
-    for in_file in filenames:
-        out_file = out_dir.joinpath(in_file.name)
-        args.append((in_file, out_file, mode, size))
+        args = []
+        for in_file in filenames:
+            out_file = out_dir.joinpath(in_file.name)
+            args.append((in_file, out_file, mode, size))
     
-    pool = mp.Pool(mp.cpu_count())
-    pool.starmap(decimate_video, args)
-    pool.close()
+        pool = mp.Pool(mp.cpu_count())
+        pool.starmap(decimate_video, args)
+        pool.close()
+    
+    toc = time.perf_counter()
+    print('%.1f seconds to decimate' % (toc - tic))
 
 
 def preprocess(in_dir, correction_dir, temporal_dir, spatial_dir, filename):
+    tic = time.perf_counter()
+
     if(filename): # file mode, multi-threaded job for a single file
         in_file = in_dir.joinpath(filename + '.tif')
         correction_file = correction_dir.joinpath(in_file.name)
@@ -86,9 +101,14 @@ def preprocess(in_dir, correction_dir, temporal_dir, spatial_dir, filename):
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(run_preprocessing, args)
         pool.close()
+        
+    toc = time.perf_counter()
+    print('%.1f seconds to preprocess' % (toc - tic))
 
 
 def train(in_dirs, target_dir, model_dir, out_dir, ref_dir):
+    tic = time.perf_counter()
+
     seed = 0
     validation_ratio = 5
     train_model(in_dirs, target_dir, model_dir,
@@ -100,30 +120,53 @@ def train(in_dirs, target_dir, model_dir, out_dir, ref_dir):
                    params.PATCH_SHAPE, params.VALIDATION_TILE_STRIDES,
                    params.BATCH_SIZE)
 
+    toc = time.perf_counter()
+    print('%.1f seconds to train' % (toc - tic))
+
 
 def segment(in_dirs, model_dir, out_dir, ref_dir, filename):
+    tic = time.perf_counter()
+    
     apply_model(in_dirs, model_dir, out_dir, ref_dir, filename,
                 params.PATCH_SHAPE, params.INFERENCE_TILE_STRIDES,
                 params.BATCH_SIZE)
+    
+    toc = time.perf_counter()
+    print('%.1f seconds to segment' % (toc - tic))
 
 
 def demix(in_dir, out_dir, correction_dir, filename):
+    tic = time.perf_counter()
+    
     if(filename):
-        filenames = [in_dir.joinpath(filename + '.tif')]
-    else:
-        filenames = sorted(in_dir.glob('*.tif'))
-    for in_file in filenames:
-        print('demixing ' + in_file.stem)
+        in_file = in_dir.joinpath(filename + '.tif')
         out_file = out_dir.joinpath(in_file.name)
         corr_file = correction_dir.joinpath(in_file.name)
         compute_masks(in_file, corr_file, out_file)
+    else:
+        filenames = sorted(in_dir.glob('*.tif'))
+        args = []
+        for in_file in filenames:
+            out_file = out_dir.joinpath(in_file.name)
+            corr_file = correction_dir.joinpath(in_file.name)
+            args.append((in_file, corr_file, out_file))
+
+        pool = mp.Pool(mp.cpu_count())
+        pool.starmap(compute_masks, args)
+        pool.close()
+    
+    toc = time.perf_counter()
+    print('%.1f seconds to demix' % (toc - tic))
 
 
 def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
+    tic = time.perf_counter()
+
     if(filename):
         filenames = [in_dir.joinpath(filename + '.tif')]
     else:
         filenames = sorted(in_dir.glob('*.tif'))
+    # notebook can't do multiprocessing, run one file at a time
     for in_file in filenames:
         print('evaluating ' + in_file.stem)
         gt_file = gt_dir.joinpath(in_file.name)
@@ -131,6 +174,8 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
         run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir)
     run_ipynb_evaluate_all(out_dir)
 
+    toc = time.perf_counter()
+    print('%.1f seconds to evaluate' % (toc - tic))
 
 
 

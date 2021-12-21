@@ -167,6 +167,8 @@ def demix_cells_incrementally(probability_maps,
 
 def compute_masks(in_file, data_file, out_file, save_images=False):
 
+    print('demixing ' + in_file.stem)
+
     probability_maps = tiff.imread(in_file).astype(float)
     # remove the last frame, which tends to be errorneous
     # probably because the last segment can be shorter than specified length
