@@ -9,6 +9,18 @@ REPRESENTATIVE_IOU = 0.4
 
     
 def _plot_F1_sub(f1, precision, recall, thresholds):
+    """
+    Plot F1 scores as well as precision and recall values.
+
+    Parameters
+    ----------
+    See plot_F1_and_IoU().
+
+    Returns
+    -------
+    None.
+
+    """
     plt.axis('square')
     plt.xlim(0, 1)
     plt.ylim(0, 1)
@@ -25,6 +37,18 @@ def _plot_F1_sub(f1, precision, recall, thresholds):
 
 
 def _plot_IoU_sub(IoU):
+    """
+    Visualize an IoU matrix as a heat map.
+
+    Parameters
+    ----------
+    See plot_F1_and_IoU().
+
+    Returns
+    -------
+    None.
+
+    """
     ax = plt.gca()
     ax.set_xticks([x - 0.5 for x in range(IoU.shape[1])], minor=True)
     ax.set_yticks([y - 0.5 for y in range(IoU.shape[0])], minor=True)
@@ -42,12 +66,47 @@ def _plot_IoU_sub(IoU):
 
 
 def plot_F1(f1, precision, recall, thresholds):
+    """
+    Plot F1 scores as well as precision and recall values.
+
+    Parameters
+    ----------
+    See plot_F1_and_IoU().
+
+    Returns
+    -------
+    None.
+
+    """
     plt.figure(figsize=(5, 5))
     _plot_F1_sub(f1, precision, recall, thresholds)
     plt.show()
 
 
 def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU):
+    """
+    Plot F1 scores as well as precision and recall values,
+    and visualize an IoU matrix as a heat map.
+
+    Parameters
+    ----------
+    f1 : list of float
+        F1 scores for varying IoU thresholds.
+    precision : list of float
+        Precision values for varying IoU thresholds.
+    recall : list of float
+        Recall values for varying IoU thresholds.
+    thresholds : list of float
+        IoU thresholds.
+    IoU : 2D numpy.ndarray of float
+        Matrix whose elements represent IoU values between predicted masks
+        and ground truth masks.
+
+    Returns
+    -------
+    None.
+
+    """
     plt.figure(figsize=(11, 5))
     plt.subplot(1, 2, 1)
     _plot_F1_sub(f1, precision, recall, thresholds)
@@ -58,6 +117,23 @@ def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU):
 
 
 def _overlay_masks(masks, color):
+    """
+    Overlay masks on an image, and label each mask with its ID number.
+    The underlying image is assumed to be already drawn, and the contours
+    of the masks will be drawn on top of it.
+
+    Parameters
+    ----------
+    masks : 3D numpy.ndarray of boolean
+        Mask images.
+    color : 3-tuple of float
+        RGB color in [0, 1] for drawing mask contours
+
+    Returns
+    -------
+    None.
+
+    """
     contour_image = np.zeros(masks.shape[1:], dtype=bool)
     for mask in masks:
         contour = find_boundaries(mask, mode='outer')
@@ -74,6 +150,19 @@ def _overlay_masks(masks, color):
 
 
 def _plot_masks_sub(image, eval_masks, gt_masks):
+    """
+    Plot (show) mask images overlaid on a given image. Either of eval_masks
+    or gt_masks can be None, in which case only the other masks will be shown.
+
+    Parameters
+    ----------
+    See plot_masks().
+
+    Returns
+    -------
+    None.
+
+    """
     plt.axis('off')
     plt.imshow(image, interpolation='bilinear', cmap='gray')
     title = ''
@@ -89,6 +178,25 @@ def _plot_masks_sub(image, eval_masks, gt_masks):
 
 
 def plot_masks(image, eval_masks, gt_masks):
+    """
+    Plot (show) three mask images: (1) predicted masks to be evaluated and
+    the ground truth masks, (2) predicted masks only, and (3) GT masks only.
+    All of them will be overlaid on a given image.
+
+    Parameters
+    ----------
+    image : 2D numpy.ndarray of float
+        Image on which masks are overlaid.
+    eval_masks : 3D numpy.ndarray of boolean
+        Masks to be evaluated. The shape should be (# masks,) + image.shape.
+    gt_masks : 3D numpy.ndarray of boolean
+        Ground truth masks. The shape should be (# masks,) + image.shape.
+
+    Returns
+    -------
+    None.
+
+    """
     plt.figure(figsize=(17, 5))
     plt.subplot(1, 3, 1)
     _plot_masks_sub(image, eval_masks, gt_masks)
@@ -101,6 +209,25 @@ def plot_masks(image, eval_masks, gt_masks):
     
 
 def plot_per_dataset_scores(keys, scores, label, color):
+    """
+    Plot a bar chart showing scores for individual data sets.
+
+    Parameters
+    ----------
+    keys : list of string
+        Names of data sets.
+    scores : list of float
+        Score values.
+    label : string
+        Name of the score type. Used to label the chart.
+    color : color (any color specification such as string, RGB, etc.)
+        Color of the bars.
+
+    Returns
+    -------
+    None.
+
+    """
     #mags = df['Magnification']
     plt.figure(figsize=(17, 3))
     plt.ylim(0, 1)

@@ -10,7 +10,26 @@ from .roi import read_roi
 NUM_THRESHOLDS = 100
 
 def evaluate_each(in_file, gt_file, img_file, out_dir):
+    """
+    Evaluate predicted neuron masks against ground truth masks.
 
+    Parameters
+    ----------
+    in_file : string
+        Path to a file containing predicted neuron masks.
+    gt_file : string
+        Path to a file containing ground truth masks.
+    img_file : string
+        Path to a file containing a representative image of the data set.
+    out_dir : string
+        Path to a directory in which evaluation statistics will be saved.
+
+    Returns
+    -------
+    eval_data : dictionary
+        Dictionary containing evaluation statistics.
+
+    """
     eval_data = {}
 
     eval_masks = tiff.imread(in_file).astype(bool)

@@ -85,6 +85,27 @@ def count_matches(eval_masks, gt_masks, thresholds, remove_duplicates=True):
 
 
 def calc_f1_scores(counts):
+    """
+    Calculate F1 scores, along with precision and recall values,
+    based on the numbers (counts) of true/false positives/negatives.
+
+    Parameters
+    ----------
+    counts : list of 3-tuples
+        Each element of the list is a tuple (true_pos, false_pos, false_neg)
+        representing the numbers of true positives, false positives,
+        and false negatives (for a certain IoU threshold unspecified here).
+
+    Returns
+    -------
+    f1 : 1D numpy.ndarray of float
+        F1 scores for individual IoU thresholds.
+    precision : 1D numpy.ndarray of float
+        Precision values for individual IoU thresholds.
+    recall : 1D numpy.ndarray of float
+        Recall values for individual IoU thresholds.
+
+    """
     true_pos  = np.array(counts)[:, 0]
     false_pos = np.array(counts)[:, 1]
     false_neg = np.array(counts)[:, 2]

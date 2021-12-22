@@ -9,7 +9,31 @@ REPRESENTATIVE_IOU = 0.4
 
 
 def _aggregate_scores(out_dir, filter_func=lambda x: True):
+    """
+    Aggregate individual evaluation scores.
 
+    Parameters
+    ----------
+    out_dir : string
+        Path to a directory from which individual evaluation statistics will
+        be read, and in which aggregated evaluation will be saved.
+    filter_func : function, optional
+        Function to select data sets whose evaluation results are aggregated.
+        Intended to be used to aggregate only a subset of individual
+        evaluations, but not in use. The default is lambda x: True.
+
+    Returns
+    -------
+    f1_rep : float
+        Single F1 score representing the overall accuracy of predicted neuron
+        masks, corresponding to an IoU threshold of REPRESENTATIVE_IOU.
+    df_sum : pandas.DataFrame
+        Table summarizing overall evaluation statistics.
+    df_each : pandas.DataFrame
+        Table summarizing individual evalution statistics corresponding
+        to an IoU threshold of REPRESENTATIVE_IOU.
+
+    """
     dataset_ids = []
     precision_each = []
     recall_each = []
@@ -58,7 +82,23 @@ def _aggregate_scores(out_dir, filter_func=lambda x: True):
 
 
 def evaluate_all(out_dir):
-        
+    """
+    Aggregate individual evaluation results and report overall evaluation.
+    This assumes individual evaluations have already been performed by
+    evaluate_each() and their results are stored in out_dir.
+
+    Parameters
+    ----------
+    out_dir : string
+        Path to a directory from which individual evaluation statistics will
+        be read, and in which overall evaluation will be saved.
+
+    Returns
+    -------
+    eval_data : dictionary
+        Dictionary containing overall evaluation statistics.
+
+    """
     f1_rep, df_sum, df_each = _aggregate_scores(pathlib.Path(out_dir))
 
     eval_data = {}
