@@ -1,60 +1,65 @@
-from keras import layers
-from keras import models
+from keras import layers, models
 
-def get_model(img_size, num_channels):
+
+def conv(inputs, num_filters):
+    x = layers.Conv2D(num_filters, 3, padding='same')(inputs)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    x = layers.Conv2D(num_filters, 3, padding='same')(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.Activation('relu')(x)
+    return x
+
+
+def down(inputs, num_filters, dropout_rate, centered):
+    c = conv(inputs, num_filters)
+    if(centered):
+        pool_size = 3
+    else:
+        pool_size = 2
+    x = layers.MaxPooling2D(pool_size, strides=2, padding='same')(c)
+    x = layers.Dropout(dropout_rate)(x)
+    return x, c
+
+
+def up(inputs, copy, num_filters, dropout_rate, method, centered):
+    if(method == 'conv_transpose'):
+        if(centered):
+            kernel_size = 3
+        else:
+            kernel_size = 2
+        x = layers.Conv2DTranspose(num_filters, kernel_size,
+                                   strides=2, padding='same')(inputs)
+    else:
+        x = layers.UpSampling2D(2)(inputs)
+
+    x = layers.concatenate([copy, x], axis=3)
+    x = layers.Dropout(dropout_rate)(x)
+    x = conv(x, num_filters)
+    return x
+
+
+def get_model(img_size, num_channels,
+              num_stages, num_filters, dropout_rate,
+              upsample_method, centered):
 
     inputs = layers.Input(shape=img_size + (num_channels,))
 
-    ### [First half of the network: downsampling inputs] ###
+    x = inputs
+    conv_list = []
+    n = num_filters
+    for i in range(num_stages):
+        x, c = down(x, n, dropout_rate, centered)
+        conv_list.append(c)
+        n *= 2
 
-    # Entry block
-    x = layers.Conv2D(32, 3, strides=2, padding="same")(inputs)
-    x = layers.BatchNormalization()(x)
-    x = layers.Activation("relu")(x)
+    x = conv(x, n)
 
-    previous_block_activation = x  # Set aside residual
+    for i in range(num_stages):
+        n /= 2
+        x = up(x, conv_list[-i-1], n, dropout_rate, upsample_method, centered)
 
-    # Blocks 1, 2, 3 are identical apart from the feature depth.
-    for filters in [64, 128]:
-        x = layers.Activation("relu")(x)
-        x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
+    outputs = layers.Conv2D(1, (1, 1), activation='sigmoid')(x)
 
-        x = layers.Activation("relu")(x)
-        x = layers.SeparableConv2D(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
-
-        x = layers.MaxPooling2D(3, strides=2, padding="same")(x)
-
-        # Project residual
-        residual = layers.Conv2D(filters, 1, strides=2, padding="same")(
-            previous_block_activation
-        )
-        x = layers.add([x, residual])  # Add back residual
-        previous_block_activation = x  # Set aside next residual
-
-    ### [Second half of the network: upsampling inputs] ###
-
-    for filters in [128, 64, 32]:
-        x = layers.Activation("relu")(x)
-        x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
-
-        x = layers.Activation("relu")(x)
-        x = layers.Conv2DTranspose(filters, 3, padding="same")(x)
-        x = layers.BatchNormalization()(x)
-
-        x = layers.UpSampling2D(2)(x)
-
-        # Project residual
-        residual = layers.UpSampling2D(2)(previous_block_activation)
-        residual = layers.Conv2D(filters, 1, padding="same")(residual)
-        x = layers.add([x, residual])  # Add back residual
-        previous_block_activation = x  # Set aside next residual
-
-    # Add a per-pixel classification layer, 1-class sigmoid
-    outputs = layers.Conv2D(1, 3, activation="sigmoid", padding="same")(x)
-
-    # Define the model
     model = models.Model(inputs, outputs)
     return model

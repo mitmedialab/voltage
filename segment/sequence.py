@@ -18,7 +18,7 @@ class VI_Sequence(Sequence):
         Parameters
         ----------
         batch_size : integer
-            Batch size for training
+            Batch size for training/inference.
         patch_shape : tuple (height, width) of integers
             Image patch size to be extracted from image files.
             The size should be equal to (when num_darts=1) or smaller than

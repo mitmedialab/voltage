@@ -3,6 +3,7 @@ import keras
 from .data import get_training_data
 from .sequence import VI_Sequence
 from .model import get_model
+from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 
 def train_model(input_dir_list, target_dir, model_dir,
@@ -63,16 +64,30 @@ def train_model(input_dir_list, target_dir, model_dir,
     # Free up RAM in case the model definition has been executed multiple times
     keras.backend.clear_session()
     num_channels = len(train_input_paths[0])
-    model = get_model(patch_shape, num_channels)
-    model.summary()    
-    model.compile(optimizer="rmsprop", loss='binary_crossentropy')
     
+    model = get_model(patch_shape, num_channels, 3, 32, 0.5,
+                      'conv_transpose', False)
+    model.summary()
+    #opt = keras.optimizers.Adadelta() # slow with default values
+    #opt = keras.optimizers.Adam() # good
+    #opt = keras.optimizers.Adamax() # so-so
+    #opt = keras.optimizers.Nadam() # so-so
+    opt = keras.optimizers.RMSprop() # good
+    model.compile(optimizer=opt, loss='binary_crossentropy')
+    #model.compile(optimizer=opt, loss=weighted_bce)
+    #model.compile(optimizer=opt, loss=dice_loss)
+    #model.compile(optimizer=opt, loss=bce_dice_loss)
+    #model.compile(optimizer=opt, loss=iou_loss)
+
     callbacks = [
-        keras.callbacks.ModelCheckpoint(model_dir.joinpath('weight.h5'),
-                                        save_best_only=True)
+        keras.callbacks.ModelCheckpoint(model_dir.joinpath('model.h5'),
+                                        monitor='val_loss',
+                                        verbose=1,
+                                        save_best_only=True,
+                                        save_weigts_only=False,
+                                        mode='min'),
+        keras.callbacks.CSVLogger(model_dir.joinpath('log.csv'))
     ]
-    
+
     model.fit(train_seq, validation_data=valid_seq,
               epochs=epochs, callbacks=callbacks)
-    
-    model.save(model_dir.joinpath('model.h5'))

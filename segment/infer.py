@@ -6,6 +6,7 @@ from keras import models
 
 from .sequence import VI_Sequence
 from .data import get_training_data, get_inference_data
+from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 
 def _merge_patches(image_shape, patches, Xs, Ys,
@@ -90,6 +91,36 @@ def _merge_patches(image_shape, patches, Xs, Ys,
 
 def predict_and_merge(model, data_seq, tile_strides,
                       input_paths, target_paths, out_dir, ref_dir):
+    """
+    Make prediction using a given U-Net model on sliding patches, and merge
+    them into single probability maps.
+
+    Parameters
+    ----------
+    model : keras.Model
+        Learned U-Net model.
+    data_seq : VI_Sequence
+        Sequence object used to feed data to the model.
+    tile_strides : tuple (y, x) of integer
+        Spacing between adjacent tiles/patches.
+    input_paths : list of list of pathlib.Path
+        List of file paths to input images. Each element of the list is
+        a list of file paths corresponding to multiple channels.
+    target_paths : list of pathlib.Path
+        List of file paths to target images specifing expected outputs.
+        It can be None, in which case only U-Net inputs and outputs will
+        be saved to ref_dir.
+    out_dir : pathlib.Path
+        Directory path to which U-Net outputs will be saved.
+    ref_dir : pathlib.Path
+        Directory path to which U-Net inputs, outputs, and targets (ground
+        truth) if any, are juxtaposed and saved for visual inspection.
+
+    Returns
+    -------
+    None.
+
+    """
     
     preds = model.predict(data_seq, verbose=1)
     preds = preds[:, :, :, 0] # remove last dimension (its length is one)
@@ -99,12 +130,13 @@ def predict_and_merge(model, data_seq, tile_strides,
     num_frames = data_seq.num_frames
     image_shape = data_seq.image_shape
     patch_shape = preds.shape[1:]
-    
-    std = (patch_shape[0] + patch_shape[1]) / 2 / 3
-    gauss_y = gaussian(patch_shape[0], std)
-    gauss_x = gaussian(patch_shape[1], std)
+
+    # construct a weight matrix for average patch merger
+    sigma = (patch_shape[0] + patch_shape[1]) / 2 / 3
+    gauss_y = gaussian(patch_shape[0], sigma)
+    gauss_x = gaussian(patch_shape[1], sigma)
     weight = np.outer(gauss_y, gauss_x)
-    
+
     for i, paths in enumerate(input_paths):
         pred_img = np.zeros((num_frames,) + image_shape)
         for j in range(num_frames):
@@ -138,6 +170,51 @@ def predict_and_merge(model, data_seq, tile_strides,
 def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
                    seed, validation_ratio,
                    patch_shape, tile_strides, batch_size):
+    """
+    Validate a learned U-Net by making inference on a validation data set.
+
+    This is different from validation during training, which is performed on
+    a patch-by-patch basis for randomly chosen patches from a validation set.
+    In contrast, this function performs inference on sliding patches and merge
+    them into probability maps having the same size as input images, which is
+    the same process as performing inference on test/real data as implemented
+    in apply_model(), making the results more suitable for visual inspection.
+
+    In order to use the same validation set as training, the parameters
+    input_dir_list, target_dir, seed, validation_ratio, and patch_shape
+    must be the same as supplied to the training function train_model().
+
+    Parameters
+    ----------
+    input_dir_list : list of pathlib.Path
+        List of directory paths containing input files. Each directory path
+        corresponds to one channel of the input.
+    target_dir : pathlib.Path
+        Directory path containing target files.
+    model_dir : pathlib.Path
+        Directory path containing a learned model.
+    out_dir : pathlib.Path
+        Directory path to which U-Net outputs will be saved.
+    ref_dir : pathlib.Path
+        Directory path to which U-Net inputs, outputs, and targets (ground
+        truth) are juxtaposed and saved for visual inspection.
+    seed : integer
+        Seed for randomized splitting into traning and validation data.
+    validation_ratio : integer
+        What fraction of the inputs are used for validation. If there are
+        N inputs, N/validation_ratio of them will be used for validation.
+    patch_shape : tuple (height, width) of integer
+        Size of patches to be extracted from images.
+    tile_strides : tuple (y, x) of integer
+        Spacing between adjacent tiles/patches.
+    batch_size : integer
+        Batch size for inference.
+
+    Returns
+    -------
+    None.
+
+    """
 
     data = get_training_data(input_dir_list, target_dir,
                              seed, validation_ratio)
@@ -148,7 +225,11 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
                             valid_input_paths, valid_target_paths,
                             tiled=True, tile_strides=tile_strides)
 
-    model = models.load_model(model_dir.joinpath('model.h5'))
+    model = models.load_model(model_dir.joinpath('model.h5'),
+                              custom_objects={'weighted_bce': weighted_bce,
+                                              'dice_loss': dice_loss,
+                                              'bce_dice_loss': bce_dice_loss,
+                                              'iou_loss': iou_loss})
 
     predict_and_merge(model, valid_seq, tile_strides,
                       valid_input_paths, valid_target_paths, out_dir, ref_dir)
@@ -156,9 +237,44 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
 
 def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
                 patch_shape, tile_strides, batch_size):
+    """
+    Apply a learned U-Net by making inference on a test/real data set.
+
+    Parameters
+    ----------
+    input_dir_list : list of pathlib.Path
+        List of directory paths containing input files. Each directory path
+        corresponds to one channel of the input.
+    model_dir : pathlib.Path
+        Directory path containing a learned model.
+    out_dir : pathlib.Path
+        Directory path to which U-Net outputs will be saved.
+    ref_dir : pathlib.Path
+        Directory path to which U-Net inputs and outputs are juxtaposed
+        and saved for visual inspection.
+    filename : string
+        If non-empty, only the input whose stem (filename excluding directory
+        and extension) matches the specified string will be processed.
+        If empty, all the inputs in input_dir_list will be processed.
+    patch_shape : tuple (height, width) of integer
+        Size of patches to be extracted from images.
+    tile_strides : tuple (y, x) of integer
+        Spacing between adjacent tiles/patches.
+    batch_size : integer
+        Batch size for inference.
+
+    Returns
+    -------
+    None.
+
+    """
 
     input_files = get_inference_data(input_dir_list)
-    model = models.load_model(model_dir.joinpath('model.h5'))
+    model = models.load_model(model_dir.joinpath('model.h5'),
+                              custom_objects={'weighted_bce': weighted_bce,
+                                              'dice_loss': dice_loss,
+                                              'bce_dice_loss': bce_dice_loss,
+                                              'iou_loss': iou_loss})
     for paths in input_files:
         if(filename and paths[0].stem != filename):
             continue
