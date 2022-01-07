@@ -4,6 +4,7 @@ import math
 from skimage import draw
 from skimage.morphology import binary_erosion, disk
 from scipy.ndimage import gaussian_filter
+from scipy.ndimage.measurements import center_of_mass
 from elasticdeform import deform_grid
 
 
@@ -23,8 +24,17 @@ SIGNAL_BOOST_FACTOR_MAX = 1.35
 NEURON_OPACITY = 0.5
 
 NON_SPIKING_CELL_RATIO = 0.3
-MIN_NUM_SPIKES_PER_FRAME = 0.005
-MAX_NUM_SPIKES_PER_FRAME = 0.02
+NUM_SPIKES_PER_FRAME_MIN = 0.005
+NUM_SPIKES_PER_FRAME_MAX = 0.02
+
+NUM_DENDRITES_MIN = 0
+NUM_DENDRITES_MAX = 2
+DENDRITE_LENGTH_RATIO_MIN = 1 # relative to the cell body size
+DENDRITE_LENGTH_RATIO_MAX = 3
+DENDRITE_WIDTH_RATIO_MIN = 0.05
+DENDRITE_WIDTH_RATIO_MAX = 0.1
+ANGLE_OFFSET = 0.5 # how much angle can change from start to end
+ANGLE_PERTURBATION = 0.1 # angle is randomized up to this value at each point
 
 
 class neuron:
@@ -54,6 +64,7 @@ class neuron:
         self.image_shape = image_shape
         self._set_shape(roi_shape, deform)
         self._set_image()
+        self._set_dendrites()
 
 
     def _set_shape(self, roi_shape, deform):
@@ -123,6 +134,65 @@ class neuron:
         self.alpha = gaussian_filter(opacity, sigma)
 
 
+    def _set_dendrites(self):
+        """
+        Set dendrites by growing thin strands from the cell body.
+        An alpha map (self.dendrites) will be created separately from that
+        of the cell body (self.alpha). The intensity reuses self.image.
+
+        Returns
+        -------
+        None.
+
+        """
+        # center of the cell body
+        y0, x0 = center_of_mass(self.mask)
+        # size (diameter) of the cell body, assuming it is a disk
+        size = 2 * math.sqrt(np.sum(self.mask) / math.pi)
+
+        self.dendrites = np.zeros(self.image_shape)
+        num_dendrites = random.randint(NUM_DENDRITES_MIN, NUM_DENDRITES_MAX)
+        for i in range(num_dendrites):
+            length = random.uniform(DENDRITE_LENGTH_RATIO_MIN,
+                                    DENDRITE_LENGTH_RATIO_MAX) * size
+            width = random.uniform(DENDRITE_WIDTH_RATIO_MIN,
+                                   DENDRITE_WIDTH_RATIO_MAX) * size
+
+            # randomly pick a direction of the dendrite at its root
+            angle = random.uniform(-math.pi, +math.pi)
+            # the direction at its endpoint will be angle + angle_offset
+            angle_offset = random.random() * ANGLE_OFFSET
+
+            # grow a dendrite starting from the center of the cell body
+            x = x0
+            y = y0
+            angle_delta = angle_offset / length
+            t = 0
+            img = np.zeros(self.image_shape)
+            for t in range(math.ceil(length)):
+                # update the angle of the dendrite and take a unit step
+                angle += angle_delta + random.random() * ANGLE_PERTURBATION
+                x += math.cos(angle)
+                y += math.sin(angle)
+                xi = math.floor(x)
+                yi = math.floor(y)
+                if(xi < 0 or self.image_shape[1] <= xi+1):
+                    continue
+                if(yi < 0 or self.image_shape[0] <= yi+1):
+                    continue
+                if(self.mask[yi, xi]): # wait until it leaves the cell body
+                    continue
+                # The opacity at the root is the same as the cell body
+                # but it wears off toward the endpoint
+                img[yi, xi] = NEURON_OPACITY * (1 - t / length)
+
+            # Turn the thin sharp curve into a thick smooth one by blurring
+            # while compensating for the intensity reduction (i.e., undoing
+            # Gaussian normalization), and add to the alpha map
+            norm = math.sqrt(2 * math.pi) * width
+            self.dendrites += gaussian_filter(img, width) * norm
+
+
     def set_spikes(self, time_frames):
         """
         Set a spiking/firing pattern of the neuron.
@@ -144,8 +214,8 @@ class neuron:
             num_spikes = 0
         else:
             self.active = True
-            num_spikes = random.randint(time_frames * MIN_NUM_SPIKES_PER_FRAME,
-                                        time_frames * MAX_NUM_SPIKES_PER_FRAME)
+            num_spikes = random.randint(time_frames * NUM_SPIKES_PER_FRAME_MIN,
+                                        time_frames * NUM_SPIKES_PER_FRAME_MAX)
             
         spiking_frames = np.random.randint(0, time_frames, num_spikes)
         self.spiking_frames = np.sort(np.unique(spiking_frames))
@@ -158,7 +228,7 @@ class neuron:
 
     def add_cell_image(self, image, t):
         """
-        Add the neuron to a given image.
+        Add the neuron (image of the cell body and dendrites) to a given image.
 
         Parameters
         ----------
@@ -173,14 +243,16 @@ class neuron:
             Output image.
 
         """
-        background = (1 - self.alpha) * image
-        foreground = self.alpha * self.image * self.spike_levels[t]
+        alpha = self.alpha + self.dendrites
+        background = (1 - alpha) * image
+        foreground = alpha * self.image * self.spike_levels[t]
         return foreground + background
 
 
     def add_mask_image(self, image, t=-1):
         """
-        Add the neuron mask to a given image.
+        Add the neuron mask to a given image. The mask represents the cell body
+        footprint and does not include dendrites.
 
         Parameters
         ----------

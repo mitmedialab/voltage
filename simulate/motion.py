@@ -2,9 +2,10 @@ import math
 import random
 
 
-DAMPING = 0.2
+DAMPING = 0.5
 ANGLE_PERTURBATION = 0.2
-SCALE = 3.0
+SCALE = 20.0
+TIME_STEP = 0.1
 
 
 def synthesize_motion(time_frames):
@@ -39,8 +40,8 @@ def synthesize_motion(time_frames):
 
     for i in range(time_frames):
 
-        Xs.append(SCALE * x)
-        Ys.append(SCALE * y)
+        Xs.append(x)
+        Ys.append(y)
 
         if(x == 0 and y == 0):
             angle = random.uniform(-pi, +pi) # pick direction randomly
@@ -49,14 +50,14 @@ def synthesize_motion(time_frames):
             angle += pi # opposite direction to return to the origin
             angle += random.uniform(-pi, +pi) * ANGLE_PERTURBATION
 
-        mag = random.random()
+        mag = random.random() * SCALE
         ax = mag * math.cos(angle) - DAMPING * vx
         ay = mag * math.sin(angle) - DAMPING * vy
 
-        vx += ax
-        vy += ay
-        x += vx
-        y += vy
+        vx += ax * TIME_STEP
+        vy += ay * TIME_STEP
+        x += vx * TIME_STEP
+        y += vy * TIME_STEP
 
     return Xs, Ys
 
