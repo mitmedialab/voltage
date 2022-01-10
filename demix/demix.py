@@ -3,6 +3,7 @@ import numpy as np
 import tifffile as tiff
 from skimage import measure
 from skimage.transform import resize, rescale
+from skimage.morphology import binary_erosion
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage.morphology import binary_fill_holes
 
@@ -190,12 +191,13 @@ def compute_masks(in_file, data_file, out_file, save_images=False):
     avg_data = np.mean(data, axis=0)
     background = gaussian_filter(avg_data, 10)
     data -= background # subtract background intensity
-    foreground_mask = binary_fill_holes(avg_data - background > 0.001)
+    #foreground_mask = binary_fill_holes(avg_data - background > 0.001)
 
 
     # separate active areas within the foreground into connected components
-    active_foreground = np.logical_and(foreground_mask, active_areas)
-    label_image = measure.label(active_foreground)
+    #active_foreground = np.logical_and(foreground_mask, active_areas)
+    #label_image = measure.label(active_foreground)
+    label_image = measure.label(binary_erosion(active_areas))
     components = measure.regionprops(label_image)
     if(save_images):
         tiff.imwrite('avg_prob.tif', avg_prob.astype('float32'),
@@ -204,14 +206,14 @@ def compute_masks(in_file, data_file, out_file, save_images=False):
                      photometric='minisblack')
         tiff.imwrite('avg_data.tif', avg_data.astype('float32'),
                      photometric='minisblack')
-        tiff.imwrite('foreground_mask.tif', foreground_mask,
-                     photometric='minisblack')
-        tiff.imwrite('active_foreground.tif',
-                     active_foreground.astype('float32'),
-                     photometric='minisblack')
+        #tiff.imwrite('foreground_mask.tif', foreground_mask,
+        #             photometric='minisblack')
+        #tiff.imwrite('active_foreground.tif',
+        #             active_foreground.astype('float32'),
+        #             photometric='minisblack')
     
     # Process each component
-    h, w = active_foreground.shape
+    h, w = active_areas.shape
     out = np.zeros((0, h, w), dtype=bool)
     margin = 0
     
