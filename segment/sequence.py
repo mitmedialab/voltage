@@ -64,6 +64,8 @@ class VI_Sequence(Sequence):
         self.num_darts = num_darts
         self.tiled = tiled
         self.shuffle = shuffle
+        self.num_splits = 1
+        self.split_idx = 0
 
         self.num_channels = len(input_img_paths[0])
         tmp = tiff.imread(input_img_paths[0][0])
@@ -121,26 +123,55 @@ class VI_Sequence(Sequence):
             random.shuffle(self.sample_indices)
 
 
-    def __len__(self):
+    def _get_lengths(self):
         """
-        Calculate the number of batches in the sequence. If the number of
-        samples is not divisible by the specified bach size, the result is
-        rounded down so that a batch having less samples than the batch size
-        will not be added to the end of the sequence for trainig in the case
-        of tiled=False, whereas it is rounded up so all the samples are
-        evaluated in the case of tiled=True.
+        Calculate the number of batches in the sequence, along with the number
+        of batches in each subsequence if the sequence is split.
+
+        If the number of samples is not divisible by the specified bach size,
+        the result is rounded down so that a batch having less samples than
+        the batch size will not be added to the end of the sequence for trainig
+        in the case of tiled=False, whereas it is rounded up so all the samples
+        are evaluated in the case of tiled=True.
 
         Returns
         -------
-        Integer
+        length : integer
             The number of batches in the sequence.
+        sublength : integer
+            The number of batches in each subsequence. If the sequence is not
+            split (self.num_splits=1), this will be the same as length.
 
         """
         num_samples = len(self.sample_indices)
         if(self.tiled):
-            return (num_samples + self.batch_size - 1) // self.batch_size
+            length = (num_samples + self.batch_size - 1) // self.batch_size
         else:
-            return num_samples // self.batch_size
+            length = num_samples // self.batch_size
+
+        sublength = (length + self.num_splits - 1) // self.num_splits
+        return length, sublength
+
+
+    def __len__(self):
+        """
+        Return the number of batches in the sequence if it is not split
+        (self.num_splits=1). If split (self.num_splits>1), return the number
+        of batches in the current subsequence pointed to by self.split_idx.
+
+        Returns
+        -------
+        Integer
+            The number of batches in the (sub)sequence.
+
+        """
+        length, sublength = self._get_lengths()
+        if(self.num_splits == 1):
+            return length
+        else:
+            start = sublength * self.split_idx
+            end = min(start + sublength, length)
+            return end - start
 
 
     def __getitem__(self, idx):
@@ -162,6 +193,12 @@ class VI_Sequence(Sequence):
             The shape is batch_size x patch_height x patch_width x 1.
 
         """
+
+        # For split sequence, move the index to the start of the subsequence
+        if(self.num_splits > 1):
+            _, sublength = self._get_lengths()
+            idx += sublength * self.split_idx
+
         buf_shape = (self.batch_size,) + self.patch_shape
         inputs = np.zeros(buf_shape + (self.num_channels,), dtype='float32')
         targets = np.zeros(buf_shape + (1,), dtype='float32')
@@ -183,7 +220,7 @@ class VI_Sequence(Sequence):
 
     def on_epoch_end(self):
         """
-        Shuffle samples at the end of every epoch if shuffle=True.
+        Shuffle samples at the end of every epoch if self.shuffle=True.
 
         Returns
         -------
@@ -197,7 +234,7 @@ class VI_Sequence(Sequence):
     def get_tile_pos(self):
         """
         Return the top left corner positions of the tiles when patches are
-        tiled (i.e., tiled=True).
+        tiled (i.e., self.tiled=True).
 
         Returns
         -------
@@ -211,3 +248,44 @@ class VI_Sequence(Sequence):
             return self.Ys[0:self.num_darts], self.Xs[0:self.num_darts]
         else:
             return None
+
+
+    def output_data_size(self):
+        """
+        Return the total output data size necessary to hold the prediction
+        results for all the samples in the sequence, assuming 32-bit float.
+
+        Returns
+        -------
+        size : integer
+            Total data size in bytes.
+
+        """
+        num_samples = len(self.sample_indices)
+        size = num_samples * self.patch_shape[0] * self.patch_shape[1] * 4
+        return size
+
+
+    def split_samples(self, num_splits=1, split_idx=0):
+        """
+        Split the sequence into multiple subsequences. Useful when the sequence
+        contains many samples leading to too large output prediction data for
+        the available GPU memory. Passing non-default argument values changes
+        the behaviors of __len__() and __getitem__() to realize the splitting.
+
+        Parameters
+        ----------
+        num_splits : integer
+            The sequence will be split into this many subsequences.
+            The default is 1 (no splitting).
+        split_idx : integer
+            Only the split_idx-th subsequence will be output.
+            The default is 0 (no splitting).
+
+        Returns
+        -------
+        None.
+
+        """
+        self.num_splits = num_splits
+        self.split_idx = split_idx

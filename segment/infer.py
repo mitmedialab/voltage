@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import tifffile as tiff
 from skimage.transform import resize
@@ -89,7 +90,7 @@ def _merge_patches(image_shape, patches, Xs, Ys,
         return None
 
 
-def predict_and_merge(model, data_seq, tile_strides,
+def predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
                       input_paths, target_paths, out_dir, ref_dir):
     """
     Make prediction using a given U-Net model on sliding patches, and merge
@@ -103,6 +104,9 @@ def predict_and_merge(model, data_seq, tile_strides,
         Sequence object used to feed data to the model.
     tile_strides : tuple (y, x) of integer
         Spacing between adjacent tiles/patches.
+    gpu_mem_size : float or None
+        GPU memory size in gigabytes (GB) that can be allocated for buffering
+        prediction outputs. If None, no limit is assumed.
     input_paths : list of list of pathlib.Path
         List of file paths to input images. Each element of the list is
         a list of file paths corresponding to multiple channels.
@@ -122,7 +126,28 @@ def predict_and_merge(model, data_seq, tile_strides,
 
     """
     
-    preds = model.predict(data_seq, verbose=1)
+    # model.predict() allocates a buffer on the GPU to hold all the output
+    # prediction data before passing it back to the main memory, which can
+    # cause GPU out-of-memory error if data_seq feeds too many samples.
+    # When this happens, it cannot be avoided by reducing the batch size, as
+    # the number of batches increases and the output data size stays the same.
+    # To avoid the error, we can split the data_seq sequence into multiple
+    # subsequences and run predict() for each of them, after which we join
+    # the outputs together on the main memory.
+    data_size = data_seq.output_data_size() / 1000000000 # in gigabytes
+    if(gpu_mem_size is None):
+        gpu_mem_size = data_size
+    num_splits = math.ceil(data_size / gpu_mem_size)
+    if(num_splits > 1):
+        print('splitting %.1f GB output data into %d parts'
+              % (data_size, num_splits))
+    for i in range(num_splits):
+        data_seq.split_samples(num_splits, i)
+        ret = model.predict(data_seq, verbose=1)
+        if(i == 0):
+            preds = ret
+        else:
+            preds = np.concatenate((preds, ret), axis=0)
     preds = preds[:, :, :, 0] # remove last dimension (its length is one)
     
     Ys, Xs = data_seq.get_tile_pos()
@@ -169,7 +194,7 @@ def predict_and_merge(model, data_seq, tile_strides,
 
 def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
                    seed, validation_ratio,
-                   patch_shape, tile_strides, batch_size):
+                   patch_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Validate a learned U-Net by making inference on a validation data set.
 
@@ -209,6 +234,9 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
         Spacing between adjacent tiles/patches.
     batch_size : integer
         Batch size for inference.
+    gpu_mem_size : float or None
+        GPU memory size in gigabytes (GB) that can be allocated for buffering
+        prediction outputs. The default is None (no limit is assumed).
 
     Returns
     -------
@@ -231,12 +259,12 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
                                               'bce_dice_loss': bce_dice_loss,
                                               'iou_loss': iou_loss})
 
-    predict_and_merge(model, valid_seq, tile_strides,
+    predict_and_merge(model, valid_seq, tile_strides, gpu_mem_size,
                       valid_input_paths, valid_target_paths, out_dir, ref_dir)
 
 
 def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
-                patch_shape, tile_strides, batch_size):
+                patch_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Apply a learned U-Net by making inference on a test/real data set.
 
@@ -262,6 +290,9 @@ def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
         Spacing between adjacent tiles/patches.
     batch_size : integer
         Batch size for inference.
+    gpu_mem_size : float or None
+        GPU memory size in gigabytes (GB) that can be allocated for buffering
+        prediction outputs. The default is None (no limit is assumed).
 
     Returns
     -------
@@ -278,10 +309,12 @@ def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
     for paths in input_files:
         if(filename and paths[0].stem != filename):
             continue
-        
+
+        print('processing ' + filename)
+
         data_seq = VI_Sequence(batch_size, patch_shape,
                                [paths], None,
                                tiled=True, tile_strides=tile_strides)
-        
-        predict_and_merge(model, data_seq, tile_strides,
+
+        predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
                           [paths], None, out_dir, ref_dir)
