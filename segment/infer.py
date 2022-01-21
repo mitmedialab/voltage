@@ -310,7 +310,7 @@ def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
         if(filename and paths[0].stem != filename):
             continue
 
-        print('processing ' + filename)
+        print('processing ' + paths[0].stem)
 
         data_seq = VI_Sequence(batch_size, patch_shape,
                                [paths], None,
