@@ -1,7 +1,9 @@
 import tifffile as tiff
+import h5py
 from libpreproc import preprocess_cython
 
-def run_preprocessing(in_file, correction_file, temporal_file, spatial_file,
+def run_preprocessing(in_file, correction_file, motion_file,
+                      temporal_file, spatial_file,
                       motion_search_level=2, motion_search_size=5,
                       motion_patch_size=10, motion_patch_offset=7,
                       shading_period=1000,
@@ -20,6 +22,8 @@ def run_preprocessing(in_file, correction_file, temporal_file, spatial_file,
     correction_file : string
         Output tiff file path to which motion/shading-corrected video will be
         saved.
+    motion_file : string
+        Output hdf5 file path to which estimated motion vectors will be saved.
     temporal_file : string
         Output tiff file path to which extracted temporal signal will be saved.
     spatial_file : string
@@ -64,14 +68,17 @@ def run_preprocessing(in_file, correction_file, temporal_file, spatial_file,
         signal_method_id = 1
 
     in_image = tiff.imread(in_file).astype('float32')
-    c, t, s = preprocess_cython(in_image,
-                                motion_search_level, motion_search_size,
-                                motion_patch_size, motion_patch_offset,
-                                shading_period,
-                                signal_method_id, signal_period,
-                                signal_scale,
-                                num_threads)
+    c, t, s, x, y = preprocess_cython(in_image,
+                                      motion_search_level, motion_search_size,
+                                      motion_patch_size, motion_patch_offset,
+                                      shading_period,
+                                      signal_method_id, signal_period,
+                                      signal_scale,
+                                      num_threads)
 
     tiff.imwrite(correction_file, c, photometric='minisblack')
     tiff.imwrite(temporal_file, t, photometric='minisblack')
     tiff.imwrite(spatial_file, s, photometric='minisblack')
+    with h5py.File(motion_file, 'w') as f:
+        f.create_dataset('x', data=x)
+        f.create_dataset('y', data=y)

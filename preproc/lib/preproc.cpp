@@ -69,6 +69,7 @@ int preprocess_cpu(int num_frames, int height, int width,
                    float **out_image,
                    float **out_temporal,
                    float **out_spatial,
+                   float **out_x, float **out_y,
                    int motion_search_level, int motion_search_size,
                    int motion_patch_size, int motion_patch_offset,
                    int shading_period,
@@ -138,6 +139,16 @@ int preprocess_cpu(int num_frames, int height, int width,
         tu = new TimerUtil("motion correction");
 	    motion_list = correct_motion(motion_param, t, w, h, img, range);
 	    delete tu;
+
+        *out_x = malloc_float1d(t);
+        *out_y = malloc_float1d(t);
+        float *px = *out_x;
+        float *py = *out_y;
+        for(auto m : motion_list)
+        {
+            *px++ = m.x;
+            *py++ = m.y;
+        }
     }
     if(motion_list.empty()) return -1;
     printf("(x, y) in [%.1f, %.1f] x [%.1f, %.1f]\n",

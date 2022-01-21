@@ -60,7 +60,8 @@ static double normalized_cross_correlation(int w, int h, int cx, int cy, int pat
     double ref_var = ref_sum2 - ref_sum * ref_sum; if(ref_var < 0) ref_var = 0;
     double tgt_var = tgt_sum2 - tgt_sum * tgt_sum; if(tgt_var < 0) tgt_var = 0;
     //return covar / sqrt(ref_var * tgt_var + 1e-6); // raw NCC
-    return ref_sum * covar / sqrt(ref_var * tgt_var + 1e-6); // scaled by average intensity of reference patch
+    //return ref_sum * covar / sqrt(ref_var * tgt_var + 1e-6); // scaled by average intensity of reference patch
+    return ref_sum2 * covar / sqrt(ref_var * tgt_var + 1e-6); // scaled by average squared intensity of reference patch
 }
 
 static double get_peak(int search_size, double **v, bool subpixel, float *x, float *y)

@@ -75,9 +75,11 @@ def preprocess(in_dir, correction_dir, temporal_dir, spatial_dir, filename):
     if(filename): # file mode, multi-threaded job for a single file
         in_file = in_dir.joinpath(filename + '.tif')
         correction_file = correction_dir.joinpath(in_file.name)
+        motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
         temporal_file = temporal_dir.joinpath(in_file.name)
         spatial_file = spatial_dir.joinpath(in_file.name)
-        run_preprocessing(in_file, correction_file, temporal_file, spatial_file,
+        run_preprocessing(in_file, correction_file, motion_file,
+                          temporal_file, spatial_file,
                           motion_search_level=params.MOTION_SEARCH_LEVEL,
                           motion_search_size=params.MOTION_SEARCH_SIZE,
                           motion_patch_size=params.MOTION_PATCH_SIZE,
@@ -85,14 +87,16 @@ def preprocess(in_dir, correction_dir, temporal_dir, spatial_dir, filename):
                           signal_period=params.TIME_SEGMENT_SIZE,
                           signal_scale=params.SIGNAL_SCALE)
         
-    else: # batch mode, single-threaded jobs for multiple files (faster)
+    else: # batch mode, single-threaded jobs for multiple files
         filenames = sorted(in_dir.glob('*.tif'))
         args = []
         for in_file in filenames:
             correction_file = correction_dir.joinpath(in_file.name)
+            motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
             temporal_file = temporal_dir.joinpath(in_file.name)
             spatial_file = spatial_dir.joinpath(in_file.name)
-            args.append((in_file, correction_file, temporal_file, spatial_file,
+            args.append((in_file, correction_file, motion_file,
+                         temporal_file, spatial_file,
                          params.MOTION_SEARCH_LEVEL, params.MOTION_SEARCH_SIZE,
                          params.MOTION_PATCH_SIZE, params.MOTION_PATCH_OFFSET,
                          1000, 'max-med',
@@ -226,8 +230,12 @@ elif(params.RUN_MODE == 'run'):
     temporal_dir = set_dir(params.PREPROC_PATH, 'temporal')
     spatial_dir = set_dir(params.PREPROC_PATH, 'spatial')
     if(params.RUN_PREPROC):
-        preprocess(data_dir, correction_dir, temporal_dir, spatial_dir,
-                   params.FILENAME)
+        filenames = sorted(data_dir.glob('*.tif'))
+        for filename in filenames:
+            if(params.FILENAME and params.FILENAME != filename.stem):
+                continue
+            preprocess(data_dir, correction_dir, temporal_dir, spatial_dir,
+                       filename.stem)
     
     # segment neurons
     model_dir = pathlib.Path(params.MODEL_PATH)
