@@ -1,1 +1,1 @@
-from .demix import compute_masks
+from .mask import compute_masks
