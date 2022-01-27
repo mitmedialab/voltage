@@ -4,13 +4,41 @@ import tifffile as tiff
 
 
 MAX_NUM_OVERLAPPING_CELLS = 5
-ERROR_THRESH = 1e-3
+ERROR_THRESH_ABSOLUTE = 1e-3
+ERROR_THRESH_RELATIVE = 0.5
 MAX_ITER = 10000
 UPDATE_STEP = 1.0e-2
 ITER_THRESH = 1.0e-3
 
 
 def compute_products_of_one_minus_c_times_z(num_cells, c, z):
+    """
+    Compute various products of (1 - c[i, t] . z[i, x]),
+    which are commonly used in the optimization calculation.
+
+    Parameters
+    ----------
+    num_cells : integer
+        The number of cells.
+    c : 2D numpy.ndarray of float
+        Current estimate of the temporal probability.
+        The shape is (num_cells, num_frames).
+    z : 2D numpy.ndarray of float
+        Current estimate of the spatial probability where pixels are flattened.
+        The shape is (num_cells, num_pixels).
+
+    Returns
+    -------
+    out : list of 2D numpy.ndarray of float
+        Product values.
+        Each element of the list has the shape (num_frames, num_pixels).
+        The first element is the product for all i, that is,
+        Prod_{i=0}^{N-1} (1 - c[i, t] . z[i, x]) for various (t, x).
+        The second element is the product for all i but 0, that is,
+        Prod_{i=1}^{N-1} (1 - c[i, t] . z[i, x]) for various (t, x).
+        The third element excludes i=1, the fourth i=2, and so on.
+
+    """
     num_frames = c.shape[1]
     num_pixels = z.shape[1]
 
@@ -39,6 +67,29 @@ def compute_products_of_one_minus_c_times_z(num_cells, c, z):
 
 
 def compute_derivatives_c(num_cells, y, c, z):
+    """
+    Compute the derivatives of the least squares objective function w.r.t. c.
+
+    Parameters
+    ----------
+    num_cells : integer
+        The number of cells.
+    y : 2D numpy.ndarray of float
+        Observed probability maps where pixels are flattened.
+        The shape is (num_frames, num_pixels).
+    c : 2D numpy.ndarray of float
+        Current estimate of the temporal probability.
+        The shape is (num_cells, num_frames).
+    z : 2D numpy.ndarray of float
+        Current estimate of the spatial probability where pixels are flattened.
+        The shape is (num_cells, num_pixels).
+
+    Returns
+    -------
+    dc : 2D numpy.ndarray of float
+        Derivatives w.r.t. c.
+
+    """
     prods = compute_products_of_one_minus_c_times_z(num_cells, c, z)
     first_term = y - 1 + prods[0]
     dc = np.zeros(c.shape)
@@ -50,6 +101,29 @@ def compute_derivatives_c(num_cells, y, c, z):
 
 
 def compute_derivatives_z(num_cells, y, c, z):
+    """
+    Compute the derivatives of the least squares objective function w.r.t. z.
+
+    Parameters
+    ----------
+    num_cells : integer
+        The number of cells.
+    y : 2D numpy.ndarray of float
+        Observed probability maps where pixels are flattened.
+        The shape is (num_frames, num_pixels).
+    c : 2D numpy.ndarray of float
+        Current estimate of the temporal probability.
+        The shape is (num_cells, num_frames).
+    z : 2D numpy.ndarray of float
+        Current estimate of the spatial probability where pixels are flattened.
+        The shape is (num_cells, num_pixels).
+
+    Returns
+    -------
+    dz : 2D numpy.ndarray of float
+        Derivatives w.r.t. z.
+
+    """
     prods = compute_products_of_one_minus_c_times_z(num_cells, c, z)
     first_term = y - 1 + prods[0]    
     dz = np.zeros(z.shape)
@@ -63,18 +137,27 @@ def compute_derivatives_z(num_cells, y, c, z):
 def demix_cells_py(probability_maps, num_cells, z_init,
                    max_iter, update_step, iter_thresh,
                    save_images):
+    """
+    Pure Python implementation of demix_cells().
+    See demix_cells() for parameter definitions.
+    """
     num_frames, h, w = probability_maps.shape
+    # Flatten pixels as all the computation will be pixel-wise
     y = np.reshape(probability_maps, (num_frames, h * w))
+    # Initialize the temporal probability randomly
     c = np.random.rand(num_cells, num_frames)
-    z = z_init
+    # Initialize the spatial probability to the given value while flattening
+    z = np.reshape(z_init, (num_cells, h * w))
 
-    # Alternate gradient descent, iterate until the masks no longer change
-    # Important to clip values at [0, 1] as they represent probabilities
+    if(save_images):
+        progress_img = np.zeros((max_iter, h * 2, w * num_cells))
+
+    # Alternate gradient descent, iterate until the masks no longer change.
+    # Important to clip values at [0, 1] as they represent probabilities.
     # Diff should be taken after clipping, and should not be computed simply
-    # as the magnitude of the derivatives (which could prevent convergence)
+    # as the magnitude of the derivatives (which could prevent convergence).
     num_iter = 0
     update_norm = iter_thresh + 1
-    progress_img = np.zeros((max_iter, h * 2, w * num_cells))
     while(num_iter < max_iter and update_norm > iter_thresh):
         dc = compute_derivatives_c(num_cells, y, c, z)
         c_new = np.clip(c - update_step * dc, 0, 1)
@@ -97,19 +180,83 @@ def demix_cells_py(probability_maps, num_cells, z_init,
 
     prods = compute_products_of_one_minus_c_times_z(num_cells, c, z)
     err = np.linalg.norm(y - 1 + prods[0]) / math.sqrt(y.size)
-    print('%d cells: %d iterations with error %e' % (num_cells, num_iter, err))
 
     if(save_images):
         tiff.imwrite('progress_ncell%d.tif' % num_cells,
                      progress_img[0:num_iter].astype('float32'),
                      photometric='minisblack')
 
-    return z, c, err
+    return z.reshape(num_cells, h, w), c, err, num_iter
 
 
 def demix_cells(probability_maps, num_cells, z_init,
                 max_iter, update_step, iter_thresh,
                 mode, save_images, num_threads):
+    """
+    Demix cells from a sequence of probability maps of firing neurons,
+    assuming there are a given number N of overlapping cells.
+
+    This is done by solving the following equation in the least squares sense:
+
+        1 - y[t, x, y] = Prod_{i=0}^{N-1} (1 - z[i, x, y] . c[i, t]),
+
+    where y represents the input sequence of probability maps, and z and c
+    are as defined in the output. In words, the probability that pixel (x, y)
+    at time t does NOT correspond to any firing neurons is equal to the
+    probability that the following does NOT happen for ALL i: the pixel (x, y)
+    belongs to the i-th firing neuron AND the i-th neuron fires at time t.
+
+    The least squares minimization is solved for z and c alternately using
+    gradient descent. As a result, the input observation y will be decomposed
+    into the spatial probability z and temporal probability c, and z represents
+    the demixed cell footprints.
+
+    Parameters
+    ----------
+    probability_maps : 3D numpy.ndarray of float
+        Sequence of probability maps output by the U-Net indicating how likely
+        each pixel at each time instance corresponds to firing neurons.
+        The shape is (num_frames, height, width).
+    num_cells : integer
+        The assumed number of overlapping cells.
+    z_init : 3D numpy.ndarray of float
+        Initial estimate of the probability maps of demixed cells. The shape
+        is (num_cells, height, width).
+    max_iter : integer
+        The maximum number of gradient descent interations.
+    update_step : float
+        At each iteration, the estimate will be moved by the negative gradient
+        scaled by this number.
+    iter_thresh : float
+        Iteration stops when the update becomes smaller than this number.
+    mode : string
+        Execution mode. Options are 'cpu' (multithreaded C++ on CPU),
+        'gpu' (GPU, not available yet), and 'py' (pure Python implementation).
+    save_images : boolean
+        If True, intermediate images will be saved for debugging.
+    num_threads : integer
+        The number of threads for the multithreaded C++ execution (mode='cpu').
+
+    Returns
+    -------
+    z : 3D numpy.ndarray of float
+        Spatial probability maps of demixed cells.
+        The shape is (num_cells, height, width). The i-th image represents
+        the probability that a given pixel belongs to the i-th cell.
+
+    c : 2D numpy.ndarray of float
+        Temporal probability maps of demixed cells.
+        The shape is (num_cells, num_frames). It represents the probability
+        that a given cell fires at a given frame.
+
+    err : float
+        Error representing how well the specified number of cells explains
+        the observed probability maps.
+
+    n : integer
+        The number of interations performed before convergence.
+
+    """
     if(mode == 'cpu'):
         try:
             from libdemix import demix_cells_cython
@@ -123,39 +270,81 @@ def demix_cells(probability_maps, num_cells, z_init,
         mode = 'py'
     
     if(mode == 'cpu'):
-        return demix_cells_cython(probability_maps, num_cells, z_init,
-                                  max_iter, update_step, iter_thresh,
-                                  num_threads)
+        z, c, err, n = demix_cells_cython(probability_maps, num_cells, z_init,
+                                          max_iter, update_step, iter_thresh,
+                                          num_threads)
     else:
-        return demix_cells_py(probability_maps, num_cells, z_init,
-                              max_iter, update_step, iter_thresh,
-                              save_images)
-    
-    
+        z, c, err, n = demix_cells_py(probability_maps, num_cells, z_init,
+                                      max_iter, update_step, iter_thresh,
+                                      save_images)
+    return z, c, err, n
+
+
 def demix_cells_incrementally(probability_maps,
                               mode, save_images, num_threads):
+    """
+    Demix potentially overlapping cells from a sequence of probability maps
+    of firing neurons. It begins with a single-cell explanation and looks
+    for the best explanation by incrementing the number of overlapping cells.
+
+    Parameters
+    ----------
+    probability_maps : 3D numpy.ndarray of float
+        Sequence of probability maps output by the U-Net indicating how likely
+        each pixel at each time instance corresponds to firing neurons.
+        The shape is (num_frames, height, width).
+    mode : string
+        Execution mode. Options are 'cpu' (multithreaded C++ on CPU),
+        'gpu' (GPU, not available yet), and 'py' (pure Python implementation).
+    save_images : boolean
+        If True, intermediate images will be saved for debugging.
+    num_threads : integer
+        The number of threads for the multithreaded C++ execution (mode='cpu').
+
+    Returns
+    -------
+    3D numpy.ndarray of float
+        Demixed cells. The shape is (num_cells, height, width), consisting of
+        as many images as the estimated number of overlapping cells. Each
+        image represents the spatial probability map of each firing cell.
+
+    """
     num_frames, h, w = probability_maps.shape
-    y = np.reshape(probability_maps, (num_frames, h * w))
-    z_init = np.mean(y, axis=0)[np.newaxis]
-    # Try to demix while increasing the assumed number of overlapping cells
+    # Initial cell probability for a single-cell explanation
+    # is simply the temporal average of the probability maps
+    z_init = np.mean(probability_maps, axis=0)[np.newaxis]
+    # Try to demix while incrementing the assumed number of overlapping cells
     prev_err = 1e10
     prev_z = None
     for num_cells in range(1, MAX_NUM_OVERLAPPING_CELLS+1):
-        z, c, err = demix_cells(probability_maps, num_cells, z_init,
-                                MAX_ITER, UPDATE_STEP, ITER_THRESH,
-                                mode, save_images, num_threads)
+        z, c, err, n = demix_cells(probability_maps, num_cells, z_init,
+                                   MAX_ITER, UPDATE_STEP, ITER_THRESH,
+                                   mode, save_images, num_threads)
         if(save_images):
-            tiff.imwrite('ncell%d.tif' % num_cells,
-                         z.reshape((num_cells, h, w)).astype('float32'),
+            tiff.imwrite('ncell%d.tif' % num_cells, z.astype('float32'),
                          photometric='minisblack')
 
-        z_init = np.append(z, np.zeros((1, h * w)), axis=0)
-        if(err < ERROR_THRESH):
+        print('%d cells: %d iterations with error %e' % (num_cells, n, err))
+
+        # If the error is small enough, the current estimate is already good,
+        # and even though further incrementing the number of cells will likely
+        # further reduce the error, it would likely lead to oversplitting
+        if(err < ERROR_THRESH_ABSOLUTE):
+            print('absolute threshold reached')
             break
-        if(err > prev_err * 0.5):
-            z = prev_z
-            num_cells -= 1
-            break
+
+        # If the error did not decrease sufficiently from the previous
+        # iteration, it is likely that the current estimate oversplitted
+        # the cell(s) even if the absolute error is still large.
+        # If that happens, output the previous estimate.
+        if(err > prev_err * ERROR_THRESH_RELATIVE):
+            print('relative threshold reached')
+            return prev_z
+
+        # For the next iteration with one more cell, use the current estimate
+        # for N cells along with zero for N+1-th cell as the initial estimate
+        z_init = np.append(z, np.zeros((1, h, w)), axis=0)
         prev_err = err
         prev_z = z
-    return z.reshape((num_cells, h, w))
+
+    return z

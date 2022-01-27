@@ -10,7 +10,7 @@
 #define CLAMP(X) (X < LOWER_BOUND ? LOWER_BOUND : (X > UPPER_BOUND ? UPPER_BOUND : X))
 
 
-static double **malloc_double2d(int w, int h)
+static double **malloc_double2d(size_t w, size_t h)
 {
     double **buf;
     if((buf = (double **)malloc(sizeof(double *) * w)) == NULL)
@@ -24,7 +24,7 @@ static double **malloc_double2d(int w, int h)
         free(buf);
         return NULL;
     }
-    for(int i = 1; i < w; i++) buf[i] = buf[0] + i * h;
+    for(size_t i = 1; i < w; i++) buf[i] = buf[0] + i * h;
     return buf;
 }
 
@@ -118,13 +118,18 @@ static double compute_error(int t, int p, int n,
     return sqrt(sum / (t * p));
 }
 
-double demix_cells_cpu(int num_frames, int height, int width,
-                       double *probability_maps,
-                       int num_cells, double *z_init,
-                       double **z_out, double **c_out,
-                       int max_iter, double update_step, double iter_thresh,
-                       int num_threads)
+int demix_cells_cpu(int num_frames, int height, int width,
+                    double *probability_maps,
+                    int num_cells, double *z_init,
+                    double **z_out, double **c_out, double *err,
+                    int max_iter, double update_step, double iter_thresh,
+                    int num_threads)
 {
+    if(num_threads > 0)
+    {
+        omp_set_num_threads(num_threads);
+    }
+
     // set up variables
     const int p = width * height; // # pixels
     const int t = num_frames;
@@ -153,37 +158,39 @@ double demix_cells_cpu(int num_frames, int height, int width,
         z[i][j] = z_init[i * p + j];
     }
 
-    omp_set_num_threads(num_threads);
-    int m;
-    for(m = 0; m < max_iter; m++)
+    int num_iter = 0;
+    double update_norm = iter_thresh + 1.0;
+    while(num_iter < max_iter && update_norm > iter_thresh)
     {
         compute_derivatives_c(t, p, n, y, c, z, dc);
-        double sum_dif_c = 0;
-        for(int i = 0; i < n; i++)
+        //double c_dif = 0;
+        #pragma omp parallel for
         for(int k = 0; k < t; k++)
+        for(int i = 0; i < n; i++)
         {
-            double v = CLAMP(c[i][k] - update_step * dc[i][k]);
-            sum_dif_c += (v - c[i][k]) * (v - c[i][k]);
-            c[i][k] = v;
+            double c_new = CLAMP(c[i][k] - update_step * dc[i][k]);
+            //c_dif += (c_new - c[i][k]) * (c_new - c[i][k]);
+            c[i][k] = c_new;
         }
-        sum_dif_c = sqrt(sum_dif_c / (n * t)) / update_step;
+        //c_dif = sqrt(c_dif / (n * t)) / update_step;
 
         compute_derivatives_z(t, p, n, y, c, z, dz);
-        double sum_dif_z = 0;
-        for(int i = 0; i < n; i++)
+        double z_dif = 0;
+        #pragma omp parallel for reduction(+: z_dif)
         for(int j = 0; j < p; j++)
+        for(int i = 0; i < n; i++)
         {
-            double v = CLAMP(z[i][j] - update_step * dz[i][j]);
-            sum_dif_z += (v - z[i][j]) * (v - z[i][j]);
-            z[i][j] = v;
+            double z_new = CLAMP(z[i][j] - update_step * dz[i][j]);
+            z_dif += (z_new - z[i][j]) * (z_new - z[i][j]);
+            z[i][j] = z_new;
         }
-        sum_dif_z = sqrt(sum_dif_z / (n * p)) / update_step;
+        z_dif = sqrt(z_dif / (n * p)) / update_step;
         
-        if(sum_dif_z < iter_thresh) break;
+        num_iter++;
+        update_norm = z_dif;
     }
     
-    double err = compute_error(t, p, n, y, c, z);
-    printf("%d cells: %d iterations with error %e\n", num_cells, m, err);
+    *err = compute_error(t, p, n, y, c, z);
     
     // output
     *z_out = z[0];
@@ -195,6 +202,6 @@ double demix_cells_cpu(int num_frames, int height, int width,
     free_double2d(dz);
     free_double2d(dc);
         
-    return err;
+    return num_iter;
 }
 
