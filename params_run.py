@@ -20,6 +20,10 @@ RUN_EVALUATE = True
 FILENAME = '' # if non-empty, only the specified file will be processed
 
 
+# performance parameters (optimal values depend on the computer environment)
+NUM_THREADS_DEMIXING = 16
+
+
 # real data parameters
 INFERENCE_TILE_STRIDES = (8, 8)
 BATCH_SIZE = 128

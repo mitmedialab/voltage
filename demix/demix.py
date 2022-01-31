@@ -182,7 +182,7 @@ def demix_cells_py(probability_maps, num_cells, z_init,
     err = np.linalg.norm(y - 1 + prods[0]) / math.sqrt(y.size)
 
     if(save_images):
-        tiff.imwrite('progress_ncell%d.tif' % num_cells,
+        tiff.imwrite(save_images + '_progress_num_cells%d.tif' % num_cells,
                      progress_img[0:num_iter].astype('float32'),
                      photometric='minisblack')
 
@@ -191,7 +191,7 @@ def demix_cells_py(probability_maps, num_cells, z_init,
 
 def demix_cells(probability_maps, num_cells, z_init,
                 max_iter, update_step, iter_thresh,
-                mode, save_images, num_threads):
+                mode, num_threads, save_images):
     """
     Demix cells from a sequence of probability maps of firing neurons,
     assuming there are a given number N of overlapping cells.
@@ -231,11 +231,13 @@ def demix_cells(probability_maps, num_cells, z_init,
         Iteration stops when the update becomes smaller than this number.
     mode : string
         Execution mode. Options are 'cpu' (multithreaded C++ on CPU),
-        'gpu' (GPU, not available yet), and 'py' (pure Python implementation).
-    save_images : boolean
-        If True, intermediate images will be saved for debugging.
+        and 'py' (pure Python implementation).
     num_threads : integer
         The number of threads for the multithreaded C++ execution (mode='cpu').
+    save_images : string
+        If non-empty, intermediate images will be saved for debugging.
+        The specified string will be used as a prefix for image filenames.
+        Some (optimization progress) images will be saved only when mode='py'.
 
     Returns
     -------
@@ -264,10 +266,6 @@ def demix_cells(probability_maps, num_cells, z_init,
             print('failed to import libdemix, '\
                   'using pure Python implementation instead')
             mode = 'py'
-    elif(mode == 'gpu'):
-        print('GPU implementation unsupported yet, '\
-              'using pure Python implementation instead')
-        mode = 'py'
     
     if(mode == 'cpu'):
         z, c, err, n = demix_cells_cython(probability_maps, num_cells, z_init,
@@ -281,7 +279,7 @@ def demix_cells(probability_maps, num_cells, z_init,
 
 
 def demix_cells_incrementally(probability_maps,
-                              mode, save_images, num_threads):
+                              mode, num_threads, save_images):
     """
     Demix potentially overlapping cells from a sequence of probability maps
     of firing neurons. It begins with a single-cell explanation and looks
@@ -295,11 +293,15 @@ def demix_cells_incrementally(probability_maps,
         The shape is (num_frames, height, width).
     mode : string
         Execution mode. Options are 'cpu' (multithreaded C++ on CPU),
-        'gpu' (GPU, not available yet), and 'py' (pure Python implementation).
-    save_images : boolean
-        If True, intermediate images will be saved for debugging.
+        and 'py' (pure Python implementation). GPU mode is not available
+        (and probably will not be in the future) because the workload is
+        not massively parallelizable.
     num_threads : integer
         The number of threads for the multithreaded C++ execution (mode='cpu').
+    save_images : string
+        If non-empty, intermediate images will be saved for debugging.
+        The specified string will be used as a prefix for image filenames.
+        Some (optimization progress) images will be saved only when mode='py'.
 
     Returns
     -------
@@ -319,10 +321,10 @@ def demix_cells_incrementally(probability_maps,
     for num_cells in range(1, MAX_NUM_OVERLAPPING_CELLS+1):
         z, c, err, n = demix_cells(probability_maps, num_cells, z_init,
                                    MAX_ITER, UPDATE_STEP, ITER_THRESH,
-                                   mode, save_images, num_threads)
+                                   mode, num_threads, save_images)
         if(save_images):
-            tiff.imwrite('ncell%d.tif' % num_cells, z.astype('float32'),
-                         photometric='minisblack')
+            tiff.imwrite(save_images + '_num_cells%d.tif' % num_cells,
+                         z.astype('float32'), photometric='minisblack')
 
         print('%d cells: %d iterations with error %e' % (num_cells, n, err))
 

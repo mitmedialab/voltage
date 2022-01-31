@@ -146,7 +146,8 @@ def demix(in_dir, out_dir, correction_dir, filename):
         in_file = in_dir.joinpath(filename + '.tif')
         out_file = out_dir.joinpath(in_file.name)
         corr_file = correction_dir.joinpath(in_file.name)
-        compute_masks(in_file, corr_file, out_file)
+        compute_masks(in_file, corr_file, out_file,
+                      num_threads=params.NUM_THREADS_DEMIXING)
     else:
         filenames = sorted(in_dir.glob('*.tif'))
         args = []
