@@ -111,33 +111,32 @@ def filter_regions(components, cell_probability, cell_image):
 
 
 
-def run_demixing_each(bounding_box, mask, probability_maps,
+def run_demixing_each(mask, probability_maps, region_id,
                       mode, num_threads, save_images):
     """
-    Demix cells in a given region specified by a bounding box and a mask.
+    Demix cells in a given region specified by a mask.
 
     The reason why this function does not take skimage.measure.RegionProperties
-    directly but instead a bounding box and a mask is that RegionProperties
-    cannot be pickled, causing "maximum recursion depth exceeded" error when
-    called using multiprocessing.
+    directly is because RegionProperties cannot be pickled, causing "maximum
+    recursion depth exceeded" error when called using multiprocessing.
 
     Parameters
     ----------
-    bounding_box : tuple of integer
-        Bounding box (ymin, xmin, ymax, xmax) of the region.
     mask : 2D numpy.ndarray of boolean
-        Binary mask defining the region within the bounding box.
+        Binary mask defining the region.
     probability_maps : 3D numpy.ndarray of float
-        Sequence of probability maps of firing neurons.
-        The shape is (num_frames, height, width).
+        Sequence of probability maps of firing neurons within the region.
+        The shape is (num_frames,) + mask.shape.
+    region_id : integer
+        ID of the region.
     mode : string
         Execution mode. Options are 'cpu' (multithreaded C++ on CPU),
         and 'py' (pure Python implementation).
     num_threads : integer
         The number of threads for the multithreaded C++ execution (mode='cpu').
-    save_images : string
-        If non-empty, intermediate images will be saved for debugging.
-        The specified string will be used as a prefix for image filenames.
+    save_images : boolean
+        If True, intermediate images will be saved for debugging.
+
     Returns
     -------
     demixed : 3D numpy.ndarray of float
@@ -145,9 +144,6 @@ def run_demixing_each(bounding_box, mask, probability_maps,
         where the number of cells is determined by the demixing algorithm.
 
     """
-    ymin, xmin, ymax, xmax = bounding_box
-    crop_prob = np.multiply(mask, probability_maps[:, ymin:ymax, xmin:xmax])
-
     # Downsample if the region is large so the shorter side will have the
     # predetermined length (DEMIX_REGION_SIZE_MAX). This is to prevent a large
     # region from getting oversplit just because it has more pixels and tends
@@ -159,9 +155,11 @@ def run_demixing_each(bounding_box, mask, probability_maps,
     elif(size_y >= size_x and size_x > DEMIX_REGION_SIZE_MAX):
         size_y = math.floor(size_y / size_x * DEMIX_REGION_SIZE_MAX)
         size_x = DEMIX_REGION_SIZE_MAX
-    down = resize(crop_prob, (len(crop_prob), size_y, size_x),
+
+    down = resize(probability_maps, (len(probability_maps), size_y, size_x),
                   mode='constant', anti_aliasing=True)
-    demixed = demix_cells_incrementally(down, mode, num_threads, save_images)
+    demixed = demix_cells_incrementally(down, region_id,
+                                        mode, num_threads, save_images)
     demixed = resize(demixed, (len(demixed),) + mask.shape, mode='constant')
 
     # If we decide that there is only one cell, use the region mask as-is
@@ -205,10 +203,15 @@ def run_demixing(components, probability_maps,
     if(num_threads == 0): # serial execution
         results = []
         for i, c in enumerate(components):
-            prefix = 'region%d' % i if save_images else ''
-            demixed = run_demixing_each(c.bbox, c.image, probability_maps,
-                                        mode, 1, prefix)
+            ymin, xmin, ymax, xmax = c.bbox
+            crop_prob = np.multiply(c.image,
+                                    probability_maps[:, ymin:ymax, xmin:xmax])
+            demixed = run_demixing_each(c.image, crop_prob, i,
+                                        mode, 1, save_images)
             results.append(demixed)
+
+    elif(len(components) == 0): # to avoid num_processes=0 (div0) below
+        results = []
 
     else: # parallel execution
         # Parallelize over regions as much as possible with multiprocessing
@@ -218,9 +221,11 @@ def run_demixing(components, probability_maps,
 
         args = []
         for i, c in enumerate(components):
-            prefix = 'region%d' % i if save_images else ''
-            args.append((c.bbox, c.image, probability_maps,
-                         mode, num_threads, prefix))
+            ymin, xmin, ymax, xmax = c.bbox
+            crop_prob = np.multiply(c.image,
+                                    probability_maps[:, ymin:ymax, xmin:xmax])
+            args.append((c.image, crop_prob, i,
+                         mode, num_threads, save_images))
 
         pool = mp.Pool(num_processes)
         results = pool.starmap(run_demixing_each, args)

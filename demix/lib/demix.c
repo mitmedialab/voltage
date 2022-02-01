@@ -149,7 +149,7 @@ int demix_cells_cpu(int num_frames, int height, int width,
     for(int i = 0; i < n; i++)
     for(int k = 0; k < t; k++)
     {
-        c[i][k] = rand() / (double)RAND_MAX;
+        c[i][k] = 0.5;
     }
 
     for(int i = 0; i < n; i++)

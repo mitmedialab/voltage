@@ -144,8 +144,10 @@ def demix_cells_py(probability_maps, num_cells, z_init,
     num_frames, h, w = probability_maps.shape
     # Flatten pixels as all the computation will be pixel-wise
     y = np.reshape(probability_maps, (num_frames, h * w))
-    # Initialize the temporal probability randomly
-    c = np.random.rand(num_cells, num_frames)
+    # Initialize the temporal probability to "half likely"
+    # Smaller values tend to under-demix while larger values over-demix
+    # Random initialization leads to reproducibility issues
+    c = np.ones((num_cells, num_frames)) * 0.5
     # Initialize the spatial probability to the given value while flattening
     z = np.reshape(z_init, (num_cells, h * w))
 
@@ -278,7 +280,7 @@ def demix_cells(probability_maps, num_cells, z_init,
     return z, c, err, n
 
 
-def demix_cells_incrementally(probability_maps,
+def demix_cells_incrementally(probability_maps, region_id,
                               mode, num_threads, save_images):
     """
     Demix potentially overlapping cells from a sequence of probability maps
@@ -291,6 +293,9 @@ def demix_cells_incrementally(probability_maps,
         Sequence of probability maps output by the U-Net indicating how likely
         each pixel at each time instance corresponds to firing neurons.
         The shape is (num_frames, height, width).
+    region_id : integer
+        ID of the region. Used to distinguish multiple regions in the image
+        for debugging purposes.
     mode : string
         Execution mode. Options are 'cpu' (multithreaded C++ on CPU),
         and 'py' (pure Python implementation). GPU mode is not available
@@ -319,14 +324,16 @@ def demix_cells_incrementally(probability_maps,
     prev_err = 1e10
     prev_z = None
     for num_cells in range(1, MAX_NUM_OVERLAPPING_CELLS+1):
+        prefix = 'region%d' % region_id if save_images else ''
         z, c, err, n = demix_cells(probability_maps, num_cells, z_init,
                                    MAX_ITER, UPDATE_STEP, ITER_THRESH,
-                                   mode, num_threads, save_images)
+                                   mode, num_threads, prefix)
         if(save_images):
-            tiff.imwrite(save_images + '_num_cells%d.tif' % num_cells,
+            tiff.imwrite(prefix + '_num_cells%d.tif' % num_cells,
                          z.astype('float32'), photometric='minisblack')
 
-        print('%d cells: %d iterations with error %e' % (num_cells, n, err))
+        print('[region %d] %d cells: %d iterations with error %e'
+              % (region_id, num_cells, n, err))
 
         # If the error is small enough, the current estimate is already good,
         # and even though further incrementing the number of cells will likely
