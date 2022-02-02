@@ -225,32 +225,33 @@ if(params.RUN_MODE == 'train'):
 
 
 elif(params.RUN_MODE == 'run'):
-    # preprocess images
     data_dir = pathlib.Path(params.INPUT_PATH)
-    correction_dir = set_dir(params.PREPROC_PATH, 'corrected')
-    temporal_dir = set_dir(params.PREPROC_PATH, 'temporal')
-    spatial_dir = set_dir(params.PREPROC_PATH, 'spatial')
-    if(params.RUN_PREPROC):
-        filenames = sorted(data_dir.glob('*.tif'))
-        for filename in filenames:
-            if(params.FILENAME and params.FILENAME != filename.stem):
-                continue
+    filenames = sorted(data_dir.glob('*.tif'))
+    for filename in filenames:
+        if(params.FILENAME and params.FILENAME != filename.stem):
+            continue
+
+        # preprocess images
+        correction_dir = set_dir(params.PREPROC_PATH, 'corrected')
+        temporal_dir = set_dir(params.PREPROC_PATH, 'temporal')
+        spatial_dir = set_dir(params.PREPROC_PATH, 'spatial')
+        if(params.RUN_PREPROC):
             preprocess(data_dir, correction_dir, temporal_dir, spatial_dir,
                        filename.stem)
-    
-    # segment neurons
-    model_dir = pathlib.Path(params.MODEL_PATH)
-    segment_dir = set_dir(params.OUTPUT_PATH, 'segmented')
-    reference_dir = set_dir(params.OUTPUT_PATH, 'reference')
-    if(params.RUN_SEGMENT):
-        segment([temporal_dir, spatial_dir], model_dir,
-                segment_dir, reference_dir, params.FILENAME)
-    
-    # demix cells from U-Net outputs
-    demix_dir = set_dir(params.OUTPUT_PATH, 'demixed')
-    if(params.RUN_DEMIX):
-        demix(segment_dir, demix_dir, correction_dir, params.FILENAME)
-    
+
+        # segment neurons
+        model_dir = pathlib.Path(params.MODEL_PATH)
+        segment_dir = set_dir(params.OUTPUT_PATH, 'segmented')
+        reference_dir = set_dir(params.OUTPUT_PATH, 'reference')
+        if(params.RUN_SEGMENT):
+            segment([temporal_dir, spatial_dir], model_dir,
+                    segment_dir, reference_dir, filename.stem)
+
+        # demix cells from U-Net outputs
+        demix_dir = set_dir(params.OUTPUT_PATH, 'demixed')
+        if(params.RUN_DEMIX):
+            demix(segment_dir, demix_dir, correction_dir, filename.stem)
+
     # evaluate the accuracy of detections
     gt_dir = pathlib.Path(params.GT_PATH)
     eval_dir = set_dir(params.OUTPUT_PATH, 'evaluated')
