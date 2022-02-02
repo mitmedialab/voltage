@@ -24,6 +24,7 @@ ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE = 0.0001
 
 # parameter for demixing
 DEMIX_REGION_SIZE_MAX = 15
+MERGE_THRESHOLD = 0.2
 
 
 def save_components(components, image_shape, filename):
@@ -110,6 +111,61 @@ def filter_regions(components, cell_probability, cell_image):
     return out
 
 
+def filter_masks(masks):
+    """
+    Filter masks by merging ones having large overlaps. Because demixing does
+    not explicitly look at how much demixed spatial probabilities overlap, it
+    can yield masks that have large overlaps. They are merged back here.
+
+    Parameters
+    ----------
+    masks : 3D numpy.ndarray of boolean
+        Binary masks representing the footprints of neurons.
+        The shape is (num_cells, height, width).
+
+    Returns
+    -------
+    merged_masks : 3D numpy.ndarray of boolean
+        Filtered binary masks that may have merged some of the input masks.
+
+    """
+    # Determine whether a pair of masks should be merged
+    # based on the degree of overlaps between them
+    num_masks = len(masks)
+    merge = np.zeros((num_masks, num_masks), dtype=bool)
+    for i in range(num_masks):
+        area_i = np.count_nonzero(masks[i])
+        for j in range(i+1, num_masks):
+            area_j = np.count_nonzero(masks[j])
+            intersection = np.logical_and(masks[i], masks[j])
+            area_c = np.count_nonzero(intersection)
+            area_u = area_i + area_j - area_c
+            IoU = area_c / area_u
+            merge[i, j] = IoU > MERGE_THRESHOLD
+
+    # Construct a mapping table indicating whether masks should be merged:
+    # mapping[j] = i means j-th mask should be merged with i-th mask
+    mapping = [i for i in range(num_masks)] # each goes to itself (no merger)
+    for i in range(num_masks):
+        for j in range(i+1, num_masks):
+            if(merge[i, j]):
+                mapping[j] = mapping[i] # j goes to the same mask as i goes to
+
+    # Merge masks using dictionary as mapping[] values are not contiguous
+    mask_dict = {}
+    for i in range(num_masks):
+        j = mapping[i]
+        if j in mask_dict:
+            mask_dict[j] = np.logical_or(mask_dict[j], masks[i]) # merge
+        else:
+            mask_dict[j] = masks[i] # add new entry
+
+    # Convert the dictionary into a numpy array
+    merged_masks = np.zeros((0,) + masks.shape[1:])
+    for mask in mask_dict.values():
+        merged_masks = np.append(merged_masks, mask[np.newaxis], axis=0)
+    return merged_masks
+
 
 def run_demixing_each(mask, probability_maps, region_id,
                       mode, num_threads, save_images):
@@ -142,6 +198,10 @@ def run_demixing_each(mask, probability_maps, region_id,
     demixed : 3D numpy.ndarray of float
         Demixed cells in the region. The shape is (num_cells,) + mask.shape,
         where the number of cells is determined by the demixing algorithm.
+    masks : 3D numpy.ndarray of boolean
+        Binary masks representing the footprints of the demixed cells.
+        The shape is the same as above (demixed) except that the number of
+        masks may be smaller due to postprocess filtering.
 
     """
     # Downsample if the region is large so the shorter side will have the
@@ -164,9 +224,17 @@ def run_demixing_each(mask, probability_maps, region_id,
 
     # If we decide that there is only one cell, use the region mask as-is
     if(len(demixed) == 1):
-        demixed[0] = mask
+        demixed[0] = mask.astype(float)
+        masks = mask[np.newaxis]
+    else:
+        # threshold demixed cell probabilities to yield binary masks
+        masks = np.zeros(demixed.shape, dtype=bool)
+        for i, img in enumerate(demixed):
+            th = threshold_otsu(img)
+            masks[i] = img > th
+        masks = filter_masks(masks) # postprocess filtering
 
-    return demixed
+    return demixed, masks
 
 
 def run_demixing(components, probability_maps,
@@ -195,9 +263,13 @@ def run_demixing(components, probability_maps,
 
     Returns
     -------
-    out : 3D numpy.ndarray of float
+    demixed_all : 3D numpy.ndarray of float
         Demixed cells. The shape is (num_cells, height, width),
         where the number of cells is determined by the demixing algorithm.
+    masks_all : 3D numpy.ndarray of boolean
+        Binary masks representing the footprints of the demixed cells.
+        The shape is the same as above (demixed_all) except that the number of
+        masks may be smaller due to postprocess filtering.
 
     """
     if(num_threads == 0): # serial execution
@@ -206,9 +278,9 @@ def run_demixing(components, probability_maps,
             ymin, xmin, ymax, xmax = c.bbox
             crop_prob = np.multiply(c.image,
                                     probability_maps[:, ymin:ymax, xmin:xmax])
-            demixed = run_demixing_each(c.image, crop_prob, i,
-                                        mode, 1, save_images)
-            results.append(demixed)
+            demixed, masks = run_demixing_each(c.image, crop_prob, i,
+                                               mode, 1, save_images)
+            results.append((demixed, masks))
 
     elif(len(components) == 0): # to avoid num_processes=0 (div0) below
         results = []
@@ -233,14 +305,18 @@ def run_demixing(components, probability_maps,
 
     # Put the results back in the original image shape
     image_shape = probability_maps.shape[1:]
-    out = np.zeros((0,) + image_shape)
-    for c, demixed in zip(components, results):
+    demixed_all = np.zeros((0,) + image_shape)
+    masks_all = np.zeros((0,) + image_shape, dtype=bool)
+    for c, result in zip(components, results):
         ymin, xmin, ymax, xmax = c.bbox
+        demixed, masks = result
         uncrop = np.zeros((len(demixed),) + image_shape)
         uncrop[:, ymin:ymax, xmin:xmax] = demixed
-        out = np.append(out, uncrop, axis=0)
-
-    return out
+        demixed_all = np.append(demixed_all, uncrop, axis=0)
+        uncrop = np.zeros((len(masks),) + image_shape, dtype=bool)
+        uncrop[:, ymin:ymax, xmin:xmax] = masks
+        masks_all = np.append(masks_all, uncrop, axis=0)
+    return demixed_all, masks_all
 
 
 def compute_masks(in_file, data_file, out_file,
@@ -323,19 +399,15 @@ def compute_masks(in_file, data_file, out_file,
     if(save_images):
         save_components(components, image_shape, 'masks_initial.tif')
 
+    # discard unlikely regions from the candidates
     components = filter_regions(components, avg_probability, avg_image)
 
     if(save_images):
         save_components(components, image_shape, 'masks_filtered.tif')
 
-    demixed = run_demixing(components, probability_maps,
-                           mode, num_threads, save_images)
-
-    # threshold demixed cell probability to yield binary mask
-    masks = np.zeros(demixed.shape, dtype=bool)
-    for i, img in enumerate(demixed):
-        th = threshold_otsu(img)
-        masks[i] = img > th
+    # demix potentially overlapping cells in each of the regions
+    demixed, masks = run_demixing(components, probability_maps,
+                                  mode, num_threads, save_images)
 
     if(save_images):
         if(len(demixed) == 0):
