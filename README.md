@@ -102,3 +102,17 @@ Optional parameters:
 The pipeline script requires at least 1 GPU and will map all available GPUs for certain functionalities.
 
 The results will be stored as per the paths set in `settings.txt` and `file_params.txt`.
+
+
+## How to add newly created datasets
+
+- Update the dataset information in `file_params.txt`
+- In `settings.txt` update the following below directory paths
+- Update the input and output directory path for the dataset, `input_base_path` and `output_base_path`, the input images is expected to be in uint16 format normalized to 0-65535 
+- Update `individual_gt_dir` and `individual_gt_ids` with the names of the sub-directories that will contain the individual ground truth files in .roi/.zip format
+- Update `consensus_gt_dir` with the directory of the consensus ground truth directory, the consensus ground truth images will be 3-Dimensional uint8 images with either 0 or 255 values
+- Update `summary_image_dir` with the Maximum Intensity Projection of the Motion Corrected images from a previous pipeline run, this is used for the evaluation notebooks and is expected to be a 2-Dimensional float32 image
+
+
+
+
