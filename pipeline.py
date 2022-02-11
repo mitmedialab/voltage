@@ -185,10 +185,10 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
 
 if(params['RUN_MODE'] == 'train'):
     # simulate and create training data sets
-    data_dir = set_dir(params['DATA_PATH'], 'data')
-    temporal_gt_dir = set_dir(params['DATA_PATH'], 'temporal_label')
-    spatial_gt_dir = set_dir(params['DATA_PATH'], 'spatial_label')
-    decimated_gt_dir = set_dir(params['DATA_PATH'],
+    data_dir = set_dir(params['DATA_DIR'], 'data')
+    temporal_gt_dir = set_dir(params['DATA_DIR'], 'temporal_label')
+    spatial_gt_dir = set_dir(params['DATA_DIR'], 'spatial_label')
+    decimated_gt_dir = set_dir(params['DATA_DIR'],
                                'temporal_label_%d' % params['TIME_SEGMENT_SIZE'])
     if(params['RUN_SIMULATE']):
         simulate(params['NUM_VIDEOS'], data_dir, temporal_gt_dir, spatial_gt_dir)
@@ -196,30 +196,30 @@ if(params['RUN_MODE'] == 'train'):
                  params['TIME_SEGMENT_SIZE'], params['FILENAME'])
 
     # preprocess images
-    correction_dir = set_dir(params['PREPROC_PATH'], 'corrected')
-    temporal_dir = set_dir(params['PREPROC_PATH'], 'temporal')
-    spatial_dir = set_dir(params['PREPROC_PATH'], 'spatial')
+    correction_dir = set_dir(params['PREPROC_DIR'], 'corrected')
+    temporal_dir = set_dir(params['PREPROC_DIR'], 'temporal')
+    spatial_dir = set_dir(params['PREPROC_DIR'], 'spatial')
     if(params['RUN_PREPROC']):
         preprocess(data_dir, correction_dir, temporal_dir, spatial_dir,
                    params['FILENAME'])
     
     # train the U-Net
-    model_dir = pathlib.Path(params['MODEL_PATH'])
+    model_dir = pathlib.Path(params['MODEL_DIR'])
     model_file = model_dir.joinpath('model.h5')
     log_file = model_dir.joinpath('log.csv')
-    segment_dir = set_dir(params['OUTPUT_PATH'], 'segmented')
-    validate_dir = set_dir(params['OUTPUT_PATH'], 'validate')
+    segment_dir = set_dir(params['OUTPUT_DIR'], 'segmented')
+    validate_dir = set_dir(params['OUTPUT_DIR'], 'validate')
     if(params['RUN_TRAIN']):
         train([temporal_dir, spatial_dir], decimated_gt_dir,
               model_file, log_file, segment_dir, validate_dir)
 
     # demix cells from U-Net outputs
-    demix_dir = set_dir(params['OUTPUT_PATH'], 'demixed')
+    demix_dir = set_dir(params['OUTPUT_DIR'], 'demixed')
     if(params['RUN_DEMIX']):
         demix(segment_dir, demix_dir, correction_dir, params['FILENAME'])
 
     # evaluate the accuracy of detections
-    eval_dir = set_dir(params['OUTPUT_PATH'], 'evaluated')
+    eval_dir = set_dir(params['OUTPUT_DIR'], 'evaluated')
     if(params['RUN_EVALUATE']):
         evaluate(demix_dir, spatial_gt_dir, spatial_dir, eval_dir,
                  params['FILENAME'])
