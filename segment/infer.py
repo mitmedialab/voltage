@@ -1,13 +1,37 @@
 import math
+import keras
 import numpy as np
 import tifffile as tiff
 from skimage.transform import resize
 from scipy.signal.windows import gaussian
-from keras import models
 
 from .sequence import VI_Sequence
 from .data import get_training_data, get_inference_data
 from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
+
+
+def _load_model(model_file):
+    """
+    Load a U-Net model from a file.
+
+    Parameters
+    ----------
+    model_file : string or pathlib.Path
+        File path containing a model.
+
+    Returns
+    -------
+    model : keras.Model
+        The loaded model.
+
+    """
+    keras.backend.clear_session()
+    loss_dict = {'weighted_bce': weighted_bce,
+                 'dice_loss': dice_loss,
+                 'bce_dice_loss': bce_dice_loss,
+                 'iou_loss': iou_loss}
+    model = keras.models.load_model(model_file, custom_objects=loss_dict)
+    return model
 
 
 def _merge_patches(image_shape, patches, Xs, Ys,
@@ -90,8 +114,8 @@ def _merge_patches(image_shape, patches, Xs, Ys,
         return None
 
 
-def predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
-                      input_paths, target_paths, out_dir, ref_dir):
+def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
+                       input_paths, target_paths, out_paths, ref_paths):
     """
     Make prediction using a given U-Net model on sliding patches, and merge
     them into single probability maps.
@@ -113,19 +137,18 @@ def predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
     target_paths : list of pathlib.Path
         List of file paths to target images specifing expected outputs.
         It can be None, in which case only U-Net inputs and outputs will
-        be saved to ref_dir.
-    out_dir : pathlib.Path
-        Directory path to which U-Net outputs will be saved.
-    ref_dir : pathlib.Path
-        Directory path to which U-Net inputs, outputs, and targets (ground
-        truth) if any, are juxtaposed and saved for visual inspection.
+        be saved to ref_paths.
+    out_paths : list of pathlib.Path
+        List of file paths to which U-Net outputs will be saved.
+    ref_paths : list of pathlib.Path
+        List of file paths to which U-Net inputs, outputs, and targets (i.e.,
+        ground truth) if any, are juxtaposed and saved for visual inspection.
 
     Returns
     -------
     None.
 
     """
-    
     # model.predict() allocates a buffer on the GPU to hold all the output
     # prediction data before passing it back to the main memory, which can
     # cause GPU out-of-memory error if data_seq feeds too many samples.
@@ -147,7 +170,7 @@ def predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
         if(i == 0):
             preds = ret
         else:
-            preds = np.concatenate((preds, ret), axis=0)
+            preds = np.append(preds, ret, axis=0)
     preds = preds[:, :, :, 0] # remove last dimension (its length is one)
     
     Ys, Xs = data_seq.get_tile_pos()
@@ -177,9 +200,9 @@ def predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
         if(data_seq.needs_resizing):
             pred_img = resize(pred_img, input_imgs[0].shape,
                               anti_aliasing=True)
-        tiff.imwrite(out_dir.joinpath(paths[0].name),
-                     pred_img.astype('float32'), photometric='minisblack')
-        
+        tiff.imwrite(out_paths[i], pred_img.astype('float32'),
+                     photometric='minisblack')
+
         # reference output for visual inspection
         video = np.zeros(pred_img.shape[:2] + (0,))
         for img in input_imgs:
@@ -188,11 +211,11 @@ def predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
             target_img = tiff.imread(target_paths[i])
             video = np.append(video, target_img, axis=2)
         video = np.append(video, pred_img, axis=2)
-        tiff.imwrite(ref_dir.joinpath(paths[0].name),
-                     video.astype('float32'), photometric='minisblack')
+        tiff.imwrite(ref_paths[i], video.astype('float32'),
+                     photometric='minisblack')
 
 
-def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
+def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
                    seed, validation_ratio,
                    patch_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
@@ -216,8 +239,8 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
         corresponds to one channel of the input.
     target_dir : pathlib.Path
         Directory path containing target files.
-    model_dir : pathlib.Path
-        Directory path containing a learned model.
+    model_file : string or pathlib.Path
+        File path containing a learned model.
     out_dir : pathlib.Path
         Directory path to which U-Net outputs will be saved.
     ref_dir : pathlib.Path
@@ -243,47 +266,41 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
     None.
 
     """
-
     data = get_training_data(input_dir_list, target_dir,
                              seed, validation_ratio)
     valid_input_paths = data[2]
     valid_target_paths = data[3]
-    
+
     valid_seq = VI_Sequence(batch_size, patch_shape,
                             valid_input_paths, valid_target_paths,
                             tiled=True, tile_strides=tile_strides)
 
-    model = models.load_model(model_dir.joinpath('model.h5'),
-                              custom_objects={'weighted_bce': weighted_bce,
-                                              'dice_loss': dice_loss,
-                                              'bce_dice_loss': bce_dice_loss,
-                                              'iou_loss': iou_loss})
+    out_paths = [out_dir.joinpath(p.name) for p in valid_target_paths]
+    ref_paths = [ref_dir.joinpath(p.name) for p in valid_target_paths]
 
-    predict_and_merge(model, valid_seq, tile_strides, gpu_mem_size,
-                      valid_input_paths, valid_target_paths, out_dir, ref_dir)
+    model = _load_model(model_file)
+
+    _predict_and_merge(model, valid_seq, tile_strides, gpu_mem_size,
+                       valid_input_paths, valid_target_paths,
+                       out_paths, ref_paths)
 
 
-def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
+def apply_model(input_files, model_file, out_file, ref_file,
                 patch_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Apply a learned U-Net by making inference on a test/real data set.
 
     Parameters
     ----------
-    input_dir_list : list of pathlib.Path
-        List of directory paths containing input files. Each directory path
-        corresponds to one channel of the input.
-    model_dir : pathlib.Path
-        Directory path containing a learned model.
-    out_dir : pathlib.Path
-        Directory path to which U-Net outputs will be saved.
-    ref_dir : pathlib.Path
-        Directory path to which U-Net inputs and outputs are juxtaposed
+    input_files : list of pathlib.Path
+        List of input file paths. Each corresponds to one channel of the input.
+    model_file : string or pathlib.Path
+        File path containing a learned model.
+    out_file : pathlib.Path
+        File path to which the U-Net output will be saved.
+    ref_file : pathlib.Path
+        File path to which the U-Net input and output are juxtaposed
         and saved for visual inspection.
-    filename : string
-        If non-empty, only the input whose stem (filename excluding directory
-        and extension) matches the specified string will be processed.
-        If empty, all the inputs in input_dir_list will be processed.
     patch_shape : tuple (height, width) of integer
         Size of patches to be extracted from images.
     tile_strides : tuple (y, x) of integer
@@ -299,22 +316,11 @@ def apply_model(input_dir_list, model_dir, out_dir, ref_dir, filename,
     None.
 
     """
+    data_seq = VI_Sequence(batch_size, patch_shape,
+                           [input_files], None,
+                           tiled=True, tile_strides=tile_strides)
 
-    input_files = get_inference_data(input_dir_list)
-    model = models.load_model(model_dir.joinpath('model.h5'),
-                              custom_objects={'weighted_bce': weighted_bce,
-                                              'dice_loss': dice_loss,
-                                              'bce_dice_loss': bce_dice_loss,
-                                              'iou_loss': iou_loss})
-    for paths in input_files:
-        if(filename and paths[0].stem != filename):
-            continue
+    model = _load_model(model_file)
 
-        print('processing ' + paths[0].stem)
-
-        data_seq = VI_Sequence(batch_size, patch_shape,
-                               [paths], None,
-                               tiled=True, tile_strides=tile_strides)
-
-        predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
-                          [paths], None, out_dir, ref_dir)
+    _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
+                       [input_files], None, [out_file], [ref_file])

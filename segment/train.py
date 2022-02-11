@@ -6,7 +6,7 @@ from .model import get_model
 from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 
-def train_model(input_dir_list, target_dir, model_dir,
+def train_model(input_dir_list, target_dir, model_file, log_file,
                 seed, validation_ratio,
                 patch_shape, num_darts, batch_size, epochs):
     """
@@ -19,8 +19,10 @@ def train_model(input_dir_list, target_dir, model_dir,
         corresponds to one channel of the input.
     target_dir : pathlib.Path
         Directory path containing target files.
-    model_dir : pathlib.Path
-        Directory path in which the trained model will be saved.
+    model_file : string or pathlib.Path
+        File path to which the trained model will be saved.
+    log_file : string or pathlib.Path
+        File path to which the training log will be saved.
     seed : integer
         Seed for randomized splitting into traning and validation data.
     validation_ratio : integer
@@ -80,13 +82,13 @@ def train_model(input_dir_list, target_dir, model_dir,
     #model.compile(optimizer=opt, loss=iou_loss)
 
     callbacks = [
-        keras.callbacks.ModelCheckpoint(model_dir.joinpath('model.h5'),
+        keras.callbacks.ModelCheckpoint(model_file,
                                         monitor='val_loss',
                                         verbose=1,
                                         save_best_only=True,
                                         save_weigts_only=False,
                                         mode='min'),
-        keras.callbacks.CSVLogger(model_dir.joinpath('log.csv'))
+        keras.callbacks.CSVLogger(log_file)
     ]
 
     model.fit(train_seq, validation_data=valid_seq,

@@ -12,9 +12,9 @@ SIGNAL_SCALE = 3.0 # must be consistent with inference
 
 # runtime parameters
 RUN_MODE = 'train' # run the pipeline for training
-RUN_SIMULATE = True
-RUN_PREPROC = True
-RUN_TRAIN = True
+RUN_SIMULATE = False
+RUN_PREPROC = False
+RUN_TRAIN = False
 RUN_DEMIX = True
 RUN_EVALUATE = True
 
@@ -24,7 +24,7 @@ FILENAME = '' # if non-empty, only the specified file will be processed
 # simulation parameters
 IMAGE_SHAPE = (128, 128)
 TIME_FRAMES = 1000
-NUM_VIDEOS = 1000
+NUM_VIDEOS = 10
 NUM_CELLS_MIN = 5
 NUM_CELLS_MAX = 15
 

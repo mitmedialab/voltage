@@ -9,7 +9,7 @@ from .roi import read_roi
 
 NUM_THRESHOLDS = 100
 
-def evaluate_each(in_file, gt_file, img_file, out_dir):
+def evaluate_each(in_file, gt_file, img_file, out_dir, out_basename):
     """
     Evaluate predicted neuron masks against ground truth masks.
 
@@ -23,6 +23,8 @@ def evaluate_each(in_file, gt_file, img_file, out_dir):
         Path to a file containing a representative image of the data set.
     out_dir : string
         Path to a directory in which evaluation statistics will be saved.
+    out_basename : string
+        File basename used to save the results.
 
     Returns
     -------
@@ -54,13 +56,13 @@ def evaluate_each(in_file, gt_file, img_file, out_dir):
     index = ['Prediction_%2.2d' % i for i in range(len(eval_masks))]
     columns = ['GT_%2.2d' % i for i in range(len(gt_masks))]
     df = pd.DataFrame(IoU, index=index, columns=columns)
-    df.to_csv(Path(out_dir, Path(in_file).stem + '_IoU.csv'))
+    df.to_csv(Path(out_dir, out_basename + '_IoU.csv'))
 
     df = pd.DataFrame(counts, columns=['TruePos', 'FalsePos', 'FalseNeg'])
     df.insert(0, 'IoU_Thresh', thresholds)
     df['Precision'] = precision
     df['Recall'] = recall
     df['F1'] = f1
-    df.to_csv(Path(out_dir, Path(in_file).stem + '_counts.csv'), index=False)
+    df.to_csv(Path(out_dir, out_basename + '_counts.csv'), index=False)
     
     return eval_data

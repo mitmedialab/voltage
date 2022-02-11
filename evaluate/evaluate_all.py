@@ -8,7 +8,7 @@ from .f1score import calc_f1_scores
 REPRESENTATIVE_IOU = 0.4
 
 
-def _aggregate_scores(out_dir, filter_func=lambda x: True):
+def _aggregate_scores(out_dir):
     """
     Aggregate individual evaluation scores.
 
@@ -17,10 +17,6 @@ def _aggregate_scores(out_dir, filter_func=lambda x: True):
     out_dir : string
         Path to a directory from which individual evaluation statistics will
         be read, and in which aggregated evaluation will be saved.
-    filter_func : function, optional
-        Function to select data sets whose evaluation results are aggregated.
-        Intended to be used to aggregate only a subset of individual
-        evaluations, but not in use. The default is lambda x: True.
 
     Returns
     -------
@@ -40,14 +36,12 @@ def _aggregate_scores(out_dir, filter_func=lambda x: True):
     f1_each = []
 
     first = True
-    filenames = sorted(out_dir.glob('*.html'))
+    filenames = sorted(out_dir.glob('**/*.html'))
     for in_file in filenames:
-        #if(not filter_func(param)):
-        #    continue
         basename = in_file.stem
         if(basename == 'all'): # skip preexisting aggregation result
             continue
-        df = pd.read_csv(out_dir.joinpath(basename + '_counts.csv'))
+        df = pd.read_csv(in_file.with_name(basename + '_counts.csv'))
         if(first):
             df_sum = df[['TruePos', 'FalsePos', 'FalseNeg']]
             thresholds = df['IoU_Thresh']
@@ -72,8 +66,6 @@ def _aggregate_scores(out_dir, filter_func=lambda x: True):
     df_sum.to_csv(out_dir.joinpath('all_counts.csv'), index=False)
     
     df_each = pd.DataFrame(dataset_ids, columns=['Dataset'])
-    #df_each['MagnificationValue'] = magnifications
-    #df_each['Magnification'] = magnifications
     df_each['Precision'] = precision_each
     df_each['Recall'] = recall_each
     df_each['F1'] = f1_each

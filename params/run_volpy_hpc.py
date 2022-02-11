@@ -3,6 +3,7 @@ TIME_SEGMENT_SIZE = 50
 PATCH_SHAPE = (64, 64)
 
 # preprocessing parameters
+FIRST_FRAME = 10
 MOTION_SEARCH_LEVEL = 2
 MOTION_SEARCH_SIZE = 5
 MOTION_PATCH_SIZE = 15
@@ -17,8 +18,6 @@ RUN_SEGMENT = True
 RUN_DEMIX = True
 RUN_EVALUATE = True
 
-FILENAME = '' # if non-empty, only the specified file will be processed
-
 
 # performance parameters (optimal values depend on the computer environment)
 NUM_THREADS_DEMIXING = 16
@@ -28,8 +27,11 @@ NUM_THREADS_DEMIXING = 16
 INFERENCE_TILE_STRIDES = (8, 8)
 BATCH_SIZE = 128
 
-INPUT_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/WholeTifs'
-GT_PATH = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs_rev20201027/consensus'
-PREPROC_PATH = '/media/bandy/nvme_work/voltage/run'
-MODEL_PATH = '/media/bandy/nvme_work/voltage/train/model'
-OUTPUT_PATH = '/media/bandy/nvme_work/voltage/run'
+
+# file paths
+import pathlib
+INPUT_DIR = '/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_HPC'
+INPUT_FILES = sorted(pathlib.Path(INPUT_DIR).glob('*/*.tif'))
+GT_FILES = [f.with_name(f.stem + '_ROI.zip') for f in INPUT_FILES]
+MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220106_dendrites/model.h5'
+OUTPUT_DIR = '/media/bandy/nvme_work/voltage/volpyHPC'

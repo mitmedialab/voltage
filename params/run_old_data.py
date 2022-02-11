@@ -1,0 +1,38 @@
+# common parameters (must be consistent with training)
+TIME_SEGMENT_SIZE = 50
+PATCH_SHAPE = (64, 64)
+
+# preprocessing parameters
+FIRST_FRAME = 0
+MOTION_SEARCH_LEVEL = 2
+MOTION_SEARCH_SIZE = 5
+MOTION_PATCH_SIZE = 15
+MOTION_PATCH_OFFSET = 7
+SIGNAL_SCALE = 3.0 # must be consistent with training
+
+
+# runtime parameters
+RUN_MODE = 'run' # run the pipeline for neuron detection
+RUN_PREPROC = True
+RUN_SEGMENT = True
+RUN_DEMIX = True
+RUN_EVALUATE = True
+
+
+# performance parameters (optimal values depend on the computer environment)
+NUM_THREADS_DEMIXING = 16
+
+
+# real data parameters
+INFERENCE_TILE_STRIDES = (8, 8)
+BATCH_SIZE = 128
+
+
+# file paths
+import pathlib
+INPUT_DIR = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/WholeTifs'
+INPUT_FILES = sorted(pathlib.Path(INPUT_DIR).glob('*.tif'))
+GT_DIR = '/media/bandy/nvme_data/ramdas/VI/SelectedData_v0.2/GT_comparison/GTs_rev20201027/consensus'
+GT_FILES = [pathlib.Path(GT_DIR).joinpath(f.name) for f in INPUT_FILES]
+MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220106_dendrites/model.h5'
+OUTPUT_DIR = '/media/bandy/nvme_work/voltage/run'
