@@ -135,13 +135,25 @@ class pipeline_info:
     def check_evaluate(self):
         if(self.evaluate == True and self.is_batch == True):
             eval_info = prepare_evaluate_all_notebook(self.evaluate_path)
-            F1 = round(eval_info['rep'][0], 2)
-            F116 = round(eval_info['rep'][1], 2)
-            F120 = round(eval_info['rep'][2], 2)
-            F140 = round(eval_info['rep'][3], 2)
+            F1 = round(eval_info['rep'][0], 4)
+            F116 = round(eval_info['rep'][1], 4)
+            F120 = round(eval_info['rep'][2], 4)
+            F140 = round(eval_info['rep'][3], 4)
             printd("Finished batch evaluation")
-            printd("Overall F1 score: %0.4f" %F1)
-            printd("F1 score info: 16x: %0.4f, 20x: %0.4f, 40x: %0.4f" %(F116, F120, F140))
+            printd("Overall F1 score (Aggregate of TP,FP,FN): %0.4f" %F1)
+            printd("F1 score info (Aggregate of TP,FP,FN): 16x: %0.4f, 20x: %0.4f, 40x: %0.4f" %(F116, F120, F140))
+            
+            F1 = round(eval_info['each'][0]['F1'].mean(), 4)
+            F116 = round(eval_info['each'][1]['F1'].mean(), 4)
+            F120 = round(eval_info['each'][2]['F1'].mean(), 4)
+            F140 = round(eval_info['each'][3]['F1'].mean(), 4)
+            F1s = round(eval_info['each'][0]['F1'].std(), 4)
+            F116s = round(eval_info['each'][1]['F1'].std(), 4)
+            F120s = round(eval_info['each'][2]['F1'].std(), 4)
+            F140s = round(eval_info['each'][3]['F1'].std(), 4)
+
+            printd("Overall F1 score (Mean ± Std): %0.4f ± %0.4f" %(F1, F1s))
+            printd("F1 score info (Mean ± Std): 16x: %0.4f ± %0.4f, 20x: %0.4f ± %0.4f, 40x: %0.4f ± %0.4f" %(F116, F116s, F120, F120s, F140, F140s))
 
     def signal_finished(self):
         execution = {}

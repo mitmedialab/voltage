@@ -131,6 +131,11 @@ def evaluate_all(save = True):
     eval_info['rep'].append(f1_rep_20x)
     eval_info['rep'].append(f1_rep_40x)
     eval_info['thresholds'] = thresholds
+    eval_info['each'] = []
+    eval_info['each'].append(df_each)
+    eval_info['each'].append(df_each_16x)
+    eval_info['each'].append(df_each_20x)
+    eval_info['each'].append(df_each_40x)
 
     f1_reps = {}
     scores = {}
