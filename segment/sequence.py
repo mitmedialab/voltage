@@ -11,7 +11,7 @@ class VI_Sequence(Sequence):
     def __init__(self, batch_size, model_io_shape, patch_shape,
                  input_img_paths, target_img_paths,
                  num_darts=1, tiled=False, tile_strides=(1, 1),
-                 shuffle=False):
+                 shuffle=False, padding='magnify'):
         """
         Initializes VI_Sequence (Voltage Imaging) instance.
 
@@ -31,7 +31,7 @@ class VI_Sequence(Sequence):
             The training image size should be equal to (when num_darts=1) or
             larger than (when num_darts>1) patch_shape. The test image size is
             expected to be larger than patch_shape in general, but when it is
-            smaller, images will be magnified.
+            smaller, images will be padded.
         input_img_paths : list of list of pathlib.Path
             List of file paths to input images to be fed into the U-Net.
             Each element of the list is a list of file paths corresponding
@@ -60,6 +60,12 @@ class VI_Sequence(Sequence):
         shuffle : boolean, optional
             If True, samples are shuffled in the beginning and every epoch.
             The default is False.
+        padding : string, optional
+            When the image size is smaller than patch_shape on either side,
+            it is extended to patch_shape according to the specified method.
+            If padding='magnify' (default), the images will be isotropically
+            magnified. Otherwise, the outside of the image boundaries will be
+            filled using numpy.pad(mode=padding).
 
         Returns
         -------
@@ -82,14 +88,25 @@ class VI_Sequence(Sequence):
         # handle cases where input images are smaller than the patch
         ratio_y = patch_shape[0] / self.image_shape[0]
         ratio_x = patch_shape[1] / self.image_shape[1]
-        if(ratio_y > 1 or ratio_x > 1):
-            self.needs_resizing = True
-            ratio = max(ratio_y, ratio_x)
-            h = math.floor(self.image_shape[0] * ratio + 0.5)
-            w = math.floor(self.image_shape[1] * ratio + 0.5)
-            self.image_shape = (h, w)
+        if(ratio_y > 1 or ratio_x > 1): # smaller and needs padding
+            if(padding == 'magnify'):
+                self.needs_padding = 'magnify'
+                ratio = max(ratio_y, ratio_x)
+                h = math.floor(self.image_shape[0] * ratio + 0.5)
+                w = math.floor(self.image_shape[1] * ratio + 0.5)
+                self.image_shape = (h, w)
+            else:
+                self.needs_padding = 'padding'
+                h = max(self.image_shape[0], patch_shape[0])
+                w = max(self.image_shape[1], patch_shape[1])
+                before_h = (h - self.image_shape[0]) // 2
+                after_h = h - self.image_shape[0] - before_h
+                before_w = (w - self.image_shape[1]) // 2
+                after_w = w - self.image_shape[1] - before_w
+                self.image_shape = (h, w)
+                pad_width = ((0, 0), (before_h, after_h), (before_w, after_w))
         else:
-            self.needs_resizing = False
+            self.needs_padding = 'no'
 
         num_images = len(input_img_paths) * self.num_frames
         buf_shape = (num_images,) + self.image_shape
@@ -101,9 +118,11 @@ class VI_Sequence(Sequence):
             e = s + self.num_frames
             for j, path in enumerate(paths):
                 tmp = tiff.imread(path)
-                if(self.needs_resizing):
+                if(self.needs_padding == 'magnify'):
                     tmp = resize(tmp, (self.num_frames,) + self.image_shape,
                                  mode='constant')
+                elif(self.needs_padding == 'padding'):
+                    tmp = np.pad(tmp, pad_width, padding)
                 self.input_images[s:e, :, :, j] = tmp
             if(target_img_paths is not None):
                 self.target_images[s:e] = tiff.imread(target_img_paths[i])

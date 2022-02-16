@@ -205,9 +205,14 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
         for path in paths:
             input_imgs.append(tiff.imread(path))
 
-        if(data_seq.needs_resizing):
+        if(data_seq.needs_padding == 'magnify'): # undo magnification
             pred_img = resize(pred_img, input_imgs[0].shape,
                               mode='constant', anti_aliasing=True)
+        elif(data_seq.needs_padding == 'padding'): # remove padding
+            h, w = input_imgs[0].shape[1:]
+            y = max((patch_shape[0] - h) // 2, 0)
+            x = max((patch_shape[1] - w) // 2, 0)
+            pred_img = pred_img[:, y:y+h, x:x+w]
         tiff.imwrite(out_paths[i], pred_img.astype('float32'),
                      photometric='minisblack')
 
