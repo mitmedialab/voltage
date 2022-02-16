@@ -23,6 +23,8 @@ def _load_model(model_file):
     -------
     model : keras.Model
         The loaded model.
+    io_shape : tuple (height, width) of integer
+        Input/output shape of the model.
 
     """
     keras.backend.clear_session()
@@ -31,7 +33,10 @@ def _load_model(model_file):
                  'bce_dice_loss': bce_dice_loss,
                  'iou_loss': iou_loss}
     model = keras.models.load_model(model_file, custom_objects=loss_dict)
-    return model
+    # model.input_shape = (None, height, width, num_channels), where the first
+    # element represents the batch size, which is undefined at this point
+    io_shape = model.input_shape[1:3]
+    return model, io_shape
 
 
 def _merge_patches(image_shape, patches, Xs, Ys,
@@ -117,8 +122,8 @@ def _merge_patches(image_shape, patches, Xs, Ys,
 def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
                        input_paths, target_paths, out_paths, ref_paths):
     """
-    Make prediction using a given U-Net model on sliding patches, and merge
-    them into single probability maps.
+    Make prediction using a given U-Net model on sliding tiles/patches,
+    and merge them into single probability maps.
 
     Parameters
     ----------
@@ -127,7 +132,7 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
     data_seq : VI_Sequence
         Sequence object used to feed data to the model.
     tile_strides : tuple (y, x) of integer
-        Spacing between adjacent tiles/patches.
+        Spacing between adjacent tiles.
     gpu_mem_size : float or None
         GPU memory size in gigabytes (GB) that can be allocated for buffering
         prediction outputs. If None, no limit is assumed.
@@ -172,7 +177,10 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
         else:
             preds = np.append(preds, ret, axis=0)
     preds = preds[:, :, :, 0] # remove last dimension (its length is one)
-    
+    if(preds.shape[1:] != data_seq.patch_shape):
+        preds = resize(preds, (len(preds),) + data_seq.patch_shape,
+                       mode='constant', anti_aliasing=True)
+
     Ys, Xs = data_seq.get_tile_pos()
     num_tiles = len(Ys)
     num_frames = data_seq.num_frames
@@ -199,7 +207,7 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
 
         if(data_seq.needs_resizing):
             pred_img = resize(pred_img, input_imgs[0].shape,
-                              anti_aliasing=True)
+                              mode='constant', anti_aliasing=True)
         tiff.imwrite(out_paths[i], pred_img.astype('float32'),
                      photometric='minisblack')
 
@@ -217,19 +225,19 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
 
 def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
                    seed, validation_ratio,
-                   patch_shape, tile_strides, batch_size, gpu_mem_size=None):
+                   tile_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Validate a learned U-Net by making inference on a validation data set.
 
     This is different from validation during training, which is performed on
     a patch-by-patch basis for randomly chosen patches from a validation set.
-    In contrast, this function performs inference on sliding patches and merge
+    In contrast, this function performs inference on sliding tiles and merge
     them into probability maps having the same size as input images, which is
     the same process as performing inference on test/real data as implemented
     in apply_model(), making the results more suitable for visual inspection.
 
     In order to use the same validation set as training, the parameters
-    input_dir_list, target_dir, seed, validation_ratio, and patch_shape
+    input_dir_list, target_dir, seed, and validation_ratio
     must be the same as supplied to the training function train_model().
 
     Parameters
@@ -251,10 +259,10 @@ def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
     validation_ratio : integer
         What fraction of the inputs are used for validation. If there are
         N inputs, N/validation_ratio of them will be used for validation.
-    patch_shape : tuple (height, width) of integer
-        Size of patches to be extracted from images.
+    tile_shape : tuple (height, width) of integer
+        Size of tiles to be extracted from images.
     tile_strides : tuple (y, x) of integer
-        Spacing between adjacent tiles/patches.
+        Spacing between adjacent tiles.
     batch_size : integer
         Batch size for inference.
     gpu_mem_size : float or None
@@ -271,14 +279,14 @@ def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
     valid_input_paths = data[2]
     valid_target_paths = data[3]
 
-    valid_seq = VI_Sequence(batch_size, patch_shape,
+    model, model_io_shape = _load_model(model_file)
+
+    valid_seq = VI_Sequence(batch_size, model_io_shape, tile_shape,
                             valid_input_paths, valid_target_paths,
                             tiled=True, tile_strides=tile_strides)
 
     out_paths = [out_dir.joinpath(p.name) for p in valid_target_paths]
     ref_paths = [ref_dir.joinpath(p.name) for p in valid_target_paths]
-
-    model = _load_model(model_file)
 
     _predict_and_merge(model, valid_seq, tile_strides, gpu_mem_size,
                        valid_input_paths, valid_target_paths,
@@ -286,7 +294,7 @@ def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
 
 
 def apply_model(input_files, model_file, out_file, ref_file,
-                patch_shape, tile_strides, batch_size, gpu_mem_size=None):
+                tile_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Apply a learned U-Net by making inference on a test/real data set.
 
@@ -301,10 +309,10 @@ def apply_model(input_files, model_file, out_file, ref_file,
     ref_file : pathlib.Path
         File path to which the U-Net input and output are juxtaposed
         and saved for visual inspection.
-    patch_shape : tuple (height, width) of integer
-        Size of patches to be extracted from images.
+    tile_shape : tuple (height, width) of integer
+        Size of tiles to be extracted from images.
     tile_strides : tuple (y, x) of integer
-        Spacing between adjacent tiles/patches.
+        Spacing between adjacent tiles.
     batch_size : integer
         Batch size for inference.
     gpu_mem_size : float or None
@@ -316,11 +324,11 @@ def apply_model(input_files, model_file, out_file, ref_file,
     None.
 
     """
-    data_seq = VI_Sequence(batch_size, patch_shape,
+    model, model_io_shape = _load_model(model_file)
+
+    data_seq = VI_Sequence(batch_size, model_io_shape, tile_shape,
                            [input_files], None,
                            tiled=True, tile_strides=tile_strides)
-
-    model = _load_model(model_file)
 
     _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
                        [input_files], None, [out_file], [ref_file])

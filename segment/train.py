@@ -8,7 +8,7 @@ from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 def train_model(input_dir_list, target_dir, model_file, log_file,
                 seed, validation_ratio,
-                patch_shape, num_darts, batch_size, epochs):
+                model_io_shape, num_darts, batch_size, epochs):
     """
     Train the U-Net for cell segmentation.
 
@@ -29,9 +29,9 @@ def train_model(input_dir_list, target_dir, model_file, log_file,
         What fraction of the inputs are used for validation. If there are
         N inputs, N/validation_ratio of them will be used for validation,
         while the rest will be used for training.
-    patch_shape : tuple (height, width) of integer
-        Size of patches to be extracted from images. Training will be
-        performed on a patch-wise manner.
+    model_io_shape : tuple (height, width) of integer
+        The U-Net model's input/output shape. Patches of this size will be
+        extracted from input/target images and used for training.
     num_darts : integer
         The number of darts to be thrown per image to extract patches
         from the image. If num_darts=1, one image patch is extracted from
@@ -55,19 +55,19 @@ def train_model(input_dir_list, target_dir, model_file, log_file,
     valid_input_paths = data[2]
     valid_target_paths = data[3]
 
-    train_seq = VI_Sequence(batch_size, patch_shape,
+    train_seq = VI_Sequence(batch_size, model_io_shape, model_io_shape,
                             train_input_paths, train_target_paths,
                             num_darts=num_darts, shuffle=True)
-    
-    valid_seq = VI_Sequence(batch_size, patch_shape,
+
+    valid_seq = VI_Sequence(batch_size, model_io_shape, model_io_shape,
                             valid_input_paths, valid_target_paths,
                             num_darts=num_darts)
-        
+
     # Free up RAM in case the model definition has been executed multiple times
     keras.backend.clear_session()
     num_channels = len(train_input_paths[0])
-    
-    model = get_model(patch_shape, num_channels, 3, 32, 0.5,
+
+    model = get_model(model_io_shape, num_channels, 3, 32, 0.5,
                       'conv_transpose', False)
     model.summary()
     #opt = keras.optimizers.Adadelta() # slow with default values

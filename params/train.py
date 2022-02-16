@@ -1,6 +1,6 @@
 # common parameters (must be consistent with inference)
 TIME_SEGMENT_SIZE = 50
-PATCH_SHAPE = (64, 64)
+MODEL_IO_SHAPE = (64, 64)
 
 # preprocessing parameters
 MOTION_SEARCH_LEVEL = 2
@@ -33,13 +33,7 @@ NUM_CELLS_MAX = 15
 NUM_DARTS = 10
 BATCH_SIZE = 128
 EPOCHS = 10
-# WARNING: too small tile strides can lead to many samples to be fed into
-# the U-Net for prediction, which can cause GPU out-of-memory error.
-# For some reason, GPU memory consumption seems to pile up as more samples
-# are input, no matter how small the batch size is set to.
-# To avoid this, we might need to split a single input video into multiple
-# time segments or even perform prediction on a frame-by-frame basis.
-VALIDATION_TILE_STRIDES = (16, 16)
+TILE_STRIDES = (16, 16)
 
 DATA_DIR = '/media/bandy/nvme_work/voltage/train/synthetic'
 PREPROC_DIR = '/media/bandy/nvme_work/voltage/train/preproc'

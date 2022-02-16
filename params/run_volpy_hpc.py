@@ -1,6 +1,5 @@
 # common parameters (must be consistent with training)
 TIME_SEGMENT_SIZE = 50
-PATCH_SHAPE = (64, 64)
 
 # preprocessing parameters
 FIRST_FRAME = 10
@@ -24,7 +23,8 @@ NUM_THREADS_DEMIXING = 16
 
 
 # real data parameters
-INFERENCE_TILE_STRIDES = (8, 8)
+TILE_SHAPE = (64, 64)
+TILE_STRIDES = (8, 8)
 BATCH_SIZE = 128
 
 

@@ -8,7 +8,7 @@ from keras.utils import Sequence
 
 class VI_Sequence(Sequence):
 
-    def __init__(self, batch_size, patch_shape,
+    def __init__(self, batch_size, model_io_shape, patch_shape,
                  input_img_paths, target_img_paths,
                  num_darts=1, tiled=False, tile_strides=(1, 1),
                  shuffle=False):
@@ -19,12 +19,19 @@ class VI_Sequence(Sequence):
         ----------
         batch_size : integer
             Batch size for training/inference.
+        model_io_shape : tuple (height, width) of integers
+            The U-Net model's input/output shape. Images of this size will be
+            produced by this sequence (and fed into the U-Net).
         patch_shape : tuple (height, width) of integers
-            Image patch size to be extracted from image files.
-            The size should be equal to (when num_darts=1) or smaller than
-            (when num_darts>1) the input images for training. For inference,
-            the input images may be smaller than the patch size, in which case
-            the input images will be magnified.
+            Image patch size to be extracted from input image files.
+            For training, it is recommended that patch_shape = model_io_shape,
+            so that extracted patches will be fed to the model as they are.
+            For inference, patch_shape may be smaller or larger, in which case
+            patches will be resized to model_io_shape expected by the model.
+            The training image size should be equal to (when num_darts=1) or
+            larger than (when num_darts>1) patch_shape. The test image size is
+            expected to be larger than patch_shape in general, but when it is
+            smaller, images will be magnified.
         input_img_paths : list of list of pathlib.Path
             List of file paths to input images to be fed into the U-Net.
             Each element of the list is a list of file paths corresponding
@@ -60,6 +67,7 @@ class VI_Sequence(Sequence):
 
         """
         self.batch_size = batch_size
+        self.model_io_shape = model_io_shape
         self.patch_shape = patch_shape
         self.num_darts = num_darts
         self.tiled = tiled
@@ -94,7 +102,8 @@ class VI_Sequence(Sequence):
             for j, path in enumerate(paths):
                 tmp = tiff.imread(path)
                 if(self.needs_resizing):
-                    tmp = resize(tmp, (self.num_frames,) + self.image_shape)
+                    tmp = resize(tmp, (self.num_frames,) + self.image_shape,
+                                 mode='constant')
                 self.input_images[s:e, :, :, j] = tmp
             if(target_img_paths is not None):
                 self.target_images[s:e] = tiff.imread(target_img_paths[i])
@@ -187,21 +196,20 @@ class VI_Sequence(Sequence):
         -------
         inputs : 4D numpy.ndarray of float32
             Input image patch data corresponding to the indexed batch.
-            The shape is batch_size x patch_height x patch_width x num_channels.
+            The shape is (batch_size, patch_height, patch_width, num_channels).
         targets : 4D numpy.ndarray of float32
             Target image patch data corresponding to the indexed batch.
-            The shape is batch_size x patch_height x patch_width x 1.
+            The shape is (batch_size, patch_height, patch_width, 1).
 
         """
-
         # For split sequence, move the index to the start of the subsequence
         if(self.num_splits > 1):
             _, sublength = self._get_lengths()
             idx += sublength * self.split_idx
 
-        buf_shape = (self.batch_size,) + self.patch_shape
+        buf_shape = (self.batch_size,) + self.model_io_shape
         inputs = np.zeros(buf_shape + (self.num_channels,), dtype='float32')
-        targets = np.zeros(buf_shape + (1,), dtype='float32')
+        targets = np.zeros(buf_shape, dtype='float32')
         for i in range(self.batch_size):
             ofs = self.batch_size * idx + i
             if(ofs >= len(self.sample_indices)):
@@ -212,9 +220,16 @@ class VI_Sequence(Sequence):
             xs = self.Xs[sample_idx]
             ye = ys + self.patch_shape[0] # no greater than self.image_shape[0]
             xe = xs + self.patch_shape[1] # no greater than self.image_shape[1]
-            inputs[i] = self.input_images[img_idx, ys:ye, xs:xe]
-            targets[i, :, :, 0] = self.target_images[img_idx, ys:ye, xs:xe]
+            if(self.patch_shape == self.model_io_shape):
+                inputs[i] = self.input_images[img_idx, ys:ye, xs:xe]
+                targets[i] = self.target_images[img_idx, ys:ye, xs:xe]
+            else:
+                inputs[i] = resize(self.input_images[img_idx, ys:ye, xs:xe],
+                                   self.model_io_shape, mode='constant')
+                targets[i] = resize(self.target_images[img_idx, ys:ye, xs:xe],
+                                    self.model_io_shape, mode='constant')
 
+        targets = targets[:, :, :, np.newaxis] # add 4th dimension of size 1
         return inputs, targets
 
 
@@ -262,7 +277,7 @@ class VI_Sequence(Sequence):
 
         """
         num_samples = len(self.sample_indices)
-        size = num_samples * self.patch_shape[0] * self.patch_shape[1] * 4
+        size = num_samples * self.model_io_shape[0] * self.model_io_shape[1] * 4
         return size
 
 

@@ -116,11 +116,11 @@ def train(in_dirs, target_dir, model_file, log_file, out_dir, ref_dir):
     validation_ratio = 5
     train_model(in_dirs, target_dir, model_file, log_file,
                 seed, validation_ratio,
-                params['PATCH_SHAPE'], params['NUM_DARTS'],
+                params['MODEL_IO_SHAPE'], params['NUM_DARTS'],
                 params['BATCH_SIZE'], params['EPOCHS'])
     validate_model(in_dirs, target_dir, model_file, out_dir, ref_dir,
                    seed, validation_ratio,
-                   params['PATCH_SHAPE'], params['VALIDATION_TILE_STRIDES'],
+                   params['MODEL_IO_SHAPE'], params['TILE_STRIDES'],
                    params['BATCH_SIZE'])
 
     toc = time.perf_counter()
@@ -131,7 +131,7 @@ def segment(in_dirs, model_dir, out_dir, ref_dir, filename):
     tic = time.perf_counter()
     
     apply_model(in_dirs, model_dir, out_dir, ref_dir, filename,
-                params['PATCH_SHAPE'], params['INFERENCE_TILE_STRIDES'],
+                params['TILE_SHAPE'], params['TILE_STRIDES'],
                 params['BATCH_SIZE'])
     
     toc = time.perf_counter()
@@ -236,6 +236,7 @@ elif(params['RUN_MODE'] == 'run'):
         temporal_file = out_dir.joinpath(tag + '_temporal.tif')
         spatial_file = out_dir.joinpath(tag + '_spatial.tif')
         if(params['RUN_PREPROC']):
+            tic = time.perf_counter()
             run_preprocessing(filename, correction_file, motion_file,
                               temporal_file, spatial_file,
                               first_frame=params['FIRST_FRAME'],
@@ -245,21 +246,29 @@ elif(params['RUN_MODE'] == 'run'):
                               motion_patch_offset=params['MOTION_PATCH_OFFSET'],
                               signal_period=params['TIME_SEGMENT_SIZE'],
                               signal_scale=params['SIGNAL_SCALE'])
+            toc = time.perf_counter()
+            print('%.1f seconds to preprocess' % (toc - tic))
 
         # segment neurons
         segment_file = out_dir.joinpath(tag + '_segmented.tif')
         reference_file = out_dir.joinpath(tag + '_reference.tif')
         if(params['RUN_SEGMENT']):
+            tic = time.perf_counter()
             apply_model([temporal_file, spatial_file], params['MODEL_FILE'],
                         segment_file, reference_file,
-                        params['PATCH_SHAPE'], params['INFERENCE_TILE_STRIDES'],
+                        params['TILE_SHAPE'], params['TILE_STRIDES'],
                         params['BATCH_SIZE'])
+            toc = time.perf_counter()
+            print('%.1f seconds to segment' % (toc - tic))
 
         # demix cells from U-Net outputs
         demix_file = out_dir.joinpath(tag + '_masks.tif')
         if(params['RUN_DEMIX']):
+            tic = time.perf_counter()
             compute_masks(segment_file, correction_file, demix_file,
                           num_threads=params['NUM_THREADS_DEMIXING'])
+            toc = time.perf_counter()
+            print('%.1f seconds to compute masks' % (toc - tic))
 
         # evaluate the accuracy of detections
         if(params['RUN_EVALUATE']):
