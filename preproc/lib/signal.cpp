@@ -254,7 +254,6 @@ static float ***temporal_filter(int start, int end,
 
 int extract_signal(signal_param_t &param,
                    int num_pages, int width, int height, float ***img,
-                   std::vector<motion_t> motion, motion_range_t range,
                    float ****temporal, float ****spatial)
 
 {
@@ -266,20 +265,14 @@ int extract_signal(signal_param_t &param,
     const int patch_offset = param.patch_offset;
     const float temp_stdev = param.freq_max <= 0 ? 0 : param.frames_per_sec / (M_PI * param.freq_max);
     const float space_stdev = param.smooth_scale;
-    
-    const int down = downsample ? 2 : 1;
-    const int w_start = (int)ceil(range.min_x < 0 ? -range.min_x / down : 0);
-    const int w_end = width / down - (int)ceil(range.max_x > 0 ? range.max_x / down : 0);
-    const int h_start = (int)ceil(range.min_y < 0 ? -range.min_y / down : 0);
-    const int h_end = height / down - (int)ceil(range.max_y > 0 ? range.max_y / down : 0);
 
     float **cnt = malloc_float2d(width, height);
     memset(cnt[0], 0, width * height * sizeof(float));
     float **one = malloc_float2d(patch_size, patch_size);
     for(int k = 0; k < patch_size * patch_size; k++) one[0][k] = 1.0;
     
-    for(int i = w_start; i <= w_end - patch_size; i += patch_offset)
-	for(int j = h_start; j <= h_end - patch_size; j += patch_offset)
+    for(int i = 0; i <= width - patch_size; i += patch_offset)
+	for(int j = 0; j <= height - patch_size; j += patch_offset)
 	{
         if(downsample)
         {
@@ -312,7 +305,8 @@ int extract_signal(signal_param_t &param,
         if(end_frame > num_pages) end_frame = num_pages;
         for(int f = start_frame; f < end_frame; f++)
         {
-            if(motion[f].valid) frames.push_back(f - start_frame);
+            //if(motion_list.valid[f]) frames.push_back(f - start_frame);
+            frames.push_back(f - start_frame); // assume all the frames are valid
         }
         if((int)frames.size() < period / 2)
 	    {
@@ -346,8 +340,8 @@ int extract_signal(signal_param_t &param,
             // overlaps due to overlapping patches
             // need to separate it into multiple sets of non-overlapping patches
             //#pragma omp parallel for
-            for(int i = w_start; i <= w_end - patch_size; i += patch_offset)
-            for(int j = h_start; j <= h_end - patch_size; j += patch_offset)
+            for(int i = 0; i <= width - patch_size; i += patch_offset)
+            for(int j = 0; j <= height - patch_size; j += patch_offset)
             {
                 float **pc = compute_principal_component(frames, i, j, patch_size, buf,
                                                          normalize, downsample);
@@ -382,8 +376,6 @@ int extract_signal(signal_param_t &param,
                 recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
             }
             const size_t m = frames.size() / 2;
-            //for(int i = w_start; i < w_end; i++)
-            //for(int j = h_start; j < h_end; j++)
             for(int i = 0; i < width; i++)
             for(int j = 0; j < height; j++)
             {

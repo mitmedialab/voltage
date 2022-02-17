@@ -1,20 +1,16 @@
-UTILS     = ../../utils
-
 CXX       = g++
-CXXFLAGS  = -O3 -fopenmp -fPIC -I$(UTILS)
+CXXFLAGS  = -O3 -fopenmp -fPIC
 
-TARGET = libpreproc.a
+TARGET = libutils.a
 
 all: $(TARGET)
 
-.SUFFIXES: .c .cpp .cu .o
+.SUFFIXES: .c .cpp .o
 
 SRCS_CC  := $(wildcard *.c)
 SRCS_CPP := $(wildcard *.cpp)
-SRCS_CU  := $(wildcard *.cu)
 OBJS  = $(SRCS_CC:.c=.o)
 OBJS += $(SRCS_CPP:.cpp=.o)
-OBJS += $(SRCS_CU:.cu=.o)
 
 $(TARGET): $(OBJS)
 	ar rcs $@ $^
@@ -24,9 +20,6 @@ $(TARGET): $(OBJS)
 
 .cpp.o:
 	$(CXX) -c $(CXXFLAGS) $< -o $@
-
-.cu.o:
-	$(CXX) -c -Xcompiler $(CXXFLAGS) $< -o $@
 
 
 clean:

@@ -249,7 +249,7 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
                                      int num_pages, int width, int height, float ***img,
                                      motion_range_t &range)
 {    
-    const float thresh_xy = param.thresh_xy;
+    //const float thresh_xy = param.thresh_xy;
     const float thresh_c = param.thresh_c;
     const int length = param.length;
     int c_count = 0;

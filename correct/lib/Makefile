@@ -3,7 +3,7 @@ UTILS     = ../../utils
 CXX       = g++
 CXXFLAGS  = -O3 -fopenmp -fPIC -I$(UTILS)
 
-TARGET = libpreproc.a
+TARGET = libcorrect.a
 
 all: $(TARGET)
 

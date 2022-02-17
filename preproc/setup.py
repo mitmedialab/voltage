@@ -9,10 +9,10 @@ NAME = 'lib' + BASENAME
 extension = Extension(
     name=NAME,
     sources=[NAME + '.pyx'],
-    libraries=[BASENAME, 'm', 'pthread'],
+    libraries=[BASENAME, 'utils', 'm', 'pthread'],
     language='c++',
-    library_dirs=['lib'],
-    include_dirs=['lib', numpy.get_include()],
+    library_dirs=['lib', '../utils'],
+    include_dirs=['lib', '../utils', numpy.get_include()],
 )
 
 setup(

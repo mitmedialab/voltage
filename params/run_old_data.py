@@ -12,6 +12,7 @@ SIGNAL_SCALE = 3.0 # must be consistent with training
 
 # runtime parameters
 RUN_MODE = 'run' # run the pipeline for neuron detection
+RUN_CORRECT = True
 RUN_PREPROC = True
 RUN_SEGMENT = True
 RUN_DEMIX = True

@@ -3,7 +3,7 @@ from distutils.extension import Extension
 from Cython.Build import cythonize
 import numpy
 
-BASENAME = 'demix'
+BASENAME = 'correct'
 NAME = 'lib' + BASENAME
 
 extension = Extension(
@@ -19,5 +19,5 @@ setup(
     name=NAME,
     ext_modules=cythonize([extension]),
     version='0.1',
-    description='Cell demixing for voltage imaging data'
+    description='Motion/shading correction for voltage imaging data'
 )

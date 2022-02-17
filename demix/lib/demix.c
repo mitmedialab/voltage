@@ -3,37 +3,12 @@
 #include <string.h>
 #include <math.h>
 #include <omp.h>
+#include "malloc_util.h"
 
 
 #define UPPER_BOUND (1.0)
 #define LOWER_BOUND (0.0)
 #define CLAMP(X) (X < LOWER_BOUND ? LOWER_BOUND : (X > UPPER_BOUND ? UPPER_BOUND : X))
-
-
-static double **malloc_double2d(size_t w, size_t h)
-{
-    double **buf;
-    if((buf = (double **)malloc(sizeof(double *) * w)) == NULL)
-    {
-        fprintf(stderr, "failed to allocate memory\n");
-        return NULL;
-    }
-    if((buf[0] = (double *)malloc(sizeof(double) * w * h)) == NULL)
-    {
-        fprintf(stderr, "failed to allocate memory\n");
-        free(buf);
-        return NULL;
-    }
-    for(size_t i = 1; i < w; i++) buf[i] = buf[0] + i * h;
-    return buf;
-}
-
-static void free_double2d(double **buf)
-{
-    free(buf[0]);
-    free(buf);
-}                         
-
 
 
 static void compute_derivatives_c(int t, int p, int n,

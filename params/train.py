@@ -13,6 +13,7 @@ SIGNAL_SCALE = 3.0 # must be consistent with inference
 # runtime parameters
 RUN_MODE = 'train' # run the pipeline for training
 RUN_SIMULATE = True
+RUN_CORRECT = True
 RUN_PREPROC = True
 RUN_TRAIN = True
 RUN_DEMIX = True

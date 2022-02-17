@@ -1,8 +1,7 @@
-CXX       = g++
-CXXFLAGS  = -O3 -fopenmp -fPIC
+UTILS     = ../../utils
 
-LDFLAGS   = -fopenmp
-LDLIBS    = -lm -lpthread
+CXX       = g++
+CXXFLAGS  = -O3 -fopenmp -fPIC -I$(UTILS)
 
 TARGET = libdemix.a
 
@@ -21,13 +20,13 @@ $(TARGET): $(OBJS)
 	ar rcs $@ $^
 
 .c.o:
-	$(CXX) -c $(CXXFLAGS) $(LDFLAGS) $< $(LDLIBS) -o $@
+	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 .cpp.o:
-	$(CXX) -c $(CXXFLAGS) $(LDFLAGS) $< $(LDLIBS) -o $@
+	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 .cu.o:
-	$(CXX) -c -Xcompiler $(CXXFLAGS) $(LDFLAGS) $< $(LDLIBS) -o $@
+	$(CXX) -c -Xcompiler $(CXXFLAGS) $< -o $@
 
 
 clean:

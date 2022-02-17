@@ -2,9 +2,6 @@
 #define __SIGNAL_H__
 
 
-#include "motion.h"
-
-
 typedef struct
 {
     int method;       // 0: PCA, 1: max-median
@@ -23,7 +20,6 @@ typedef struct
 
 int extract_signal(signal_param_t &param,
                    int num_pages, int width, int height, float ***img,
-                   std::vector<motion_t> motion, motion_range_t range,
                    float ****temporal, float ****spatial);
 
 

@@ -119,8 +119,9 @@ class VI_Sequence(Sequence):
             for j, path in enumerate(paths):
                 tmp = tiff.imread(path)
                 if(self.needs_padding == 'magnify'):
+                    # mode='constant' leads to false positives near boundaries
                     tmp = resize(tmp, (self.num_frames,) + self.image_shape,
-                                 mode='constant')
+                                 mode='reflect')
                 elif(self.needs_padding == 'padding'):
                     tmp = np.pad(tmp, pad_width, padding)
                 self.input_images[s:e, :, :, j] = tmp
@@ -244,9 +245,9 @@ class VI_Sequence(Sequence):
                 targets[i] = self.target_images[img_idx, ys:ye, xs:xe]
             else:
                 inputs[i] = resize(self.input_images[img_idx, ys:ye, xs:xe],
-                                   self.model_io_shape, mode='constant')
+                                   self.model_io_shape, mode='reflect')
                 targets[i] = resize(self.target_images[img_idx, ys:ye, xs:xe],
-                                    self.model_io_shape, mode='constant')
+                                    self.model_io_shape, mode='reflect')
 
         targets = targets[:, :, :, np.newaxis] # add 4th dimension of size 1
         return inputs, targets

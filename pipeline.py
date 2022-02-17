@@ -5,7 +5,8 @@ import pathlib
 import multiprocessing as mp
 
 from simulate import create_synthetic_data, decimate_video
-from preproc import run_preprocessing
+from correct import correct_video
+from preproc import preprocess_video
 from segment import train_model, validate_model, apply_model
 from demix import compute_masks
 from evaluate import run_ipynb_evaluate_each, run_ipynb_evaluate_all
@@ -67,23 +68,18 @@ def decimate(in_dir, out_dir, mode, size, filename):
     print('%.1f seconds to decimate' % (toc - tic))
 
 
-def preprocess(in_dir, correction_dir, temporal_dir, spatial_dir, filename):
+def correct(in_dir, correction_dir, filename):
     tic = time.perf_counter()
 
     if(filename): # file mode, multi-threaded job for a single file
         in_file = in_dir.joinpath(filename + '.tif')
         correction_file = correction_dir.joinpath(in_file.name)
         motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
-        temporal_file = temporal_dir.joinpath(in_file.name)
-        spatial_file = spatial_dir.joinpath(in_file.name)
-        run_preprocessing(in_file, correction_file, motion_file,
-                          temporal_file, spatial_file,
-                          motion_search_level=params['MOTION_SEARCH_LEVEL'],
-                          motion_search_size=params['MOTION_SEARCH_SIZE'],
-                          motion_patch_size=params['MOTION_PATCH_SIZE'],
-                          motion_patch_offset=params['MOTION_PATCH_OFFSET'],
-                          signal_period=params['TIME_SEGMENT_SIZE'],
-                          signal_scale=params['SIGNAL_SCALE'])
+        correct_video(in_file, correction_file, motion_file,
+                      motion_search_level=params['MOTION_SEARCH_LEVEL'],
+                      motion_search_size=params['MOTION_SEARCH_SIZE'],
+                      motion_patch_size=params['MOTION_PATCH_SIZE'],
+                      motion_patch_offset=params['MOTION_PATCH_OFFSET'])
         
     else: # batch mode, single-threaded jobs for multiple files
         filenames = sorted(in_dir.glob('*.tif'))
@@ -91,20 +87,49 @@ def preprocess(in_dir, correction_dir, temporal_dir, spatial_dir, filename):
         for in_file in filenames:
             correction_file = correction_dir.joinpath(in_file.name)
             motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
-            temporal_file = temporal_dir.joinpath(in_file.name)
-            spatial_file = spatial_dir.joinpath(in_file.name)
             args.append((in_file, correction_file, motion_file,
-                         temporal_file, spatial_file,
                          0,
-                         params['MOTION_SEARCH_LEVEL'], params['MOTION_SEARCH_SIZE'],
-                         params['MOTION_PATCH_SIZE'], params['MOTION_PATCH_OFFSET'],
-                         1000, 'max-med',
-                         params['TIME_SEGMENT_SIZE'], params['SIGNAL_SCALE'], 1))
+                         params['MOTION_SEARCH_LEVEL'],
+                         params['MOTION_SEARCH_SIZE'],
+                         params['MOTION_PATCH_SIZE'],
+                         params['MOTION_PATCH_OFFSET'], 1000, 0))
 
         pool = mp.Pool(mp.cpu_count())
-        pool.starmap(run_preprocessing, args)
+        pool.starmap(correct_video, args)
         pool.close()
+
+    toc = time.perf_counter()
+    print('%.1f seconds to correct' % (toc - tic))
+
+
+def preprocess(in_dir, temporal_dir, spatial_dir, filename):
+    tic = time.perf_counter()
+
+    if(filename): # file mode, multi-threaded job for a single file
+        in_file = in_dir.joinpath(filename + '.tif')
+        temporal_file = temporal_dir.joinpath(in_file.name)
+        spatial_file = spatial_dir.joinpath(in_file.name)
+        preprocess_video(in_file,
+                         temporal_file, spatial_file,
+                         signal_period=params['TIME_SEGMENT_SIZE'],
+                         signal_scale=params['SIGNAL_SCALE'])
         
+    else: # batch mode, single-threaded jobs for multiple files
+        filenames = sorted(in_dir.glob('*.tif'))
+        args = []
+        for in_file in filenames:
+            temporal_file = temporal_dir.joinpath(in_file.name)
+            spatial_file = spatial_dir.joinpath(in_file.name)
+            args.append((in_file,
+                         temporal_file, spatial_file,
+                         0, 'max-med',
+                         params['TIME_SEGMENT_SIZE'], params['SIGNAL_SCALE'],
+                         1))
+
+        pool = mp.Pool(mp.cpu_count())
+        pool.starmap(preprocess_video, args)
+        pool.close()
+
     toc = time.perf_counter()
     print('%.1f seconds to preprocess' % (toc - tic))
 
@@ -195,14 +220,18 @@ if(params['RUN_MODE'] == 'train'):
         decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or',
                  params['TIME_SEGMENT_SIZE'], params['FILENAME'])
 
-    # preprocess images
+    # correct images
     correction_dir = set_dir(params['PREPROC_DIR'], 'corrected')
+    if(params['RUN_CORRECT']):
+        correct(data_dir, correction_dir, params['FILENAME'])
+
+    # preprocess images
     temporal_dir = set_dir(params['PREPROC_DIR'], 'temporal')
     spatial_dir = set_dir(params['PREPROC_DIR'], 'spatial')
     if(params['RUN_PREPROC']):
-        preprocess(data_dir, correction_dir, temporal_dir, spatial_dir,
+        preprocess(correction_dir, temporal_dir, spatial_dir,
                    params['FILENAME'])
-    
+
     # train the U-Net
     model_dir = pathlib.Path(params['MODEL_DIR'])
     model_file = model_dir.joinpath('model.h5')
@@ -230,22 +259,30 @@ elif(params['RUN_MODE'] == 'run'):
         tag = filename.stem
         out_dir = set_dir(params['OUTPUT_DIR'], tag)
 
-        # preprocess images
+        # correct images
         correction_file = out_dir.joinpath(tag + '_corrected.tif')
         motion_file = out_dir.joinpath(tag + '_motion.hdf5')
+        if(params['RUN_CORRECT']):
+            tic = time.perf_counter()
+            correct_video(filename, correction_file, motion_file,
+                          first_frame=params['FIRST_FRAME'],
+                          motion_search_level=params['MOTION_SEARCH_LEVEL'],
+                          motion_search_size=params['MOTION_SEARCH_SIZE'],
+                          motion_patch_size=params['MOTION_PATCH_SIZE'],
+                          motion_patch_offset=params['MOTION_PATCH_OFFSET'])
+            toc = time.perf_counter()
+            print('%.1f seconds to correct' % (toc - tic))
+
+        # extract signal
         temporal_file = out_dir.joinpath(tag + '_temporal.tif')
         spatial_file = out_dir.joinpath(tag + '_spatial.tif')
         if(params['RUN_PREPROC']):
             tic = time.perf_counter()
-            run_preprocessing(filename, correction_file, motion_file,
-                              temporal_file, spatial_file,
-                              first_frame=params['FIRST_FRAME'],
-                              motion_search_level=params['MOTION_SEARCH_LEVEL'],
-                              motion_search_size=params['MOTION_SEARCH_SIZE'],
-                              motion_patch_size=params['MOTION_PATCH_SIZE'],
-                              motion_patch_offset=params['MOTION_PATCH_OFFSET'],
-                              signal_period=params['TIME_SEGMENT_SIZE'],
-                              signal_scale=params['SIGNAL_SCALE'])
+            preprocess_video(correction_file,
+                             temporal_file, spatial_file,
+                             first_frame=params['FIRST_FRAME'],
+                             signal_period=params['TIME_SEGMENT_SIZE'],
+                             signal_scale=params['SIGNAL_SCALE'])
             toc = time.perf_counter()
             print('%.1f seconds to preprocess' % (toc - tic))
 
