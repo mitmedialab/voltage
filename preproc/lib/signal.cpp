@@ -265,14 +265,15 @@ int extract_signal(signal_param_t &param,
     const int patch_offset = param.patch_offset;
     const float temp_stdev = param.freq_max <= 0 ? 0 : param.frames_per_sec / (M_PI * param.freq_max);
     const float space_stdev = param.smooth_scale;
+    const int down = downsample ? 2 : 1;
 
     float **cnt = malloc_float2d(width, height);
     memset(cnt[0], 0, width * height * sizeof(float));
     float **one = malloc_float2d(patch_size, patch_size);
     for(int k = 0; k < patch_size * patch_size; k++) one[0][k] = 1.0;
-    
-    for(int i = 0; i <= width - patch_size; i += patch_offset)
-	for(int j = 0; j <= height - patch_size; j += patch_offset)
+
+    for(int i = 0; i <= width / down - patch_size; i += patch_offset)
+    for(int j = 0; j <= height / down - patch_size; j += patch_offset)
 	{
         if(downsample)
         {
@@ -340,8 +341,8 @@ int extract_signal(signal_param_t &param,
             // overlaps due to overlapping patches
             // need to separate it into multiple sets of non-overlapping patches
             //#pragma omp parallel for
-            for(int i = 0; i <= width - patch_size; i += patch_offset)
-            for(int j = 0; j <= height - patch_size; j += patch_offset)
+            for(int i = 0; i <= width / down - patch_size; i += patch_offset)
+            for(int j = 0; j <= height / down - patch_size; j += patch_offset)
             {
                 float **pc = compute_principal_component(frames, i, j, patch_size, buf,
                                                          normalize, downsample);
