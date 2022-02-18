@@ -1,13 +1,21 @@
 # common parameters (must be consistent with training)
 TIME_SEGMENT_SIZE = 50
 
-# preprocessing parameters
+# motion/shading correction parameters
 FIRST_FRAME = 0
 MOTION_SEARCH_LEVEL = 2
 MOTION_SEARCH_SIZE = 5
 MOTION_PATCH_SIZE = 15
 MOTION_PATCH_OFFSET = 7
-SIGNAL_SCALE = 3.0 # must be consistent with training
+
+# preprocessing parameters
+SIGNAL_METHOD = 'max-med'
+SIGNAL_SCALE = 3.0
+
+# demixing parameters
+AREA_THRESHOLD = 55
+ACTIVITY_LEVEL_THRESHOLD_RELATIVE = 1/9
+ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE = 0.0001
 
 
 # runtime parameters
@@ -21,6 +29,7 @@ RUN_EVALUATE = True
 
 # performance parameters (optimal values depend on the computer environment)
 NUM_THREADS_DEMIXING = 16
+GPU_MEM_SIZE = 5 # GB
 
 
 # real data parameters

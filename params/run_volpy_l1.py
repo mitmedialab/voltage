@@ -2,14 +2,14 @@
 TIME_SEGMENT_SIZE = 50
 
 # motion/shading correction parameters
-FIRST_FRAME = TIME_SEGMENT_SIZE
+FIRST_FRAME = 0
 MOTION_SEARCH_LEVEL = 0
 MOTION_SEARCH_SIZE = 0
 MOTION_PATCH_SIZE = 1
 MOTION_PATCH_OFFSET = 1000
 
 # preprocessing parameters
-SIGNAL_METHOD = 'max-med'
+SIGNAL_METHOD = 'med-min'
 SIGNAL_SCALE = 3.0
 
 # demixing parameters
@@ -33,15 +33,15 @@ GPU_MEM_SIZE = 5 # GB
 
 
 # real data parameters
-TILE_SHAPE = (128, 128)
-TILE_STRIDES = (32, 32)
+TILE_SHAPE = (64, 64)
+TILE_STRIDES = (16, 16)
 BATCH_SIZE = 128
 
 
 # file paths
 import pathlib
-INPUT_DIR = '/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_HPC'
+INPUT_DIR = '/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_L1'
 INPUT_FILES = sorted(pathlib.Path(INPUT_DIR).glob('*/*.tif'))
 GT_FILES = [f.with_name(f.stem + '_ROI.zip') for f in INPUT_FILES]
 MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220106_dendrites/model.h5'
-OUTPUT_DIR = '/media/bandy/nvme_work/voltage/volpyHPC'
+OUTPUT_DIR = '/media/bandy/nvme_work/voltage/volpyL1'

@@ -2,12 +2,15 @@
 TIME_SEGMENT_SIZE = 50
 MODEL_IO_SHAPE = (64, 64)
 
-# preprocessing parameters
+# motion/shading correction parameters
 MOTION_SEARCH_LEVEL = 2
 MOTION_SEARCH_SIZE = 5
 MOTION_PATCH_SIZE = 10
 MOTION_PATCH_OFFSET = 7
-SIGNAL_SCALE = 3.0 # must be consistent with inference
+
+# preprocessing parameters
+SIGNAL_METHOD = 'max-med'
+SIGNAL_SCALE = 3.0
 
 
 # runtime parameters

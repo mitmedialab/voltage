@@ -11,22 +11,6 @@ from scipy.ndimage import gaussian_filter
 from .demix import demix_cells_incrementally
 
 
-# parameters for extracting candidate regions
-PROBABILITY_MAPS_SCALE = 1/4
-ACTIVE_REGIONS_SIGMA = 10
-ACTIVE_REGIONS_THRESHOLD = 0.001
-BACKGROUND_SIGMA = 10
-
-# parameters for filtering candidate regions
-AREA_THRESHOLD = 55
-ACTIVITY_LEVEL_THRESHOLD_RELATIVE = 1/9
-ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE = 0.0001
-
-# parameter for demixing
-DEMIX_REGION_SIZE_MAX = 15
-MERGE_THRESHOLD = 0.2
-
-
 def save_components(components, image_shape, filename):
     """
     Convert connected components into a multi-page binary image and save it.
@@ -60,7 +44,7 @@ def save_components(components, image_shape, filename):
                  photometric='minisblack')
 
 
-def filter_regions(components, cell_probability, cell_image):
+def filter_regions(components, cell_probability, cell_image, **kwargs):
     """
     Filter candidate cell regions by discarding unlikely ones.
 
@@ -79,12 +63,15 @@ def filter_regions(components, cell_probability, cell_image):
         Filtered cell regions (a subset of the input components)
 
     """
+    kwargs.setdefault('AREA_THRESHOLD', 0)
+    kwargs.setdefault('ACTIVITY_LEVEL_THRESHOLD_RELATIVE', 0)
+    kwargs.setdefault('ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE', 0)
 
     activity_levels = []
 
     for c in components:
 
-        if(c.area < AREA_THRESHOLD):
+        if(c.area < kwargs['AREA_THRESHOLD']):
             activity_levels.append(0) # mark as discarded
             continue
 
@@ -104,14 +91,14 @@ def filter_regions(components, cell_probability, cell_image):
         max_activity = max(activity_levels)
     out = []
     for al, c in zip(activity_levels, components):
-        if(al > max_activity * ACTIVITY_LEVEL_THRESHOLD_RELATIVE
-           and al > ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE):
+        if(al > max_activity * kwargs['ACTIVITY_LEVEL_THRESHOLD_RELATIVE']
+           and al > kwargs['ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE']):
             out.append(c)
 
     return out
 
 
-def filter_masks(masks):
+def filter_masks(masks, **kwargs):
     """
     Filter masks by merging ones having large overlaps. Because demixing does
     not explicitly look at how much demixed spatial probabilities overlap, it
@@ -129,6 +116,8 @@ def filter_masks(masks):
         Filtered binary masks that may have merged some of the input masks.
 
     """
+    kwargs.setdefault('MERGE_THRESHOLD', 0.2)
+
     # Determine whether a pair of masks should be merged
     # based on the degree of overlaps between them
     num_masks = len(masks)
@@ -141,7 +130,7 @@ def filter_masks(masks):
             area_c = np.count_nonzero(intersection)
             area_u = area_i + area_j - area_c
             IoU = area_c / area_u
-            merge[i, j] = IoU > MERGE_THRESHOLD
+            merge[i, j] = IoU > kwargs['MERGE_THRESHOLD']
 
     # Construct a mapping table indicating whether masks should be merged:
     # mapping[j] = i means j-th mask should be merged with i-th mask
@@ -168,7 +157,7 @@ def filter_masks(masks):
 
 
 def run_demixing_each(mask, probability_maps, region_id,
-                      mode, num_threads, save_images):
+                      mode, num_threads, save_images, **kwargs):
     """
     Demix cells in a given region specified by a mask.
 
@@ -204,17 +193,20 @@ def run_demixing_each(mask, probability_maps, region_id,
         masks may be smaller due to postprocess filtering.
 
     """
+    kwargs.setdefault('DEMIX_REGION_SIZE_MAX', 15)
+
     # Downsample if the region is large so the shorter side will have the
     # predetermined length (DEMIX_REGION_SIZE_MAX). This is to prevent a large
     # region from getting oversplit just because it has more pixels and tends
     # to have more variability between them. It also reduces the computation.
     size_y, size_x = mask.shape
-    if(size_x >= size_y and size_y > DEMIX_REGION_SIZE_MAX):
-        size_x = math.floor(size_x / size_y * DEMIX_REGION_SIZE_MAX)
-        size_y = DEMIX_REGION_SIZE_MAX
-    elif(size_y >= size_x and size_x > DEMIX_REGION_SIZE_MAX):
-        size_y = math.floor(size_y / size_x * DEMIX_REGION_SIZE_MAX)
-        size_x = DEMIX_REGION_SIZE_MAX
+    size_max = kwargs['DEMIX_REGION_SIZE_MAX']
+    if(size_x >= size_y and size_y > size_max):
+        size_x = math.floor(size_x / size_y * size_max)
+        size_y = size_max
+    elif(size_y >= size_x and size_x > size_max):
+        size_y = math.floor(size_y / size_x * size_max)
+        size_x = size_max
 
     down = resize(probability_maps, (len(probability_maps), size_y, size_x),
                   mode='constant', anti_aliasing=True)
@@ -232,7 +224,7 @@ def run_demixing_each(mask, probability_maps, region_id,
         for i, img in enumerate(demixed):
             th = threshold_otsu(img)
             masks[i] = img > th
-        masks = filter_masks(masks) # postprocess filtering
+        masks = filter_masks(masks, **kwargs) # postprocess filtering
 
     return demixed, masks
 
@@ -320,7 +312,7 @@ def run_demixing(components, probability_maps,
 
 
 def compute_masks(in_file, data_file, out_file,
-                  mode='cpu', num_threads=0, save_images=False):
+                  mode='cpu', num_threads=0, save_images=False, **kwargs):
     """
     Compute binary masks representing the footprints of neurons based on their
     firing probability maps while demixing their spatial overlaps if any.
@@ -357,6 +349,10 @@ def compute_masks(in_file, data_file, out_file,
     None.
 
     """
+    kwargs.setdefault('PROBABILITY_MAPS_SCALE', 1/4)
+    kwargs.setdefault('ACTIVE_REGIONS_SIGMA', 10)
+    kwargs.setdefault('ACTIVE_REGIONS_THRESHOLD', 0.001)
+    kwargs.setdefault('BACKGROUND_SIGMA', 10)
 
     print('demixing ' + in_file.stem)
 
@@ -366,20 +362,20 @@ def compute_masks(in_file, data_file, out_file,
     # temporal average of probability maps
     avg_probability = np.mean(probability_maps, axis=0)
     # reduce clutter by downscaling
-    down = rescale(avg_probability, PROBABILITY_MAPS_SCALE,
+    down = rescale(avg_probability, kwargs['PROBABILITY_MAPS_SCALE'],
                    mode='constant', anti_aliasing=True)
     # resize back to the original shape
     avg_probability = resize(down, image_shape, mode='constant')
 
     # extract high probabilty regions compared with their surroundings
-    th = gaussian_filter(avg_probability, ACTIVE_REGIONS_SIGMA)
-    active_regions = avg_probability - th > ACTIVE_REGIONS_THRESHOLD
+    th = gaussian_filter(avg_probability, kwargs['ACTIVE_REGIONS_SIGMA'])
+    active_regions = avg_probability - th > kwargs['ACTIVE_REGIONS_THRESHOLD']
 
     # temporal average of motion/shading-corrected input video
     video = tiff.imread(data_file).astype(float)
     avg_image = np.mean(video, axis=0)
     # extract low spatial frequency content as background
-    background = gaussian_filter(avg_image, BACKGROUND_SIGMA)
+    background = gaussian_filter(avg_image, kwargs['BACKGROUND_SIGMA'])
     # subtract background to leave the intensity of foreground cells
     avg_image -= background
 
@@ -400,7 +396,8 @@ def compute_masks(in_file, data_file, out_file,
         save_components(components, image_shape, 'masks_initial.tif')
 
     # discard unlikely regions from the candidates
-    components = filter_regions(components, avg_probability, avg_image)
+    components = filter_regions(components, avg_probability, avg_image,
+                                **kwargs)
 
     if(save_images):
         save_components(components, image_shape, 'masks_filtered.tif')

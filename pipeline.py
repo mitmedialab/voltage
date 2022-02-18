@@ -17,6 +17,7 @@ if(len(sys.argv) != 2):
     sys.exit(0)
 
 params = runpy.run_path(sys.argv[1])
+params.setdefault('SIGNAL_METHOD', 'max-med')
 
 
 def set_dir(base_path, dirname):
@@ -111,8 +112,9 @@ def preprocess(in_dir, temporal_dir, spatial_dir, filename):
         spatial_file = spatial_dir.joinpath(in_file.name)
         preprocess_video(in_file,
                          temporal_file, spatial_file,
-                         signal_period=params['TIME_SEGMENT_SIZE'],
-                         signal_scale=params['SIGNAL_SCALE'])
+                         params['SIGNAL_METHOD'],
+                         params['TIME_SEGMENT_SIZE'],
+                         params['SIGNAL_SCALE'])
         
     else: # batch mode, single-threaded jobs for multiple files
         filenames = sorted(in_dir.glob('*.tif'))
@@ -122,9 +124,10 @@ def preprocess(in_dir, temporal_dir, spatial_dir, filename):
             spatial_file = spatial_dir.joinpath(in_file.name)
             args.append((in_file,
                          temporal_file, spatial_file,
-                         0, 'max-med',
-                         params['TIME_SEGMENT_SIZE'], params['SIGNAL_SCALE'],
-                         1))
+                         params['SIGNAL_METHOD'],
+                         params['TIME_SEGMENT_SIZE'],
+                         params['SIGNAL_SCALE'],
+                         1, 1))
 
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(preprocess_video, args)
@@ -280,9 +283,9 @@ elif(params['RUN_MODE'] == 'run'):
             tic = time.perf_counter()
             preprocess_video(correction_file,
                              temporal_file, spatial_file,
-                             first_frame=params['FIRST_FRAME'],
-                             signal_period=params['TIME_SEGMENT_SIZE'],
-                             signal_scale=params['SIGNAL_SCALE'])
+                             params['SIGNAL_METHOD'],
+                             params['TIME_SEGMENT_SIZE'],
+                             params['SIGNAL_SCALE'])
             toc = time.perf_counter()
             print('%.1f seconds to preprocess' % (toc - tic))
 
@@ -294,7 +297,7 @@ elif(params['RUN_MODE'] == 'run'):
             apply_model([temporal_file, spatial_file], params['MODEL_FILE'],
                         segment_file, reference_file,
                         params['TILE_SHAPE'], params['TILE_STRIDES'],
-                        params['BATCH_SIZE'])
+                        params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
             toc = time.perf_counter()
             print('%.1f seconds to segment' % (toc - tic))
 
@@ -303,7 +306,8 @@ elif(params['RUN_MODE'] == 'run'):
         if(params['RUN_DEMIX']):
             tic = time.perf_counter()
             compute_masks(segment_file, correction_file, demix_file,
-                          num_threads=params['NUM_THREADS_DEMIXING'])
+                          num_threads=params['NUM_THREADS_DEMIXING'],
+                          **params)
             toc = time.perf_counter()
             print('%.1f seconds to compute masks' % (toc - tic))
 

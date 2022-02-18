@@ -368,7 +368,7 @@ int extract_signal(signal_param_t &param,
                 if(cnt[i][j] > 0) out[k][i][j] /= cnt[i][j];
             }
         }
-        else // max-median
+        else if(method == 1) // max-median
         {
             float c[4];
             recursive_gauss_set_filter(space_stdev, c);
@@ -390,6 +390,30 @@ int extract_signal(signal_param_t &param,
                 }
                 std::nth_element(v.begin(), v.begin() + m, v.end());
                 out[k][i][j] = max - v[m];
+            }
+        }
+        else // median-min
+        {
+            float c[4];
+            recursive_gauss_set_filter(space_stdev, c);
+            for(auto f : frames)
+            {
+                recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
+            }
+            const size_t m = frames.size() / 2;
+            for(int i = 0; i < width; i++)
+            for(int j = 0; j < height; j++)
+            {
+                std::vector<float> v;
+                float min = 1.0;
+                for(auto f : frames)
+                {
+                    float val = buf[f][i][j];
+                    v.push_back(val);
+                    if(min > val) min = val;
+                }
+                std::nth_element(v.begin(), v.begin() + m, v.end());
+                out[k][i][j] = v[m] - min;
             }
         }
 
