@@ -93,3 +93,5 @@ def train_model(input_dir_list, target_dir, model_file, log_file,
 
     model.fit(train_seq, validation_data=valid_seq,
               epochs=epochs, callbacks=callbacks)
+
+    keras.backend.clear_session()

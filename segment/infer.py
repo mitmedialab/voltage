@@ -297,6 +297,8 @@ def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
                        valid_input_paths, valid_target_paths,
                        out_paths, ref_paths)
 
+    keras.backend.clear_session()
+
 
 def apply_model(input_files, model_file, out_file, ref_file,
                 tile_shape, tile_strides, batch_size, gpu_mem_size=None):
@@ -337,3 +339,5 @@ def apply_model(input_files, model_file, out_file, ref_file,
 
     _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
                        [input_files], None, [out_file], [ref_file])
+
+    keras.backend.clear_session()
