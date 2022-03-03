@@ -2,7 +2,6 @@
 TIME_SEGMENT_SIZE = 50
 
 # motion/shading correction parameters
-FIRST_FRAME = 0
 MOTION_SEARCH_LEVEL = 0
 MOTION_SEARCH_SIZE = 0
 MOTION_PATCH_SIZE = 1

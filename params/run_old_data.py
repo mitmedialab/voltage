@@ -2,14 +2,12 @@
 TIME_SEGMENT_SIZE = 50
 
 # motion/shading correction parameters
-FIRST_FRAME = 0
 MOTION_SEARCH_LEVEL = 2
 MOTION_SEARCH_SIZE = 5
 MOTION_PATCH_SIZE = 15
 MOTION_PATCH_OFFSET = 7
 
 # preprocessing parameters
-SIGNAL_METHOD = 'max-med'
 SIGNAL_SCALE = 3.0
 
 # demixing parameters

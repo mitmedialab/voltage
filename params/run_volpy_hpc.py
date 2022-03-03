@@ -9,8 +9,8 @@ MOTION_PATCH_SIZE = 1
 MOTION_PATCH_OFFSET = 1000
 
 # preprocessing parameters
-SIGNAL_METHOD = 'max-med'
 SIGNAL_SCALE = 3.0
+SIGNAL_BINNING = 2
 
 # demixing parameters
 AREA_THRESHOLD = 50

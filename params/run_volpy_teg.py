@@ -2,7 +2,6 @@
 TIME_SEGMENT_SIZE = 50
 
 # motion/shading correction parameters
-FIRST_FRAME = 0
 MOTION_SEARCH_LEVEL = 0
 MOTION_SEARCH_SIZE = 0
 MOTION_PATCH_SIZE = 1
@@ -11,6 +10,7 @@ MOTION_PATCH_OFFSET = 1000
 # preprocessing parameters
 SIGNAL_METHOD = 'med-min'
 SIGNAL_SCALE = 3.0
+SIGNAL_BINNING = 2
 
 # demixing parameters
 AREA_THRESHOLD = 100

@@ -17,7 +17,9 @@ if(len(sys.argv) != 2):
     sys.exit(0)
 
 params = runpy.run_path(sys.argv[1])
+params.setdefault('FIRST_FRAME', 0)
 params.setdefault('SIGNAL_METHOD', 'max-med')
+params.setdefault('SIGNAL_BINNING', 1)
 
 
 def set_dir(base_path, dirname):
@@ -285,7 +287,8 @@ elif(params['RUN_MODE'] == 'run'):
                              temporal_file, spatial_file,
                              params['SIGNAL_METHOD'],
                              params['TIME_SEGMENT_SIZE'],
-                             params['SIGNAL_SCALE'])
+                             params['SIGNAL_SCALE'],
+                             params['SIGNAL_BINNING'])
             toc = time.perf_counter()
             print('%.1f seconds to preprocess' % (toc - tic))
 
