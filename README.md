@@ -20,12 +20,12 @@ $ conda create -n voltage python=3.8
 $ conda activate voltage  
 $ conda install tiffile  
 $ conda install scikit-image  
-$ conda install keras
-$ conda install tensorflow-gpu
-$ conda install ipykernel
+$ conda install keras  
+$ conda install tensorflow-gpu  
+$ conda install ipykernel  
 $ conda install nbconvert  
 $ conda install pandas  
-$ conda install cython
+$ conda install cython  
 $ pip install elasticdeform  
 $ pip install read-roi
 
