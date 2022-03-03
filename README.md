@@ -3,12 +3,14 @@
 
 ## Directory Structure
 
-* preproc/     : preprocessing (motion/shading correction and spike extraction)
-* segment/     : segmentation of active cells
-* demix/       : demixing of individual cells
-* simulation/  : synthetic data generation for training U-Net segmentation
-* evaluate/    : accuracy evaluation by comparing the results with ground truth
-* lib/         : libraries
+* correct/     : motion/shading correction
+* preproc/     : preliminary feature extraction
+* segment/     : segmentation of active cell regions
+* demix/       : demixing of overlapping cells
+* simulate/    : synthetic data generation for training U-Net segmentation
+* evaluate/    : accuracy evaluation by comparison with ground truth
+* utils/       : C++ utilities used by some of the above modules
+* params/      : parameter files for pipeline script
 * pipeline.py  : pipeline script
 
 
@@ -17,35 +19,29 @@
 $ conda create -n voltage python=3.8  
 $ conda activate voltage  
 $ conda install tiffile  
-$ conda install scipy  
 $ conda install scikit-image  
 $ conda install keras  
 $ conda install tensorflow-gpu  
-$ conda install nbformat  
+$ conda install ipykernel  
 $ conda install nbconvert  
 $ conda install pandas  
+$ conda install cython  
 $ pip install elasticdeform  
-
-
-## Building Libraries
-
-$ cd lib/tiff-4.1.0_mod  
-$ ./configure  
-$ make  
-$ cd ../..  
-$ make  
-
-Building tiff-4.1.0_mod allows much faster saving of multipage tiffs, but one could also use standard libtiff instead.
+$ pip install read-roi
 
 
 ## How To Run
 
-Set the parameters at the top of pipeline.py appropriately, the path strings in particular.
+Build and install C++ Cython modules:
 
-To train the U-Net cell segmentation network, set mode = 'train' in pipeline.py and run
+$ make
 
-$ python pipeline.py
+To train the U-Net cell segmentation network, edit params/train.py (path strings in particular) and run:
 
-This will create synthetic data and train the network. The trained U-Net model will be stored in MODEL_PATH. 
+$ python pipeline.py params/train.py
 
-To run the pipeline for real data sets using the trained model, set mode = 'run' and run the pipeline.py.
+This will create synthetic data and train the network. The trained U-Net model will be stored in MODEL_DIR.
+
+To run the pipeline for real data sets using the trained model, edit params/run_xxx.py (choose one of the preconfigured parameter files or create your own) and run:
+
+$ python pipeline.py params/run_xxx.py
