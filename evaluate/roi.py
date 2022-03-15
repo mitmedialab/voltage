@@ -43,7 +43,7 @@ def read_roi(roi_file, image_shape):
 
     Parameters
     ----------
-    roi_file : string
+    roi_file : string or pathlib.Path
         ROI file name.
     image_shape : 2-tuple of int
         Height and width of the output masks. This is used when the ROI file
@@ -61,7 +61,7 @@ def read_roi(roi_file, image_shape):
     roi_file = pathlib.Path(roi_file)
     roi_ext = roi_file.suffix.lower()
     if(roi_ext == '.roi'):
-        roi_dict = read_roi_file(roi_file)
+        roi_dict = read_roi_file(str(roi_file)) # can't handle pathlib.Path
     elif(roi_ext == '.zip'):
         roi_dict = read_roi_zip(roi_file)
     elif(roi_ext == '.tif' or roi_ext == '.tiff'):
