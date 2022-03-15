@@ -370,11 +370,14 @@ int extract_signal(signal_param_t &param,
         }
         else if(method == 1) // max-median
         {
-            float c[4];
-            recursive_gauss_set_filter(space_stdev, c);
-            for(auto f : frames)
+            if(space_stdev >= 0.5)
             {
-                recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
+                float c[4];
+                recursive_gauss_set_filter(space_stdev, c);
+                for(auto f : frames)
+                {
+                    recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
+                }
             }
             const size_t m = frames.size() / 2;
             for(int i = 0; i < width; i++)
@@ -394,11 +397,14 @@ int extract_signal(signal_param_t &param,
         }
         else // median-min
         {
-            float c[4];
-            recursive_gauss_set_filter(space_stdev, c);
-            for(auto f : frames)
+            if(space_stdev >= 0.5)
             {
-                recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
+                float c[4];
+                recursive_gauss_set_filter(space_stdev, c);
+                for(auto f : frames)
+                {
+                    recursive_gauss_apply_filter2d(c, space_stdev, width, height, buf[f]);
+                }
             }
             const size_t m = frames.size() / 2;
             for(int i = 0; i < width; i++)
