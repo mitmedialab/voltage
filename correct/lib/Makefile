@@ -1,7 +1,7 @@
 UTILS     = ../../utils
 
 CXX       = g++
-CXXFLAGS  = -O3 -fopenmp -fPIC -I$(UTILS)
+CXXFLAGS  = -std=c++11 -O3 -fopenmp -fPIC -I$(UTILS)
 
 TARGET = libcorrect.a
 

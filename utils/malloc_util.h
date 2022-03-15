@@ -2,6 +2,9 @@
 #define __MALLOC_UTIL_H__
 
 
+#include <stddef.h>
+
+
 #define MyMalloc(type)   type    *malloc_ ## type ## 1d(size_t n);                      \
                          type   **malloc_ ## type ## 2d(size_t w, size_t h);            \
                          type  ***malloc_ ## type ## 3d(size_t w, size_t h, size_t d);  \
