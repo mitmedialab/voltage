@@ -7,7 +7,7 @@ from skimage.segmentation import find_boundaries
 REPRESENTATIVE_IOU = 0.4
 
 
-    
+
 def _plot_F1_sub(f1, precision, recall, thresholds):
     """
     Plot F1 scores as well as precision and recall values.
@@ -228,19 +228,12 @@ def plot_per_dataset_scores(keys, scores, label, color):
     None.
 
     """
-    #mags = df['Magnification']
     plt.figure(figsize=(17, 3))
     plt.ylim(0, 1)
     plt.grid(axis='y')
     plt.bar(list(range(len(scores))), scores, color=color) 
     plt.xticks(list(range(len(scores))), keys, rotation='vertical')
-    #for mag, ticklabel in zip(mags, plt.gca().get_xticklabels()):
-    #    if(mag >= 40):
-    #        ticklabel.set_color('green')
-    #    elif(mag >= 20):
-    #        ticklabel.set_color('blue')
     plt.ylabel(label)
-    #plt.xlabel('Dataset  (black 16x, blue 20x, green 40x)')
     plt.xlabel('Dataset')
     plt.title('Per-dataset ' + label + ' at IoU = %.1f' % REPRESENTATIVE_IOU)
     plt.show()
