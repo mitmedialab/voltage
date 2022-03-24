@@ -13,24 +13,17 @@
 
 static void normalize_intensity(int num_frames, int width, int height, float ***img)
 {
-    float *lumi = malloc_float1d(num_frames);
-    float max = 0;
-    
-    for(int k = 0; k < num_frames; k++)
-    {
-        lumi[k] = 0;
-        for(int i = 0; i < width; i++)
-        for(int j = 0; j < height; j++)
-        {
-            lumi[k] += img[k][i][j];
-            if(max < img[k][i][j]) max = img[k][i][j];
-        }
-    }
-
+    // equalize average frame intensities
     #pragma omp parallel for
     for(int k = 0; k < num_frames; k++)
     {
-        float scale = lumi[0] / lumi[k] / max;
+        float sum = 0;
+        for(int i = 0; i < width; i++)
+        for(int j = 0; j < height; j++)
+        {
+            sum += img[k][i][j];
+        }
+        const float scale = 1.0 / sum;
         for(int i = 0; i < width; i++)
         for(int j = 0; j < height; j++)
         {
@@ -38,7 +31,26 @@ static void normalize_intensity(int num_frames, int width, int height, float ***
         }
     }
     
-    free_float1d(lumi);
+    // rescale intensities so that [min, max] = [0, 1]
+    float min = img[0][0][0];
+    float max = img[0][0][0];
+    #pragma omp parallel for reduction(min: min) reduction(max: max)
+    for(int k = 0; k < num_frames; k++)
+    for(int i = 0; i < width; i++)
+    for(int j = 0; j < height; j++)
+    {
+        if(min > img[k][i][j]) min = img[k][i][j];
+        if(max < img[k][i][j]) max = img[k][i][j];
+    }
+
+    const float scale = 1.0 / (max - min);
+    #pragma omp parallel for
+    for(int k = 0; k < num_frames; k++)
+    for(int i = 0; i < width; i++)
+    for(int j = 0; j < height; j++)
+    {
+        img[k][i][j] = (img[k][i][j] - min) * scale;
+    }
 }
 
 
@@ -79,16 +91,12 @@ void correct_video_cpu(int num_frames, int height, int width,
     
     TimerUtil *tu;
 
+    tu = new TimerUtil("intensity normalization");
+    normalize_intensity(t, w, h, img);
+    delete tu;
+
     std::vector<motion_t> motion_list;
     motion_range_t range;
-
-    // hack: eliminate black line at the bottom
-    for(int i = 0; i < t; i++)
-    {
-        for(int j = 0; j < w; j++) img[i][j][h-1] = img[i][j][h-2];
-    }
-
-    normalize_intensity(t, w, h, img);
 
     tu = new TimerUtil("motion correction");
     motion_list = correct_motion(motion_param, t, w, h, img, range);

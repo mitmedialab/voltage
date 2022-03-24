@@ -23,7 +23,7 @@ public:
         struct timespec e;
         clock_gettime(CLOCK_REALTIME, &e);
         double elapsed = (e.tv_sec - s.tv_sec) + (e.tv_nsec - s.tv_nsec) / 1e9;
-        printf("%s: %.1lf sec\n", name, elapsed);
+        printf("%s: %.2lf sec\n", name, elapsed);
     };
 };
 

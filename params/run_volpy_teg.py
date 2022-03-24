@@ -28,13 +28,15 @@ RUN_EVALUATE = True
 
 
 # performance parameters (optimal values depend on the computer environment)
+NUM_THREADS_CORRECT = 0  # 0 uses all the available logical cores
+NUM_THREADS_PREPROC = 0  # 0 uses all the available logical cores
 NUM_THREADS_DEMIXING = 16
 GPU_MEM_SIZE = 5 # GB
 
 
 # real data parameters
 TILE_SHAPE = (128, 128)
-TILE_STRIDES = (32, 32)
+TILE_STRIDES = (16, 16)
 BATCH_SIZE = 128
 
 

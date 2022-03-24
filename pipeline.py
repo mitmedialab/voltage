@@ -3,6 +3,8 @@ import time
 import runpy
 import pathlib
 import multiprocessing as mp
+import tifffile as tiff
+import pandas as pd
 
 from simulate import create_synthetic_data, decimate_video
 from correct import correct_video
@@ -82,7 +84,8 @@ def correct(in_dir, correction_dir, filename):
                       motion_search_level=params['MOTION_SEARCH_LEVEL'],
                       motion_search_size=params['MOTION_SEARCH_SIZE'],
                       motion_patch_size=params['MOTION_PATCH_SIZE'],
-                      motion_patch_offset=params['MOTION_PATCH_OFFSET'])
+                      motion_patch_offset=params['MOTION_PATCH_OFFSET'],
+                      num_threads=params['NUM_THREADS_CORRECT'])
         
     else: # batch mode, single-threaded jobs for multiple files
         filenames = sorted(in_dir.glob('*.tif'))
@@ -95,7 +98,7 @@ def correct(in_dir, correction_dir, filename):
                          params['MOTION_SEARCH_LEVEL'],
                          params['MOTION_SEARCH_SIZE'],
                          params['MOTION_PATCH_SIZE'],
-                         params['MOTION_PATCH_OFFSET'], 1000, 0))
+                         params['MOTION_PATCH_OFFSET'], 1000, 1))
 
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(correct_video, args)
@@ -116,7 +119,8 @@ def preprocess(in_dir, temporal_dir, spatial_dir, filename):
                          temporal_file, spatial_file,
                          params['SIGNAL_METHOD'],
                          params['TIME_SEGMENT_SIZE'],
-                         params['SIGNAL_SCALE'])
+                         params['SIGNAL_SCALE'],
+                         num_threads=params['NUM_THREADS_PREPROC'])
         
     else: # batch mode, single-threaded jobs for multiple files
         filenames = sorted(in_dir.glob('*.tif'))
@@ -263,6 +267,9 @@ elif(params['RUN_MODE'] == 'run'):
     for i, filename in enumerate(params['INPUT_FILES']):
         tag = filename.stem
         out_dir = set_dir(params['OUTPUT_DIR'], tag)
+        stage_names = []
+        elapsed_times = []
+        tic_total = time.perf_counter()
 
         # correct images
         correction_file = out_dir.joinpath(tag + '_corrected.tif')
@@ -274,8 +281,11 @@ elif(params['RUN_MODE'] == 'run'):
                           motion_search_level=params['MOTION_SEARCH_LEVEL'],
                           motion_search_size=params['MOTION_SEARCH_SIZE'],
                           motion_patch_size=params['MOTION_PATCH_SIZE'],
-                          motion_patch_offset=params['MOTION_PATCH_OFFSET'])
+                          motion_patch_offset=params['MOTION_PATCH_OFFSET'],
+                          num_threads=params['NUM_THREADS_CORRECT'])
             toc = time.perf_counter()
+            stage_names.append('Correct')
+            elapsed_times.append(toc - tic)
             print('%.1f seconds to correct' % (toc - tic))
 
         # extract signal
@@ -288,8 +298,11 @@ elif(params['RUN_MODE'] == 'run'):
                              params['SIGNAL_METHOD'],
                              params['TIME_SEGMENT_SIZE'],
                              params['SIGNAL_SCALE'],
-                             params['SIGNAL_BINNING'])
+                             params['SIGNAL_BINNING'],
+                             params['NUM_THREADS_PREPROC'])
             toc = time.perf_counter()
+            stage_names.append('Preproc')
+            elapsed_times.append(toc - tic)
             print('%.1f seconds to preprocess' % (toc - tic))
 
         # segment neurons
@@ -302,6 +315,8 @@ elif(params['RUN_MODE'] == 'run'):
                         params['TILE_SHAPE'], params['TILE_STRIDES'],
                         params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
             toc = time.perf_counter()
+            stage_names.append('Segment')
+            elapsed_times.append(toc - tic)
             print('%.1f seconds to segment' % (toc - tic))
 
         # demix cells from U-Net outputs
@@ -312,7 +327,23 @@ elif(params['RUN_MODE'] == 'run'):
                           num_threads=params['NUM_THREADS_DEMIXING'],
                           **params)
             toc = time.perf_counter()
+            stage_names.append('Mask')
+            elapsed_times.append(toc - tic)
             print('%.1f seconds to compute masks' % (toc - tic))
+
+        # save speed stats
+        toc_total = time.perf_counter()
+        elapsed_time_total = toc_total - tic_total
+        df = pd.DataFrame([elapsed_times], [tag], stage_names)
+        df['Sum'] = sum(elapsed_times) # likely smaller than elapsed_time_total
+        df['Total'] = elapsed_time_total
+        with tiff.TiffFile(filename) as tif:
+            df['# frames'] = len(tif.pages)
+            df['Frame rate'] = len(tif.pages) / elapsed_time_total
+        data_size_in_gb = filename.stat().st_size / (1024 ** 3)
+        df['Data size [GB]'] = data_size_in_gb
+        df['Time/data [sec/GB]'] = elapsed_time_total / data_size_in_gb
+        df.to_csv(pathlib.Path(out_dir, tag + '_times.csv'))
 
         # evaluate the accuracy of detections
         if(params['RUN_EVALUATE']):

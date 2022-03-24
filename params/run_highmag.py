@@ -11,8 +11,8 @@ MOTION_PATCH_OFFSET = 7
 SIGNAL_SCALE = 3.0
 
 # demixing parameters
-AREA_THRESHOLD = 55
-ACTIVITY_LEVEL_THRESHOLD_RELATIVE = 1/9
+AREA_THRESHOLD = 100
+ACTIVITY_LEVEL_THRESHOLD_RELATIVE = 1/5
 ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE = 0.0001
 
 
@@ -26,6 +26,8 @@ RUN_EVALUATE = True
 
 
 # performance parameters (optimal values depend on the computer environment)
+NUM_THREADS_CORRECT = 0  # 0 uses all the available logical cores
+NUM_THREADS_PREPROC = 0  # 0 uses all the available logical cores
 NUM_THREADS_DEMIXING = 16
 GPU_MEM_SIZE = 5 # GB
 
@@ -38,9 +40,9 @@ BATCH_SIZE = 128
 
 # file paths
 import pathlib
-INPUT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.3/highmag'
+INPUT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.4/highmag'
 INPUT_FILES = sorted(pathlib.Path(INPUT_DIR).glob('*.tif'))
-GT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.3/highmag_GT_v20201027'
+GT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.4/highmag_GT'
 GT_FILES = [pathlib.Path(GT_DIR).joinpath(f.name) for f in INPUT_FILES]
 MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220106_dendrites/model.h5'
-OUTPUT_DIR = '/media/bandy/nvme_work/voltage/highmag_v0.3'
+OUTPUT_DIR = '/media/bandy/nvme_work/voltage/highmag_v0.4'
