@@ -4,3 +4,4 @@ from .evaluate_all import evaluate_all
 from .plot import plot_F1, plot_F1_and_IoU, plot_masks, plot_per_dataset_scores
 from .f1score import count_matches, calc_f1_scores
 from .roi import read_roi
+from .timer import Timer

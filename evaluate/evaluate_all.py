@@ -36,11 +36,9 @@ def _aggregate_scores(out_dir):
     f1_each = []
 
     first = True
-    filenames = sorted(out_dir.glob('**/*.html'))
+    filenames = sorted(out_dir.glob('*/*.html'))
     for in_file in filenames:
         basename = in_file.stem
-        if(basename == 'all'): # skip preexisting aggregation result
-            continue
         df = pd.read_csv(in_file.with_name(basename + '_counts.csv'))
         if(first):
             df_sum = df[['TruePos', 'FalsePos', 'FalseNeg']]
@@ -71,6 +69,37 @@ def _aggregate_scores(out_dir):
     df_each['F1'] = f1_each
     
     return f1_rep, df_sum, df_each
+
+
+def _aggregate_times(out_dir):
+    """
+    Aggregate individual speed statistics.
+
+    Parameters
+    ----------
+    out_dir : string
+        Path to a directory from which individual speed statistics will
+        be read, and in which aggregated statistics will be saved.
+
+    Returns
+    -------
+    df_all : pandas.DataFrame
+        Table summarizing all speed statistics.
+
+    """
+    first = True
+    filenames = sorted(out_dir.glob('*/*.html'))
+    for in_file in filenames:
+        basename = in_file.stem
+        df = pd.read_csv(in_file.with_name(basename + '_times.csv'))
+        if(first):
+            df_all = df
+            first = False
+        else:
+            df_all = pd.concat([df_all, df], ignore_index=True)
+
+    df_all.to_csv(out_dir.joinpath('all_times.csv'), index=False)
+    return df_all
 
 
 def evaluate_all(out_dir):
@@ -105,5 +134,8 @@ def evaluate_all(out_dir):
     eval_data['f1_each'] = df_each['F1']
     eval_data['precision_each'] = df_each['Precision']
     eval_data['recall_each'] = df_each['Recall']
+
+    df_times = _aggregate_times(pathlib.Path(out_dir))
+    eval_data['times'] = df_times
 
     return eval_data
