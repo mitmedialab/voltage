@@ -2,9 +2,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import center_of_mass
 from skimage.segmentation import find_boundaries
+from pathlib import Path
 
 
 REPRESENTATIVE_IOU = 0.4
+
+
+
+def _savefig(plt, filename):
+    """
+    Save plots in files. This must be called before plt.show().
+
+    Parameters
+    ----------
+    plt : matplotlib.pyplot
+        Plotting interface holding the plot to be saved.
+    filename : string or pathlib.Path
+        File path to which the plot will be saved, without extension.
+
+    Returns
+    -------
+    None.
+
+    """
+    p = Path(filename)
+    plt.savefig(p.with_suffix('.png'), bbox_inches='tight')
+    plt.savefig(p.with_suffix('.svg'), bbox_inches='tight')
 
 
 
@@ -83,7 +106,7 @@ def plot_F1(f1, precision, recall, thresholds):
     plt.show()
 
 
-def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU):
+def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU, filename=None):
     """
     Plot F1 scores as well as precision and recall values,
     and visualize an IoU matrix as a heat map.
@@ -101,6 +124,9 @@ def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU):
     IoU : 2D numpy.ndarray of float
         Matrix whose elements represent IoU values between predicted masks
         and ground truth masks.
+    filename : string or pathlib.Path, optional
+        File path to which the plot will be saved. The default is None,
+        in which case the plot will not be saved.
 
     Returns
     -------
@@ -112,6 +138,8 @@ def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU):
     _plot_F1_sub(f1, precision, recall, thresholds)
     plt.subplot(1, 2, 2)
     _plot_IoU_sub(IoU)
+    if(filename is not None):
+        _savefig(plt, filename)
     plt.show()
 
 
@@ -177,7 +205,7 @@ def _plot_masks_sub(image, eval_masks, gt_masks):
     plt.title(title)
 
 
-def plot_masks(image, eval_masks, gt_masks):
+def plot_masks(image, eval_masks, gt_masks, filename=None):
     """
     Plot (show) three mask images: (1) predicted masks to be evaluated and
     the ground truth masks, (2) predicted masks only, and (3) GT masks only.
@@ -191,6 +219,9 @@ def plot_masks(image, eval_masks, gt_masks):
         Masks to be evaluated. The shape should be (# masks,) + image.shape.
     gt_masks : 3D numpy.ndarray of boolean
         Ground truth masks. The shape should be (# masks,) + image.shape.
+    filename : string or pathlib.Path, optional
+        File path to which the plot will be saved. The default is None,
+        in which case the plot will not be saved.
 
     Returns
     -------
@@ -204,6 +235,8 @@ def plot_masks(image, eval_masks, gt_masks):
     _plot_masks_sub(image, eval_masks, None)
     plt.subplot(1, 3, 3)
     _plot_masks_sub(image, None, gt_masks)
+    if(filename is not None):
+        _savefig(plt, filename)
     plt.show()
 
     
