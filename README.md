@@ -14,7 +14,7 @@ Follow below steps to create the conda environment required to run the pipeline
 conda create -n voltage python=3.8
 
 # Activate the conda environment
-codna activate voltage
+conda activate voltage
 
 # Install sklearn
 conda install -y -q scikit-learn
@@ -35,8 +35,8 @@ pip install tifffile  --progress-bar off
 pip install read_roi  --progress-bar off
 
 # Install ray
-pip install -U ray --progress-bar off
-Note: As of May 11, 2021, the latest ray 1.3 has some problems, so please install ray 1.2 using
+# pip install -U ray --progress-bar off
+# Note: As of May 11, 2021, the latest ray 1.3 has some problems, so please install ray 1.2 using
 pip install -U ray==1.2 --progress-bar off
 
 # Install prettytable
