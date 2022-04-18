@@ -1,0 +1,3 @@
+[submodule "caiman"]
+	path = caiman
+	url = git@github.com:yquemener/CaImAn.git
