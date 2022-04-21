@@ -5,10 +5,12 @@
 # 
 # Our goal is to reuse the dataset used in VolPy to train our own segmentation algorithm.
 # 
-# Problem: volpy's segmentation tries to identify all the neurons present in an image, and therefore their ground truths reflect that. Our segmentation only identifies neurons that actually activate during a movie sequence. Therefore, in order to reuse VolPy datasets, we need to remove from their groundtruths the neurons it detects but that are not firing.
+# Problem: volpy's segmentation tries to identify all the neurons present in an image, and therefore their ground truths
+# reflect that. Our segmentation only identifies neurons that actually activate during a movie sequence. Therefore, in
+# order to reuse VolPy datasets, we need to remove from their groundtruths the neurons it detects but that are not
+# firing.
 # 
-# This notebook reproduces the VolPy pipeline and uses its results to produce a dataset that is usable to train our segmentation model.
-
+# This file
 
 """
 Demo pipeline for processing voltage imaging data. The processing pipeline
@@ -19,15 +21,11 @@ Dataset courtesy of Karel Svoboda Lab (Janelia Research Campus).
 author: @caichangjia
 """
 import cv2
-import glob
 import logging
-import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
 import os
 import caiman as cm
 from caiman.motion_correction import MotionCorrect
-from caiman.source_extraction.volpy import utils
 from caiman.source_extraction.volpy.volparams import volparams
 from caiman.source_extraction.volpy.volpy import VOLPY
 from caiman.base.rois import nf_read_roi_zip
@@ -49,9 +47,32 @@ basedir = "/home/yves/Projects/active/Fixstars/datasets/VolPy_dataset/"
 # [filename, framerate, Voltron]
 
 
-datasets = [ ["TEG.01.02", 400, True],
-             ["TEG.02.01", 400, True],
-             ["TEG.03.01", 400, True]]
+datasets = [
+             # ["TEG.01.02", 300, True],
+             # ["TEG.02.01", 300, True],
+             #    ["TEG.03.01", 300, True],
+                ["L1.00.00", 400, True],
+                ["L1.01.00", 400, True],
+                ["L1.01.35", 400, True],
+                ["L1.02.00", 400, True],
+                ["L1.02.80", 400, True],
+                ["L1.03.00", 400, True],
+                ["L1.03.35", 400, True],
+                ["L1.04.00", 400, True],
+                ["L1.04.50", 400, True],
+                ["HPC.29.04", 1000, False],
+                ["HPC.29.06", 1000, False],
+                ["HPC.32.01", 1000, False],
+                ["HPC.38.03", 1000, False],
+                ["HPC.38.05", 1000, False],
+                ["HPC.39.03", 1000, False],
+                ["HPC.39.04", 1000, False],
+                ["HPC.39.07", 1000, False],
+                ["HPC.48.01", 1000, False],
+                ["HPC.48.05", 1000, False],
+                ["HPC.48.07", 1000, False],
+                ["HPC.48.08", 1000, False]
+]
 
 logging.basicConfig(format=
                     "%(relativeCreated)12d [%(filename)s:%(funcName)20s():%(lineno)s]" \
@@ -67,8 +88,17 @@ for directory, framerate, flip_signal in datasets:
 
     # m_orig = cm.load(fnames)
 
+    do_motion_correction = True
+    do_memory_mapping = True
 
+    if len([file for file in os.listdir(file_dir) if file.startswith("memmap_")])>0:
+        do_motion_correction = False
+        do_memory_mapping = False
 
+    if len([file for file in os.listdir(file_dir) if file.endswith(".mmap") and "order_F" in file]) > 0:
+        do_motion_correction = False
+
+    print(do_motion_correction, do_memory_mapping)
     # dataset dependent parameters
     fr = framerate                                        # sample rate of the movie
 
@@ -107,21 +137,34 @@ for directory, framerate, flip_signal in datasets:
     # first we create a motion correction object with the specified parameters
     mc = MotionCorrect(fnames, dview=dview, **opts.get_group('motion'))
     # Run correction
-    mc.motion_correct(save_movie=False)
+    if do_motion_correction:
+        mc.motion_correct(save_movie=True)
+    else:
+        mc_list = [file for file in os.listdir(file_dir) if
+                   (os.path.splitext(os.path.split(fnames)[-1])[0] in file and '.mmap' in file)]
+        mc.mmap_file = [os.path.join(file_dir, mc_list[0])]
+        print(f'reuse previously saved motion corrected file:{mc.mmap_file}')
+
+    if do_memory_mapping:
+        border_to_0 = 0 if mc.border_nan == 'copy' else mc.border_to_0
+        # you can include the boundaries of the FOV if you used the 'copy' option
+        # during motion correction, although be careful about the components near
+        # the boundaries
+        # memory map the file in order 'C'
+        print(file_dir + '/memmap_' + directory)
+        print("mc.mmap_file=" + str(mc.mmap_file))
+        fname_new = cm.save_memmap_join(mc.mmap_file, base_name=file_dir + '/memmap_' + directory,
+                                        add_to_mov=border_to_0, dview=dview)  # exclude border
+    else:
+        mmap_list = [file for file in os.listdir(file_dir) if
+                     ('memmap_' + os.path.splitext(os.path.split(fnames)[-1])[0]) in file and file.endswith(".mmap")]
+        fname_new = os.path.join(file_dir, mmap_list[0])
+        print(f'reuse previously saved memory mapping file:{fname_new}')
 
 
-
-    border_to_0 = 0 if mc.border_nan == 'copy' else mc.border_to_0
-    # you can include the boundaries of the FOV if you used the 'copy' option
-    # during motion correction, although be careful about the components near
-    # the boundaries
-
-    # memory map the file in order 'C'
-    print(file_dir+'/'+directory+'/memmap_' + directory)
-    fname_new = cm.save_memmap_join(mc.mmap_file, base_name=file_dir+'/'+directory+'/memmap_' + directory,
-                                    add_to_mov=border_to_0, dview=dview)  # exclude border
-
-    ROIs = nf_read_roi_zip(path_ROIs, (364, 320))
+    import imagesize
+    width, height = imagesize.get(fnames)
+    ROIs = nf_read_roi_zip(path_ROIs, (height, width)) # (364, 320))
 
     # %% restart cluster to clean up memory
     cm.stop_server(dview=dview)
@@ -182,9 +225,9 @@ for directory, framerate, flip_signal in datasets:
     if save_result:
         vpy.estimates['ROIs'] = ROIs
         vpy.estimates['params'] = opts
-        save_name = f'volpy_{os.path.split(fnames)[1][:-5]}_{threshold_method}'
+        save_name = f'volpy_{os.path.split(fnames)[1][:-4]}_{threshold_method}'
         np.save(os.path.join(file_dir, save_name), vpy.estimates)
-        
+
     # %% STOP CLUSTER and clean up log files
     cm.stop_server(dview=dview)
 
