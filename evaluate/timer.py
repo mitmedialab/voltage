@@ -33,7 +33,7 @@ class Timer:
 
     def skip(self, stage_name):
         msg = 'Stage %s skipped' % stage_name
-        if(self.df is not None and stage_name in self.df.index):
+        if(self.df is not None and stage_name in self.df.columns):
             elapsed_time = self.df.at[0, stage_name]
             self.stage2time[stage_name] = elapsed_time
             msg += ' (previously took %.2f seconds)' % elapsed_time
