@@ -11,8 +11,6 @@ ALL_RESULTS_DIR=BASE_DIR+"/"+"voltage_rois/"
 if not os.path.exists(ALL_RESULTS_DIR):
     os.mkdir(ALL_RESULTS_DIR)
 
-spikes_threshold=15 # From how many spikes do we consider a neuron as active?
-
 for NAME in sorted(os.listdir(BASE_DIR)):
     directory = BASE_DIR+"/"+NAME
     gt_rois_file = directory+"/"+NAME+"_ROI.zip"
