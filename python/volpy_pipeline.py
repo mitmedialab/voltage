@@ -48,9 +48,9 @@ basedir = "/home/yves/Projects/active/Fixstars/datasets/VolPy_dataset/"
 
 
 datasets = [
-             # ["TEG.01.02", 300, True],
-             # ["TEG.02.01", 300, True],
-             #    ["TEG.03.01", 300, True],
+                ["TEG.01.02", 300, True],
+                ["TEG.02.01", 300, True],
+                ["TEG.03.01", 300, True],
                 ["L1.00.00", 400, True],
                 ["L1.01.00", 400, True],
                 ["L1.01.35", 400, True],
