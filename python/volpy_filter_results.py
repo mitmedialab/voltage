@@ -22,6 +22,8 @@ for NAME in sorted(os.listdir(BASE_DIR)):
     if not os.path.exists(result_dir):
         os.mkdir(result_dir)
     print(NAME)
+    import imagesize
+    width, height = imagesize.get(image_file)
     results = np.load(results_file, allow_pickle=True).item()
     failed=tot=0
     polygons=list()
@@ -31,7 +33,7 @@ for NAME in sorted(os.listdir(BASE_DIR)):
             failed+=1
         else:
             # multi-page tiff format
-            multipage.append(roi)
+            multipage.append(roi*255)
 
             # R-CNN npz format
             # img2 = ndimage.binary_dilation(roi, [[False, True, False], [True, True, True], [False, True, False]])
@@ -46,6 +48,8 @@ for NAME in sorted(os.listdir(BASE_DIR)):
         data = np.stack(multipage).astype('uint8')
         tifffile.imwrite(f"{ALL_RESULTS_DIR}/{NAME}_rois.tif", data, photometric='minisblack')
     else:
-        open(f"{ALL_RESULTS_DIR}/{NAME}_rois.tif", "w").close()
+        data = np.zeros((height, width))
+        tifffile.imwrite(f"{ALL_RESULTS_DIR}/{NAME}_rois.tif", data, photometric='minisblack')
+        # open(f"{ALL_RESULTS_DIR}/{NAME}_rois.tif", "w").close()
         print(f"Warning! {ALL_RESULTS_DIR}/{NAME}_rois.tif is empty")
     print(f"{failed} on {tot} failed")
