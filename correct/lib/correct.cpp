@@ -58,6 +58,7 @@ void correct_video_cpu(int num_frames, int height, int width,
                        float *in_image,
                        float **out_image,
                        float **out_x, float **out_y,
+                       int normalize,
                        int motion_search_level, int motion_search_size,
                        int motion_patch_size, int motion_patch_offset,
                        int shading_period,
@@ -91,9 +92,12 @@ void correct_video_cpu(int num_frames, int height, int width,
     
     TimerUtil *tu;
 
-    tu = new TimerUtil("intensity normalization");
-    normalize_intensity(t, w, h, img);
-    delete tu;
+    if(normalize)
+    {
+        tu = new TimerUtil("intensity normalization");
+        normalize_intensity(t, w, h, img);
+        delete tu;
+    }
 
     std::vector<motion_t> motion_list;
     motion_range_t range;

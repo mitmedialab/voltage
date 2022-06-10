@@ -4,7 +4,7 @@ from libcorrect import correct_video_cython
 
 
 def correct_video(in_file, correction_file, motion_file,
-                  first_frame=0,
+                  first_frame=0, normalize=True,
                   motion_search_level=2, motion_search_size=5,
                   motion_patch_size=10, motion_patch_offset=7,
                   shading_period=1000,
@@ -25,6 +25,8 @@ def correct_video(in_file, correction_file, motion_file,
         First frame number of the video. If nonzero, the input video will be
         treated as if it starts with that frame number by skipping the first
         frames. The default is zero.
+    normalize : boolean, optional
+        If True (default), the video intensity will be normalized.
     motion_search_level : integer, optional
         Max level of multiresolution motion correction. The default is 2.
     motion_search_size : integer, optional
@@ -52,6 +54,7 @@ def correct_video(in_file, correction_file, motion_file,
     in_image = tiff.imread(in_file).astype('float32')
     in_image = in_image[first_frame:] # skip first frames
     c, x, y = correct_video_cython(in_image,
+                                   1 if normalize else 0,
                                    motion_search_level, motion_search_size,
                                    motion_patch_size, motion_patch_offset,
                                    shading_period,

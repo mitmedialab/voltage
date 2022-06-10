@@ -83,6 +83,7 @@ def correct(in_dir, correction_dir, filename):
                       motion_search_size=params['MOTION_SEARCH_SIZE'],
                       motion_patch_size=params['MOTION_PATCH_SIZE'],
                       motion_patch_offset=params['MOTION_PATCH_OFFSET'],
+                      shading_period=params['TIME_SEGMENT_SIZE'],
                       num_threads=params['NUM_THREADS_CORRECT'])
         
     else: # batch mode, single-threaded jobs for multiple files
@@ -92,11 +93,12 @@ def correct(in_dir, correction_dir, filename):
             correction_file = correction_dir.joinpath(in_file.name)
             motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
             args.append((in_file, correction_file, motion_file,
-                         0,
+                         0, False,
                          params['MOTION_SEARCH_LEVEL'],
                          params['MOTION_SEARCH_SIZE'],
                          params['MOTION_PATCH_SIZE'],
-                         params['MOTION_PATCH_OFFSET'], 1000, 1))
+                         params['MOTION_PATCH_OFFSET'],
+                         params['TIME_SEGMENT_SIZE'], 1))
 
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(correct_video, args)
