@@ -59,17 +59,21 @@ def read_roi(roi_file, image_shape):
 
     """
     roi_file = pathlib.Path(roi_file)
-    roi_ext = roi_file.suffix.lower()
-    if(roi_ext == '.roi'):
-        roi_dict = read_roi_file(str(roi_file)) # can't handle pathlib.Path
-    elif(roi_ext == '.zip'):
-        roi_dict = read_roi_zip(roi_file)
-    elif(roi_ext == '.tif' or roi_ext == '.tiff'):
-        masks = tiff.imread(roi_file).astype(bool)
-        # If no ROI, the image has one black page, which should be removed
-        if(len(masks) == 1 and not np.any(masks[0])):
-            masks = np.zeros((0,) + masks.shape[1:])
-        return masks
+    if(roi_file.exists()):
+        roi_ext = roi_file.suffix.lower()
+        if(roi_ext == '.roi'):
+            roi_dict = read_roi_file(str(roi_file)) # can't handle pathlib.Path
+        elif(roi_ext == '.zip'):
+            roi_dict = read_roi_zip(roi_file)
+        elif(roi_ext == '.tif' or roi_ext == '.tiff'):
+            masks = tiff.imread(roi_file).astype(bool)
+            # If no ROI, the image has one black page, which should be removed
+            if(len(masks) == 1 and not np.any(masks[0])):
+                masks = np.zeros((0,) + masks.shape[1:])
+            return masks
+        else:
+            print('unsupported ROI format: %s' % roi_file)
+            roi_dict = {}
     else:
         print('file not found: %s' % roi_file)
         roi_dict = {}

@@ -1,4 +1,5 @@
 import time
+import math
 import pandas as pd
 import tifffile as tiff
 
@@ -51,7 +52,10 @@ class Timer:
             num_frames = len(tif.pages)
         self.df['# frames'] = num_frames
         self.df['Time/frame [msec]'] = elapsed_time_total * 1000 / num_frames
-        self.df['Frame rate [fps]'] = num_frames / elapsed_time_total
+        if(elapsed_time_total == 0):
+            self.df['Frame rate [fps]'] = math.nan
+        else:
+            self.df['Frame rate [fps]'] = num_frames / elapsed_time_total
         data_size_in_gb = data_filename.stat().st_size / (1024 ** 3)
         self.df['Data size [GB]'] = data_size_in_gb
         self.df['Time/size [sec/GB]'] = elapsed_time_total / data_size_in_gb

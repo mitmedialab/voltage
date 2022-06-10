@@ -25,9 +25,9 @@ def _savefig(plt, filename):
     None.
 
     """
-    p = Path(filename)
-    plt.savefig(p.with_suffix('.png'), bbox_inches='tight')
-    plt.savefig(p.with_suffix('.svg'), bbox_inches='tight')
+    filename = str(filename)
+    plt.savefig(filename + '.png', bbox_inches='tight')
+    plt.savefig(filename + '.svg', bbox_inches='tight')
 
 
 
