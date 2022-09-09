@@ -30,16 +30,16 @@ IMAGE_SHAPE = (128, 128)
 TIME_FRAMES = 1000
 NUM_VIDEOS = 1000
 NUM_CELLS_MIN = 5
-NUM_CELLS_MAX = 15
+NUM_CELLS_MAX = 30
 
 
 # training parameters
 NUM_DARTS = 10
 BATCH_SIZE = 128
-EPOCHS = 10
+EPOCHS = 20
 TILE_STRIDES = (16, 16)
 
-DATA_DIR = '/media/bandy/nvme_work/voltage/train/synthetic'
-PREPROC_DIR = '/media/bandy/nvme_work/voltage/train/preproc'
-MODEL_DIR = '/media/bandy/nvme_work/voltage/train/model'
-OUTPUT_DIR = '/media/bandy/nvme_work/voltage/train'
+DATA_DIR = '/media/bandy/nvme_data/voltage/train/synthetic'
+PREPROC_DIR = '/media/bandy/nvme_data/voltage/train/preproc'
+MODEL_DIR = '/media/bandy/nvme_data/voltage/train/model'
+OUTPUT_DIR = '/media/bandy/nvme_data/voltage/train'
