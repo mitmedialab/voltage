@@ -2,6 +2,7 @@ import math
 import keras
 import numpy as np
 import tifffile as tiff
+from pathlib import Path
 from skimage.transform import resize
 from scipy.signal.windows import gaussian
 
@@ -228,7 +229,7 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
                      photometric='minisblack')
 
 
-def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
+def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
                    seed, validation_ratio,
                    tile_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
@@ -252,8 +253,9 @@ def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
         corresponds to one channel of the input.
     target_dir : pathlib.Path
         Directory path containing target files.
-    model_file : string or pathlib.Path
-        File path containing a learned model.
+    model_dir : string or pathlib.Path
+        Directory path containing learned models. The model with the smallest
+        validation loss will be used.
     out_dir : pathlib.Path
         Directory path to which U-Net outputs will be saved.
     ref_dir : pathlib.Path
@@ -284,7 +286,11 @@ def validate_model(input_dir_list, target_dir, model_file, out_dir, ref_dir,
     valid_input_paths = data[2]
     valid_target_paths = data[3]
 
-    model, model_io_shape = _load_model(model_file)
+    # sort model file names by validation loss
+    model_files = sorted(Path(model_dir).glob('model*.h5'),
+                         key=lambda x: float(x.stem.split('v')[-1]))
+    # first item of the sorted list has the lowest validation loss
+    model, model_io_shape = _load_model(model_files[0])
 
     valid_seq = VI_Sequence(batch_size, model_io_shape, tile_shape,
                             valid_input_paths, valid_target_paths,

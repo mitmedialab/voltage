@@ -6,7 +6,7 @@ from .model import get_model
 from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 
-def train_model(input_dir_list, target_dir, model_file, log_file,
+def train_model(input_dir_list, target_dir, model_dir, log_file,
                 seed, validation_ratio,
                 model_io_shape, num_darts, batch_size, epochs):
     """
@@ -19,8 +19,8 @@ def train_model(input_dir_list, target_dir, model_file, log_file,
         corresponds to one channel of the input.
     target_dir : pathlib.Path
         Directory path containing target files.
-    model_file : string or pathlib.Path
-        File path to which the trained model will be saved.
+    model_dir : string or pathlib.Path
+        Directory path to which the trained models will be saved.
     log_file : string or pathlib.Path
         File path to which the training log will be saved.
     seed : integer
@@ -75,17 +75,18 @@ def train_model(input_dir_list, target_dir, model_file, log_file,
     #opt = keras.optimizers.Adamax() # so-so
     #opt = keras.optimizers.Nadam() # so-so
     opt = keras.optimizers.RMSprop() # good
+    #opt = keras.optimizers.RMSprop(learning_rate=0.01)
     model.compile(optimizer=opt, loss='binary_crossentropy')
     #model.compile(optimizer=opt, loss=weighted_bce)
     #model.compile(optimizer=opt, loss=dice_loss)
     #model.compile(optimizer=opt, loss=bce_dice_loss)
     #model.compile(optimizer=opt, loss=iou_loss)
 
+    model_file = model_dir.joinpath('model_e{epoch:02d}_v{val_loss:.4f}.h5')
     callbacks = [
         keras.callbacks.ModelCheckpoint(model_file,
                                         monitor='val_loss',
                                         verbose=1,
-                                        save_best_only=True,
                                         save_weigts_only=False,
                                         mode='min'),
         keras.callbacks.CSVLogger(log_file)

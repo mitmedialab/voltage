@@ -93,7 +93,7 @@ def correct(in_dir, correction_dir, filename):
             correction_file = correction_dir.joinpath(in_file.name)
             motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
             args.append((in_file, correction_file, motion_file,
-                         0, False,
+                         0, True,
                          params['MOTION_SEARCH_LEVEL'],
                          params['MOTION_SEARCH_SIZE'],
                          params['MOTION_PATCH_SIZE'],
@@ -143,16 +143,16 @@ def preprocess(in_dir, temporal_dir, spatial_dir, filename):
     print('%.1f seconds to preprocess' % (toc - tic))
 
 
-def train(in_dirs, target_dir, model_file, log_file, out_dir, ref_dir):
+def train(in_dirs, target_dir, model_dir, log_file, out_dir, ref_dir):
     tic = time.perf_counter()
 
     seed = 0
     validation_ratio = 5
-    train_model(in_dirs, target_dir, model_file, log_file,
+    train_model(in_dirs, target_dir, model_dir, log_file,
                 seed, validation_ratio,
                 params['MODEL_IO_SHAPE'], params['NUM_DARTS'],
                 params['BATCH_SIZE'], params['EPOCHS'])
-    validate_model(in_dirs, target_dir, model_file, out_dir, ref_dir,
+    validate_model(in_dirs, target_dir, model_dir, out_dir, ref_dir,
                    seed, validation_ratio,
                    params['MODEL_IO_SHAPE'], params['TILE_STRIDES'],
                    params['BATCH_SIZE'])
@@ -243,13 +243,12 @@ if(params['RUN_MODE'] == 'train'):
 
     # train the U-Net
     model_dir = pathlib.Path(params['MODEL_DIR'])
-    model_file = model_dir.joinpath('model.h5')
     log_file = model_dir.joinpath('log.csv')
     segment_dir = set_dir(params['OUTPUT_DIR'], 'segmented')
     validate_dir = set_dir(params['OUTPUT_DIR'], 'validate')
     if(params['RUN_TRAIN']):
         train([temporal_dir, spatial_dir], decimated_gt_dir,
-              model_file, log_file, segment_dir, validate_dir)
+              model_dir, log_file, segment_dir, validate_dir)
 
     # demix cells from U-Net outputs
     demix_dir = set_dir(params['OUTPUT_DIR'], 'demixed')
@@ -306,7 +305,8 @@ elif(params['RUN_MODE'] == 'run'):
         reference_file = out_dir.joinpath(tag + '_reference.tif')
         if(params['RUN_SEGMENT']):
             timer.start()
-            apply_model([temporal_file, spatial_file], params['MODEL_FILE'],
+            apply_model([temporal_file, spatial_file],
+                        params['MODEL_FILE'],
                         segment_file, reference_file,
                         params['TILE_SHAPE'], params['TILE_STRIDES'],
                         params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
@@ -318,7 +318,7 @@ elif(params['RUN_MODE'] == 'run'):
         demix_file = out_dir.joinpath(tag + '_masks.tif')
         if(params['RUN_DEMIX']):
             timer.start()
-            compute_masks(segment_file, correction_file, demix_file,
+            compute_masks(segment_file, spatial_file, demix_file,
                           num_threads=params['NUM_THREADS_DEMIXING'],
                           **params)
             timer.stop('Mask')
