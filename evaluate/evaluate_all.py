@@ -8,7 +8,7 @@ from .f1score import calc_f1_scores
 REPRESENTATIVE_IOU = 0.4
 
 
-def _aggregate_scores(out_dir):
+def _aggregate_scores(out_dir, weighted=False):
     """
     Aggregate individual evaluation scores.
 
@@ -17,6 +17,14 @@ def _aggregate_scores(out_dir):
     out_dir : string
         Path to a directory from which individual evaluation statistics will
         be read, and in which aggregated evaluation will be saved.
+    weighted : boolean, optional
+        There are two ways to calculate aggregate F1 scores: one is to
+        calculate it from the total numbers of true/false positives/negatives,
+        and the other is to average F1 scores from individual datasets.
+        The former puts more weight on datasets containing more neurons,
+        whereas the latter treats datasets equally. Since the former makes
+        datasets with single neurons almost meaningless, the latter is set as
+        default (weighted=False).
 
     Returns
     -------
@@ -41,7 +49,7 @@ def _aggregate_scores(out_dir):
         basename = in_file.stem
         df = pd.read_csv(in_file.with_name(basename + '_counts.csv'))
         if(first):
-            df_sum = df[['TruePos', 'FalsePos', 'FalseNeg']]
+            df_sum = df.drop(columns=['IoU_Thresh'])
             thresholds = df['IoU_Thresh']
             indices = np.where(thresholds >= REPRESENTATIVE_IOU)
             representative_iou_index = indices[0][0]
@@ -54,7 +62,13 @@ def _aggregate_scores(out_dir):
         recall_each.append(df['Recall'][representative_iou_index])
         f1_each.append(df['F1'][representative_iou_index])
 
-    f1_all, precision_all, recall_all = calc_f1_scores(df_sum)
+    if(weighted):
+        f1_all, precision_all, recall_all = calc_f1_scores(df_sum)
+    else:
+        f1_all = df_sum['F1'] / len(filenames)
+        precision_all = df_sum['Precision'] / len(filenames)
+        recall_all = df_sum['Recall'] / len(filenames)
+
     f1_rep = f1_all[representative_iou_index]
 
     df_sum.insert(0, 'IoU_Thresh', thresholds)
