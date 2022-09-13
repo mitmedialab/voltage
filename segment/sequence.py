@@ -241,13 +241,17 @@ class VI_Sequence(Sequence):
             ye = ys + self.patch_shape[0] # no greater than self.image_shape[0]
             xe = xs + self.patch_shape[1] # no greater than self.image_shape[1]
             if(self.patch_shape == self.model_io_shape):
-                inputs[i] = self.input_images[img_idx, ys:ye, xs:xe]
+                in_tmp = self.input_images[img_idx, ys:ye, xs:xe]
                 targets[i] = self.target_images[img_idx, ys:ye, xs:xe]
             else:
-                inputs[i] = resize(self.input_images[img_idx, ys:ye, xs:xe],
-                                   self.model_io_shape, mode='reflect')
+                in_tmp = resize(self.input_images[img_idx, ys:ye, xs:xe],
+                                self.model_io_shape, mode='reflect')
                 targets[i] = resize(self.target_images[img_idx, ys:ye, xs:xe],
                                     self.model_io_shape, mode='reflect')
+            # patch-wise normalization
+            vmax = np.amax(in_tmp)
+            vmin = np.amin(in_tmp)
+            inputs[i] = (in_tmp - vmin) / (vmax - vmin)
 
         targets = targets[:, :, :, np.newaxis] # add 4th dimension of size 1
         return inputs, targets
