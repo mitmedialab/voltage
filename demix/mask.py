@@ -4,8 +4,9 @@ import tifffile as tiff
 import multiprocessing as mp
 from skimage import measure
 from skimage.transform import resize, rescale
-from skimage.morphology import binary_erosion
+from skimage.morphology import binary_erosion, binary_dilation, disk
 from skimage.filters import threshold_otsu
+from sklearn.decomposition import NMF
 from scipy.ndimage import gaussian_filter
 
 from .demix import demix_cells_incrementally
@@ -83,7 +84,10 @@ def filter_regions(components, cell_probability, cell_image, **kwargs):
         # probability and the mean image intensity within the region
         mean_probability = np.mean(crop_probability, where=c.image)
         mean_image = np.mean(crop_image, where=c.image)
-        activity_levels.append(mean_probability * mean_image)
+        if(mean_image < 0.0001):
+            activity_levels.append(0)
+        else:
+            activity_levels.append(mean_probability * mean_image)
 
     # Discard candidate regions whose activity level is either less than
     # a fraction of the maximum level found in the data or is very small
@@ -199,6 +203,7 @@ def run_demixing_each(mask, probability_maps, region_id,
     # predetermined length (DEMIX_REGION_SIZE_MAX). This is to prevent a large
     # region from getting oversplit just because it has more pixels and tends
     # to have more variability between them. It also reduces the computation.
+    """
     size_y, size_x = mask.shape
     size_max = kwargs['DEMIX_REGION_SIZE_MAX']
     if(size_x >= size_y and size_y > size_max):
@@ -207,10 +212,10 @@ def run_demixing_each(mask, probability_maps, region_id,
     elif(size_y >= size_x and size_x > size_max):
         size_y = math.floor(size_y / size_x * size_max)
         size_x = size_max
-
-    down = resize(probability_maps, (len(probability_maps), size_y, size_x),
-                  mode='constant', anti_aliasing=True)
-    demixed = demix_cells_incrementally(down, region_id,
+    """
+    #down = resize(probability_maps, (len(probability_maps), size_y, size_x),
+    #              mode='constant', anti_aliasing=True)
+    demixed = demix_cells_incrementally(probability_maps, region_id,
                                         mode, num_threads, save_images)
     demixed = resize(demixed, (len(demixed),) + mask.shape, mode='constant')
 
@@ -311,37 +316,33 @@ def run_demixing(components, probability_maps,
     return demixed_all, masks_all
 
 
-def compute_masks(in_file, data_file, out_file,
-                  mode='cpu', num_threads=0, save_images=False, **kwargs):
+def compute_masks(prob_file, img_file, out_file,
+                  prob_thresh, area_thresh, background_sigma,
+                  save_images=False):
     """
     Compute binary masks representing the footprints of neurons based on their
     firing probability maps while demixing their spatial overlaps if any.
 
     Parameters
     ----------
-    in_file : string
+    prob_file : string
         Input file path of a multi-page tiff containig a sequence of
         probability maps of firing neurons.
-    data_file : string
-        Input file path of a multi-page tiff containing a motion/shading
-        corrected voltage imaging video.
+    img_file : string
+        Input file path of a multi-page tiff containing a sequence of
+        motion/shading corrected images.
     out_file : string
         Output tiff file path to which binary masks representing the footprints
         of detected and demixed neurons will be saved.
-    mode : string, optional
-        Execution mode. Options are 'cpu' (multithreaded C++ on CPU, default),
-        and 'py' (pure Python implementation). GPU mode is not available
-        (and probably will not be in the future) because the workload is
-        not massively parallelizable.
-    num_threads : integer, optional
-        The number of threads for the multithreaded C++ execution (mode='cpu').
-        Up to this many threads will be used for each candidate cell region.
-        Therefore, up to (num_threads x # regions) threads will run in total
-        as long as CPU cores are available. If it is 0 (default), everything
-        will run in serial, processing each region on a single thread.
+    prob_thresh : float
+        Probability value in [0, 1] above which pixels are considered
+        belonging to firing neurons.
+    area_thresh : int
+        Regions having no less area than this will be extracted as neurons.
+    background_sigma : float
+        Gaussian filter size to estimate a background intensity map.
     save_images : boolean, optional
         If True, intermediate images will be saved for debugging.
-        Some (optimization progress) images will be saved only when mode='py'.
         The default is False.
 
     Returns
@@ -349,72 +350,94 @@ def compute_masks(in_file, data_file, out_file,
     None.
 
     """
-    kwargs.setdefault('PROBABILITY_MAPS_SCALE', 1/4)
-    kwargs.setdefault('ACTIVE_REGIONS_SIGMA', 10)
-    kwargs.setdefault('ACTIVE_REGIONS_THRESHOLD', 0.001)
-    kwargs.setdefault('BACKGROUND_SIGMA', 10)
-
-    print('demixing ' + in_file.stem)
-
-    probability_maps = tiff.imread(in_file).astype(float)
-    image_shape = probability_maps.shape[1:]
+    prob_data = tiff.imread(prob_file).astype(float)
+    avg_prob = np.mean(prob_data, axis=0)
     
-    # temporal average of probability maps
-    avg_probability = np.mean(probability_maps, axis=0)
-    # reduce clutter by downscaling
-    down = rescale(avg_probability, kwargs['PROBABILITY_MAPS_SCALE'],
-                   mode='constant', anti_aliasing=True)
-    # resize back to the original shape
-    avg_probability = resize(down, image_shape, mode='constant')
-
-    # extract high probabilty regions compared with their surroundings
-    th = gaussian_filter(avg_probability, kwargs['ACTIVE_REGIONS_SIGMA'])
-    active_regions = avg_probability - th > kwargs['ACTIVE_REGIONS_THRESHOLD']
-
-    # temporal average of motion/shading-corrected input video
-    video = tiff.imread(data_file).astype(float)
-    avg_image = np.mean(video, axis=0)
-    # extract low spatial frequency content as background
-    background = gaussian_filter(avg_image, kwargs['BACKGROUND_SIGMA'])
+    img_data = tiff.imread(img_file).astype(float)
+    avg_image = np.mean(img_data, axis=0)
     # subtract background to leave the intensity of foreground cells
+    background = gaussian_filter(avg_image, background_sigma)
     avg_image -= background
 
-    if(save_images):
-        tiff.imwrite('avg_probability.tif', avg_probability.astype('float32'),
-                     photometric='minisblack')
-        tiff.imwrite('active_regions.tif', active_regions.astype('float32'),
-                     photometric='minisblack')
-        tiff.imwrite('avg_image.tif', avg_image.astype('float32'),
-                     photometric='minisblack')
+    t, h, w = prob_data.shape
+
+    # extract high probabilty regions as spikes
+    binary_segm = prob_data > prob_thresh
+    # filter out non-cell regions
+    masks = np.zeros_like(binary_segm)
+    for i, mask in enumerate(binary_segm):
+        label_image = measure.label(mask)
+        components = measure.regionprops(label_image)
+        for c in components:
+            if(c.area < area_thresh):
+                continue
+            elif(c.eccentricity > 0.98):
+                continue
+            else:
+                ymin, xmin, ymax, xmax = c.bbox
+                masks[i, ymin:ymax, xmin:xmax] = np.logical_or(masks[i, ymin:ymax, xmin:xmax], c.image)
 
 
-    # separate active regions into connected components
-    label_image = measure.label(binary_erosion(active_regions))
-    components = measure.regionprops(label_image)
+    component_list = []
+    any_change = True
+    X = masks.reshape((t, h * w))
+    while(any_change):
+        any_change = False
+        
+        model = NMF(n_components=1, init='random', random_state=0)
+        W = model.fit_transform(X)
+        H = model.components_
+        Y = H.reshape((h, w))
+        
+        th = threshold_otsu(Y)
+        binary_image = Y > th
+        label_image = measure.label(binary_image)
+        components = measure.regionprops(label_image)
+        foreground = np.zeros_like(binary_image)
+        for c in components:
+            if(c.area < area_thresh):
+                continue
+            elif(c.eccentricity > 0.98):
+                continue
+            else:
+                ymin, xmin, ymax, xmax = c.bbox
+                tmp = np.zeros((h, w), dtype=bool)
+                tmp[ymin:ymax, xmin:xmax] = c.image
+                intensity = np.mean(avg_image, where=tmp)
+                prob = np.mean(avg_prob, where=tmp)
+                if(intensity < 0.0001):
+                    continue
+                elif(intensity * prob < 0.0001):
+                    continue
 
-    if(save_images):
-        save_components(components, image_shape, 'masks_initial.tif')
+                #intersection = np.logical_and(total_foreground[ymin:ymax, xmin:xmax], c.image)
+                #if(np.sum(intersection) < c.area * 0.8):
+                foreground[ymin:ymax, xmin:xmax] = np.logical_or(foreground[ymin:ymax, xmin:xmax], c.image)
+                component_list.append((c, intensity, prob))
+                any_change = True
+        
+        # remove detected foreground from the observation
+        Y[np.logical_not(binary_dilation(foreground, selem=disk(3)))] = 0
+        Xm1 = X.astype(float) - np.matmul(W, Y.reshape((1, h * w)))
+        # turn it back into a sequence of binary imgages
+        X = Xm1 > prob_thresh
+        masks = X.reshape((t, h, w))
 
-    # discard unlikely regions from the candidates
-    components = filter_regions(components, avg_probability, avg_image,
-                                **kwargs)
 
-    if(save_images):
-        save_components(components, image_shape, 'masks_filtered.tif')
-
-    # demix potentially overlapping cells in each of the regions
-    demixed, masks = run_demixing(components, probability_maps,
-                                  mode, num_threads, save_images)
-
-    if(save_images):
-        if(len(demixed) == 0):
-            # add a blank image so the file has at least one page
-            demixed = np.zeros((1,) + image_shape)
-        tiff.imwrite('demixed.tif', demixed.astype('float32'),
-                     photometric='minisblack')
+    masks = np.zeros((0, h, w), dtype=bool)
+    for c in component_list:
+        #print('component %d' % c[0].label)
+        #print('relative prob %f' % (c[2] / max_prob))
+        #if(c[2] / max_prob < 1/9):
+        #    continue
+        ymin, xmin, ymax, xmax = c[0].bbox
+        tmp = np.zeros((h, w), dtype=bool)
+        tmp[ymin:ymax, xmin:xmax] = c[0].image
+        tmp = binary_dilation(tmp, selem=disk(2))
+        masks = np.concatenate((masks, tmp[np.newaxis]), axis=0)
 
     if(len(masks) == 0):
         # add a blank image so the file has at least one page
-        masks = np.zeros((1,) + image_shape, dtype=bool)
+        masks = np.zeros((1, h, w), dtype=bool)
     tiff.imwrite(out_file, masks.astype('uint8') * 255,
                  photometric='minisblack')

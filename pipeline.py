@@ -20,6 +20,7 @@ params = runpy.run_path(sys.argv[1])
 params.setdefault('FIRST_FRAME', 0)
 params.setdefault('SIGNAL_METHOD', 'max-med')
 params.setdefault('SIGNAL_BINNING', 1)
+params.setdefault('BACKGROUND_SIGMA', 10)
 
 
 def set_dir(base_path, dirname):
@@ -265,6 +266,8 @@ if(params['RUN_MODE'] == 'train'):
 elif(params['RUN_MODE'] == 'run'):
     for i, filename in enumerate(params['INPUT_FILES']):
         tag = filename.stem
+        print('')
+        print('Processing ' + tag)
         out_dir = set_dir(params['OUTPUT_DIR'], tag)
         timer = Timer(out_dir.joinpath(tag + '_times.csv'))
 
@@ -319,8 +322,8 @@ elif(params['RUN_MODE'] == 'run'):
         if(params['RUN_DEMIX']):
             timer.start()
             compute_masks(segment_file, spatial_file, demix_file,
-                          num_threads=params['NUM_THREADS_DEMIXING'],
-                          **params)
+                          0.95, params['AREA_THRESHOLD'],
+                          params['BACKGROUND_SIGMA'])
             timer.stop('Mask')
         else:
             timer.skip('Mask')
