@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 """
+Adapted from CaImAn/demos/general/demo_pipeline_voltage_imaging.py.
+The original comments to follow.
+
 Demo pipeline for processing voltage imaging data. The processing pipeline
 includes motion correction, memory mapping, segmentation, denoising and source
 extraction. The demo shows how to construct the params, MotionCorrect and VOLPY 
@@ -48,18 +51,24 @@ logging.basicConfig(format=
                     level=logging.INFO)
 
 # %%
-def run_volpy_segmentation(input_file, output_dir):
+def run_volpy_segmentation(input_file, output_dir,
+                           frame_rate, min_size, max_size,
+                           do_motion_correction):
     pass  # For compatibility between running under Spyder and the CLI
 
     # %%  Load demo movie and ROIs
     #fnames = download_demo('demo_voltage_imaging.hdf5', 'volpy')  # file path to movie file (will download if not present)
     fnames = str(input_file)
+    file_dir = os.path.split(fnames)[0]
+
     input_file = Path(input_file)
     output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True)
     
 #%% dataset dependent parameters
     # dataset dependent parameters
-    fr = 400                                        # sample rate of the movie
+    #fr = 400                                        # sample rate of the movie
+    fr = frame_rate
 
     # motion correction parameters
     pw_rigid = False                                # flag for pw-rigid motion correction
@@ -94,9 +103,16 @@ def run_volpy_segmentation(input_file, output_dir):
     # first we create a motion correction object with the specified parameters
     mc = MotionCorrect(fnames, dview=dview, **opts.get_group('motion'))
     # Run correction
-    mc.motion_correct(save_movie=True)
-    mv = cm.load(mc.mmap_file[0])
-    tiff.imwrite(output_dir.joinpath(input_file.stem + '_corrected.tif'), mv, photometric='minisblack')
+    #do_motion_correction = True
+    if do_motion_correction:
+        mc.motion_correct(save_movie=True)
+        mv = cm.load(mc.mmap_file[0])
+        tiff.imwrite(output_dir.joinpath(input_file.stem + '_corrected.tif'), mv, photometric='minisblack')
+    else: 
+        mc_list = [file for file in os.listdir(file_dir) if 
+                   (os.path.splitext(os.path.split(fnames)[-1])[0] in file and '.mmap' in file)]
+        mc.mmap_file = [os.path.join(file_dir, mc_list[0])]
+        print(f'reuse previously saved motion corrected file:{mc.mmap_file}')
 
 # %% SEGMENTATION
     # create summary images
@@ -113,13 +129,11 @@ def run_volpy_segmentation(input_file, output_dir):
     # save summary images which are used in the VolPy GUI
     #cm.movie(summary_images).save(fnames[:-5] + '_summary_images.tif')
     tiff.imwrite(output_dir.joinpath(input_file.stem + '_summary_images.tif'), summary_images, photometric='minisblack')
-    #fig, axs = plt.subplots(1, 2)
-    #axs[0].imshow(summary_images[0]); axs[1].imshow(summary_images[2])
-    #axs[0].set_title('mean image'); axs[1].set_title('corr image')
+    tiff.imwrite(output_dir.joinpath(input_file.stem + '_spatial.tif'), summary_images[0], photometric='minisblack')
 
     #elif method == 'maskrcnn':                 # Important!! Make sure install keras before using mask rcnn. 
     weights_path = download_model('mask_rcnn')    # also make sure you have downloaded the new weight. The weight was updated on Dec 1st 2020.
-    ROIs = utils.mrcnn_inference(img=summary_images.transpose([1, 2, 0]), size_range=[5, 22],
+    ROIs = utils.mrcnn_inference(img=summary_images.transpose([1, 2, 0]), size_range=[min_size, max_size], # was [5, 22]
                                  weights_path=weights_path, display_result=False) # size parameter decides size range of masks to be selected
     #cm.movie(ROIs).save(fnames[:-5] + 'mrcnn_ROIs.hdf5')
     tiff.imwrite(output_dir.joinpath(input_file.stem + '_masks.tif'), ROIs, photometric='minisblack')
@@ -131,8 +145,25 @@ def run_volpy_segmentation(input_file, output_dir):
         os.remove(log_file)
 
 
-input_dir = '/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_TEG'
-input_files = sorted(Path(input_dir).glob('*/*.tif'))
-output_dir = '/media/bandy/nvme_work/voltage/volpyTEG_volpy'
-for input_file in input_files:
-    run_volpy_segmentation(input_file, output_dir)
+INPUT_PATH = Path('/media/bandy/nvme_data/VolPy_Data/Extracted')
+OUTPUT_PATH = Path('/media/bandy/nvme_work/voltage/compare/volpy')
+DATASET_GROUPS = [
+    # (group_name, frame_rate, min_size, max_size)
+    # Note that the sizes are lengths and will be squared to specify an area range
+    # The values are taken from the VolPy paper
+    ('voltage_L1',   400,  0, 1000), # no size constraint
+    ('voltage_TEG',  300, 10, 1000), # remove masks with <100 pixels
+    ('voltage_HPC', 1000, 20, 1000), # remove masks with <400 pixels
+]
+DO_MOTION_CORRECTION = True # if False, previously saved result (mmap) will be used
+
+for group in DATASET_GROUPS:
+    group_name, frame_rate, min_size, max_size = group
+    input_dir = INPUT_PATH.joinpath(group_name)
+    input_files = sorted(input_dir.glob('*/*.tif'))
+    output_dir = OUTPUT_PATH.joinpath(group_name)
+    output_dir.mkdir(exist_ok=True)
+    for input_file in input_files:
+        dataset_name = input_file.stem
+        run_volpy_segmentation(input_file, output_dir.joinpath(dataset_name),
+                               frame_rate, min_size, max_size, DO_MOTION_CORRECTION)
