@@ -53,7 +53,7 @@ logging.basicConfig(format=
 # %%
 def run_volpy_segmentation(input_file, output_dir,
                            frame_rate, min_size, max_size,
-                           do_motion_correction):
+                           do_motion_correction, weights_path):
     pass  # For compatibility between running under Spyder and the CLI
 
     # %%  Load demo movie and ROIs
@@ -103,11 +103,11 @@ def run_volpy_segmentation(input_file, output_dir,
     # first we create a motion correction object with the specified parameters
     mc = MotionCorrect(fnames, dview=dview, **opts.get_group('motion'))
     # Run correction
-    #do_motion_correction = True
     if do_motion_correction:
         mc.motion_correct(save_movie=True)
         mv = cm.load(mc.mmap_file[0])
-        tiff.imwrite(output_dir.joinpath(input_file.stem + '_corrected.tif'), mv, photometric='minisblack')
+        tiff.imwrite(output_dir.joinpath(input_file.stem + '_corrected.tif'),
+                     mv, photometric='minisblack')
     else: 
         mc_list = [file for file in os.listdir(file_dir) if 
                    (os.path.splitext(os.path.split(fnames)[-1])[0] in file and '.mmap' in file)]
@@ -116,27 +116,30 @@ def run_volpy_segmentation(input_file, output_dir,
 
 # %% SEGMENTATION
     # create summary images
-    img = mean_image(mc.mmap_file[0], window = 1000, dview=dview)
+    img = mean_image(mc.mmap_file[0], window=1000, dview=dview)
     img = (img-np.mean(img))/np.std(img)
-    
-    gaussian_blur = False        # Use gaussian blur when there is too much noise in the video
+
+    gaussian_blur = False # Use gaussian blur when there is too much noise in the video
     Cn = local_correlations_movie_offline(mc.mmap_file[0], fr=fr, window=fr*4, 
                                           stride=fr*4, winSize_baseline=fr, 
-                                          remove_baseline=True, gaussian_blur=gaussian_blur,
+                                          remove_baseline=True,
+                                          gaussian_blur=gaussian_blur,
                                           dview=dview).max(axis=0)
     img_corr = (Cn-np.mean(Cn))/np.std(Cn)
     summary_images = np.stack([img, img, img_corr], axis=0).astype(np.float32)
-    # save summary images which are used in the VolPy GUI
-    #cm.movie(summary_images).save(fnames[:-5] + '_summary_images.tif')
-    tiff.imwrite(output_dir.joinpath(input_file.stem + '_summary_images.tif'), summary_images, photometric='minisblack')
-    tiff.imwrite(output_dir.joinpath(input_file.stem + '_spatial.tif'), summary_images[0], photometric='minisblack')
+    tiff.imwrite(output_dir.joinpath(input_file.stem + '_summary_images.tif'),
+                 summary_images, photometric='minisblack')
+    # below is for compatibility with our evaluation framework
+    tiff.imwrite(output_dir.joinpath(input_file.stem + '_spatial.tif'),
+                 summary_images[0], photometric='minisblack')
 
-    #elif method == 'maskrcnn':                 # Important!! Make sure install keras before using mask rcnn. 
-    weights_path = download_model('mask_rcnn')    # also make sure you have downloaded the new weight. The weight was updated on Dec 1st 2020.
-    ROIs = utils.mrcnn_inference(img=summary_images.transpose([1, 2, 0]), size_range=[min_size, max_size], # was [5, 22]
-                                 weights_path=weights_path, display_result=False) # size parameter decides size range of masks to be selected
-    #cm.movie(ROIs).save(fnames[:-5] + 'mrcnn_ROIs.hdf5')
-    tiff.imwrite(output_dir.joinpath(input_file.stem + '_masks.tif'), ROIs, photometric='minisblack')
+    if(not weights_path):
+        weights_path = download_model('mask_rcnn')
+    ROIs = utils.mrcnn_inference(img=summary_images.transpose([1, 2, 0]),
+                                 size_range=[min_size, max_size], # was [5, 22]
+                                 weights_path=weights_path, display_result=False)
+    tiff.imwrite(output_dir.joinpath(input_file.stem + '_masks.tif'),
+                 ROIs, photometric='minisblack')
 
 # %% STOP CLUSTER and clean up log files
     cm.stop_server(dview=dview)
@@ -147,6 +150,7 @@ def run_volpy_segmentation(input_file, output_dir,
 
 INPUT_PATH = Path('/media/bandy/nvme_data/VolPy_Data/Extracted')
 OUTPUT_PATH = Path('/media/bandy/nvme_work/voltage/compare/volpy')
+WEIGHTS_PATH = ''
 DATASET_GROUPS = [
     # (group_name, frame_rate, min_size, max_size)
     # Note that the sizes are lengths and will be squared to specify an area range
@@ -166,4 +170,6 @@ for group in DATASET_GROUPS:
     for input_file in input_files:
         dataset_name = input_file.stem
         run_volpy_segmentation(input_file, output_dir.joinpath(dataset_name),
-                               frame_rate, min_size, max_size, DO_MOTION_CORRECTION)
+                               frame_rate, min_size, max_size,
+                               DO_MOTION_CORRECTION, WEIGHTS_PATH)
+
