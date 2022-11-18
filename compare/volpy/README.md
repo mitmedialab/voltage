@@ -18,14 +18,13 @@ git checkout 91aaec809eceaff9e26041a20c1793dfafdf137f
 ```
 Then, create a conda environment, run setup_env.sh to install necessary packages, and install CaImAn locally.
 ```
-conda create -n <env_name> -c conda-forge -y python=3.7.3
+conda create -n <env_name> -y python=3.7.3
 conda activate <env_name>
 sh ../setup_env.sh
 pip install -e .
 ```
-The reason for running setup_env.sh instead of using CaImAn/environment.yml is because, in order for this VolPy version to work, some packages must have certain versions not specified in the environment.yml. For example:
-* h5py must be of version 2.x instead of 3.x.
-* If the version string of tifffile contains more than three numbers (e.g., X.Y.Z.W), CaImAn/caiman/base/timeseries.py causes an error.
+The reason for running setup_env.sh instead of using CaImAn/environment.yml is because, in order for this VolPy version to work, some packages must have certain versions not specified in the environment.yml.
+Also, in our experimental environment, it was challenging to get TensorFlow to run on GPU by installing everything from conda-forge channel, and therefore setup_env.sh installs only a few packages from conda-forge channel.
 
 The VolPy demo requires a certain directory structure to store data.
 This can be created by running CaImAn/caimanmanager.py according to the CaImAn installation instructions.
@@ -42,4 +41,34 @@ This will use manually annotated neuron ROIs.
 To run automatic neuron segmentation using Mask R-CNN, modify Line 166 of demo_pipeline_voltage_imaging.py as follows (by replacing 0 with 1).
 ```
 method = methods_list[1]
+```
+
+## Run
+
+Run main.py after setting the parameters (the variables in capital letters) approapriately.
+```
+python main.py
+```
+The VolPy datasets can be downloaded from: https://zenodo.org/record/4515768#.Y3gVI77MLE8
+
+## Train
+
+Clone the Mask R-CNN repository
+```
+git clone https://github.com/matterport/Mask_RCNN.git
+```
+Run train.py after setting the parameters (the variables in capital letters) approapriately.
+```
+python train.py
+```
+This will create training and validation data under the Mask_RCNN directory by converting summary images and ground truth ROIs.
+Once done, run the Mask R-CNN training as
+```
+cd Mask_RCNN/samples/neurons
+python neurons.py train --dataset=../../datasets/neurons --weights=coco
+```
+One might need to remove ".." preceding "mrcnn" in the following lines in neuron.py.
+```
+from ..mrcnn.config import Config
+from ..mrcnn import model as modellib, utils
 ```
