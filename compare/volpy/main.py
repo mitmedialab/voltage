@@ -56,6 +56,7 @@ logging.basicConfig(format=
 # %%
 def run_volpy_segmentation(input_file, output_dir,
                            frame_rate, min_size, max_size,
+                           max_shift, use_cuda, gaussian_blur,
                            do_motion_correction, do_summary_creation,
                            weights_path=''):
     pass  # For compatibility between running under Spyder and the CLI
@@ -71,14 +72,13 @@ def run_volpy_segmentation(input_file, output_dir,
     
 #%% dataset dependent parameters
     # dataset dependent parameters
-    #fr = 400                                        # sample rate of the movie
-    fr = frame_rate
+    fr = frame_rate                                 # sample rate of the movie
 
     # motion correction parameters
     pw_rigid = False                                # flag for pw-rigid motion correction
     gSig_filt = (3, 3)                              # size of filter, in general gSig (see below),
                                                     # change this one if algorithm does not work
-    max_shifts = (5, 5)                             # maximum allowed rigid shift
+    max_shifts = (max_shift, max_shift)             # maximum allowed rigid shift
     strides = (48, 48)                              # start a new patch for pw-rigid motion correction every x pixels
     overlaps = (24, 24)                             # overlap between pathes (size of patch strides+overlaps)
     max_deviation_rigid = 3                         # maximum deviation allowed for patch with respect to rigid shifts
@@ -94,7 +94,7 @@ def run_volpy_segmentation(input_file, output_dir,
         'overlaps': overlaps,
         'max_deviation_rigid': max_deviation_rigid,
         'border_nan': border_nan,
-        'use_cuda': False,
+        'use_cuda': use_cuda,
     }
 
     opts = volparams(params_dict=opts_dict)
@@ -129,7 +129,7 @@ def run_volpy_segmentation(input_file, output_dir,
         img = mean_image(mc.mmap_file[0], window=1000, dview=dview)
         img = (img-np.mean(img))/np.std(img)
 
-        gaussian_blur = False # Use gaussian blur when there is too much noise in the video
+        #gaussian_blur = False # Use gaussian blur when there is too much noise in the video
         Cn = local_correlations_movie_offline(mc.mmap_file[0], fr=fr, window=fr*4,
                                               stride=fr*4, winSize_baseline=fr,
                                               remove_baseline=True,
@@ -172,8 +172,12 @@ output_dir = sys.argv[2]
 frame_rate = int(sys.argv[3])
 min_size = int(sys.argv[4])
 max_size = int(sys.argv[5])
-do_motion_correction = bool(sys.argv[6])
-do_summary_creation = bool(sys.argv[7])
-weights_path = sys.argv[8] if len(sys.argv) > 8 else ''
+max_shift = int(sys.argv[6])
+use_cuda = bool(int(sys.argv[7]))
+gaussian_blur = bool(int(sys.argv[8]))
+do_motion_correction = bool(int(sys.argv[9]))
+do_summary_creation = bool(int(sys.argv[10]))
+weights_path = sys.argv[11] if len(sys.argv) > 11 else ''
 run_volpy_segmentation(input_file, output_dir, frame_rate, min_size, max_size,
+                       max_shift, use_cuda, gaussian_blur,
                        do_motion_correction, do_summary_creation, weights_path)

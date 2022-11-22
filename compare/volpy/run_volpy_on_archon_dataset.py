@@ -10,6 +10,9 @@ OUTPUT_PATH = Path('/media/bandy/nvme_work/voltage/compare/volpy/lowmag')
 WEIGHTS_PATH = ''  # if blank, the default weights will be downloaded and used
 MIN_SIZE = 10
 MAX_SIZE = 28
+MAX_SHIFT = 20              # search range for motion correction (20 is equivalent to our 5)
+USE_CUDA = False            # motion correction on GPU
+GAUSSIAN_BLUR = False       # use when the input video is noisy
 DO_MOTION_CORRECTION = True # if False, previously saved result (mmap) will be used
 DO_SUMMARY_CREATION = True  # if False, previously saved result (tiff) will be used
 
@@ -38,13 +41,10 @@ for input_file in input_files:
 
     frame_rate = int(1 / exposure)
     output_dir = OUTPUT_PATH.joinpath(dataset_name)
-    command = 'python main.py %s %s %d %d %d %d %d %s' % (input_file,
-                                                          output_dir,
-                                                          frame_rate,
-                                                          MIN_SIZE, MAX_SIZE,
-                                                          DO_MOTION_CORRECTION,
-                                                          DO_SUMMARY_CREATION,
-                                                          WEIGHTS_PATH)
+    args = (input_file, output_dir, frame_rate, MIN_SIZE, MAX_SIZE,
+            MAX_SHIFT, USE_CUDA, GAUSSIAN_BLUR,
+            DO_MOTION_CORRECTION, DO_SUMMARY_CREATION, WEIGHTS_PATH)
+    command = 'python main.py %s %s %d %d %d %d %d %d %d %d %s' % args
     print(command)
     os.system(command)
     shutil.copy('time_motion_correct.txt', output_dir)

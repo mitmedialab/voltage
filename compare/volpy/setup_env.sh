@@ -31,3 +31,5 @@ do
     conda install -y ${mm} -c conda-forge
 done
 
+pip install scikit-cuda
+
