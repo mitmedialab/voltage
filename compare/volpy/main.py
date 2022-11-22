@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """
+A function to run VolPy motion correction and cell segmentation.
 Adapted from CaImAn/demos/general/demo_pipeline_voltage_imaging.py.
 The original comments to follow.
 
@@ -16,6 +17,8 @@ import logging
 import numpy as np
 import tifffile as tiff
 import os
+import sys
+import time
 from pathlib import Path
 
 try:
@@ -53,7 +56,8 @@ logging.basicConfig(format=
 # %%
 def run_volpy_segmentation(input_file, output_dir,
                            frame_rate, min_size, max_size,
-                           do_motion_correction, weights_path):
+                           do_motion_correction, do_summary_creation,
+                           weights_path=''):
     pass  # For compatibility between running under Spyder and the CLI
 
     # %%  Load demo movie and ROIs
@@ -90,7 +94,7 @@ def run_volpy_segmentation(input_file, output_dir,
         'overlaps': overlaps,
         'max_deviation_rigid': max_deviation_rigid,
         'border_nan': border_nan,
-        'use_cuda': True,
+        'use_cuda': False,
     }
 
     opts = volparams(params_dict=opts_dict)
@@ -104,7 +108,11 @@ def run_volpy_segmentation(input_file, output_dir,
     mc = MotionCorrect(fnames, dview=dview, **opts.get_group('motion'))
     # Run correction
     if do_motion_correction:
+        tic = time.perf_counter()
         mc.motion_correct(save_movie=True)
+        toc = time.perf_counter()
+        with open('time_motion_correct.txt', 'w') as f:
+            f.write('%f\n' % (toc - tic))
         mv = cm.load(mc.mmap_file[0])
         tiff.imwrite(output_dir.joinpath(input_file.stem + '_corrected.tif'),
                      mv, photometric='minisblack')
@@ -116,28 +124,39 @@ def run_volpy_segmentation(input_file, output_dir,
 
 # %% SEGMENTATION
     # create summary images
-    img = mean_image(mc.mmap_file[0], window=1000, dview=dview)
-    img = (img-np.mean(img))/np.std(img)
+    if do_summary_creation:
+        tic = time.perf_counter()
+        img = mean_image(mc.mmap_file[0], window=1000, dview=dview)
+        img = (img-np.mean(img))/np.std(img)
 
-    gaussian_blur = False # Use gaussian blur when there is too much noise in the video
-    Cn = local_correlations_movie_offline(mc.mmap_file[0], fr=fr, window=fr*4, 
-                                          stride=fr*4, winSize_baseline=fr, 
-                                          remove_baseline=True,
-                                          gaussian_blur=gaussian_blur,
-                                          dview=dview).max(axis=0)
-    img_corr = (Cn-np.mean(Cn))/np.std(Cn)
-    summary_images = np.stack([img, img, img_corr], axis=0).astype(np.float32)
-    tiff.imwrite(output_dir.joinpath(input_file.stem + '_summary_images.tif'),
-                 summary_images, photometric='minisblack')
-    # below is for compatibility with our evaluation framework
-    tiff.imwrite(output_dir.joinpath(input_file.stem + '_spatial.tif'),
-                 summary_images[0], photometric='minisblack')
+        gaussian_blur = False # Use gaussian blur when there is too much noise in the video
+        Cn = local_correlations_movie_offline(mc.mmap_file[0], fr=fr, window=fr*4,
+                                              stride=fr*4, winSize_baseline=fr,
+                                              remove_baseline=True,
+                                              gaussian_blur=gaussian_blur,
+                                              dview=dview).max(axis=0)
+        img_corr = (Cn-np.mean(Cn))/np.std(Cn)
+        summary_images = np.stack([img, img, img_corr], axis=0).astype(np.float32)
+        toc = time.perf_counter()
+        with open('time_summary_images.txt', 'w') as f:
+            f.write('%f\n' % (toc - tic))
+        tiff.imwrite(output_dir.joinpath(input_file.stem + '_summary_images.tif'),
+                     summary_images, photometric='minisblack')
+        # below is for compatibility with our evaluation framework
+        tiff.imwrite(output_dir.joinpath(input_file.stem + '_spatial.tif'),
+                     summary_images[0], photometric='minisblack')
+    else:
+        summary_images = tiff.imread(output_dir.joinpath(input_file.stem + '_summary_images.tif'))
 
     if(not weights_path):
         weights_path = download_model('mask_rcnn')
+    tic = time.perf_counter()
     ROIs = utils.mrcnn_inference(img=summary_images.transpose([1, 2, 0]),
                                  size_range=[min_size, max_size], # was [5, 22]
                                  weights_path=weights_path, display_result=False)
+    toc = time.perf_counter()
+    with open('time_segmentation.txt', 'w') as f:
+        f.write('%f\n' % (toc - tic))
     tiff.imwrite(output_dir.joinpath(input_file.stem + '_masks.tif'),
                  ROIs, photometric='minisblack')
 
@@ -148,28 +167,13 @@ def run_volpy_segmentation(input_file, output_dir,
         os.remove(log_file)
 
 
-INPUT_PATH = Path('/media/bandy/nvme_data/VolPy_Data/Extracted')
-OUTPUT_PATH = Path('/media/bandy/nvme_work/voltage/compare/volpy')
-WEIGHTS_PATH = ''
-DATASET_GROUPS = [
-    # (group_name, frame_rate, min_size, max_size)
-    # Note that the sizes are lengths and will be squared to specify an area range
-    # The values are taken from the VolPy paper
-    ('voltage_L1',   400,  0, 1000), # no size constraint
-    ('voltage_TEG',  300, 10, 1000), # remove masks with <100 pixels
-    ('voltage_HPC', 1000, 20, 1000), # remove masks with <400 pixels
-]
-DO_MOTION_CORRECTION = True # if False, previously saved result (mmap) will be used
-
-for group in DATASET_GROUPS:
-    group_name, frame_rate, min_size, max_size = group
-    input_dir = INPUT_PATH.joinpath(group_name)
-    input_files = sorted(input_dir.glob('*/*.tif'))
-    output_dir = OUTPUT_PATH.joinpath(group_name)
-    output_dir.mkdir(exist_ok=True)
-    for input_file in input_files:
-        dataset_name = input_file.stem
-        run_volpy_segmentation(input_file, output_dir.joinpath(dataset_name),
-                               frame_rate, min_size, max_size,
-                               DO_MOTION_CORRECTION, WEIGHTS_PATH)
-
+input_file = sys.argv[1]
+output_dir = sys.argv[2]
+frame_rate = int(sys.argv[3])
+min_size = int(sys.argv[4])
+max_size = int(sys.argv[5])
+do_motion_correction = bool(sys.argv[6])
+do_summary_creation = bool(sys.argv[7])
+weights_path = sys.argv[8] if len(sys.argv) > 8 else ''
+run_volpy_segmentation(input_file, output_dir, frame_rate, min_size, max_size,
+                       do_motion_correction, do_summary_creation, weights_path)
