@@ -3,8 +3,8 @@ import shutil
 from pathlib import Path
 
 
-INPUT_PATH = Path('/media/bandy/nvme_data/VolPy_Data/Extracted')
-OUTPUT_PATH = Path('/media/bandy/nvme_work/voltage/compare/volpy')
+INPUT_PATH = '/media/bandy/nvme_data/VolPy_Data/Extracted'
+OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy'
 WEIGHTS_PATH = ''  # if blank, the default weights will be downloaded and used
 DATASET_GROUPS = [
     # (group_name, frame_rate, min_size, max_size)
@@ -23,9 +23,9 @@ DO_SUMMARY_CREATION = True  # if False, previously saved result (tiff) will be u
 
 for group in DATASET_GROUPS:
     group_name, frame_rate, min_size, max_size = group
-    input_dir = INPUT_PATH.joinpath(group_name)
+    input_dir = Path(INPUT_PATH).joinpath(group_name)
     input_files = sorted(input_dir.glob('*/*.tif'))
-    output_dir = OUTPUT_PATH.joinpath(group_name)
+    output_dir = Path(OUTPUT_PATH).joinpath(group_name)
     output_dir.mkdir(exist_ok=True)
     for input_file in input_files:
         dataset_name = input_file.stem

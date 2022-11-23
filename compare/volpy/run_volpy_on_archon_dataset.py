@@ -5,8 +5,8 @@ from pathlib import Path
 from tifffile import TiffFile
 
 
-INPUT_PATH = Path('/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag')
-OUTPUT_PATH = Path('/media/bandy/nvme_work/voltage/compare/volpy/lowmag')
+INPUT_PATH = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag'
+OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy/lowmag'
 WEIGHTS_PATH = ''  # if blank, the default weights will be downloaded and used
 MIN_SIZE = 10
 MAX_SIZE = 28
@@ -17,8 +17,8 @@ DO_MOTION_CORRECTION = True # if False, previously saved result (mmap) will be u
 DO_SUMMARY_CREATION = True  # if False, previously saved result (tiff) will be used
 
 
-input_files = sorted(INPUT_PATH.glob('*.tif'))
-OUTPUT_PATH.mkdir(exist_ok=True)
+input_files = sorted(Path(INPUT_PATH).glob('*.tif'))
+Path(OUTPUT_PATH).mkdir(exist_ok=True)
 for input_file in input_files:
     dataset_name = input_file.stem
     print('Processing ', dataset_name)
@@ -40,7 +40,7 @@ for input_file in input_files:
         exit()
 
     frame_rate = int(1 / exposure)
-    output_dir = OUTPUT_PATH.joinpath(dataset_name)
+    output_dir = Path(OUTPUT_PATH).joinpath(dataset_name)
     args = (input_file, output_dir, frame_rate, MIN_SIZE, MAX_SIZE,
             MAX_SHIFT, USE_CUDA, GAUSSIAN_BLUR,
             DO_MOTION_CORRECTION, DO_SUMMARY_CREATION, WEIGHTS_PATH)
