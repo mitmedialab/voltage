@@ -99,7 +99,8 @@ def split_training_data(input_path, output_path, gt_path, mode, dataset_groups,
 
 
 #%% Test
-INPUT_PATH = '/media/bandy/nvme_data/VolPy_Data/Extracted'
-OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy'
-DATASET_GROUPS = ['voltage_L1', 'voltage_TEG', 'voltage_HPC']
-split_training_data(INPUT_PATH, OUTPUT_PATH, INPUT_PATH, 0, DATASET_GROUPS, 3, 0)
+if __name__ == '__main__':
+    INPUT_PATH = '/media/bandy/nvme_data/VolPy_Data/Extracted'
+    OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy'
+    DATASET_GROUPS = ['voltage_L1', 'voltage_TEG', 'voltage_HPC']
+    split_training_data(INPUT_PATH, OUTPUT_PATH, INPUT_PATH, 0, DATASET_GROUPS, 3, 0)
