@@ -45,11 +45,38 @@ method = methods_list[1]
 
 ## Run
 
-Run main.py after setting the parameters (the variables in capital letters) approapriately.
+### Run VolPy on VolPy Datasets
+
+The datasets used in the VolPy paper can be downloaded from: https://zenodo.org/record/4515768#.Y3gVI77MLE8
+
+To reproduce the results in the VolPy paper, run the following script after setting the parameters (the variables in capital letters) approapriately.
 ```
-python main.py
+python run_volpy_on_volpy_datasets.py
 ```
-The VolPy datasets can be downloaded from: https://zenodo.org/record/4515768#.Y3gVI77MLE8
+Once done, the accuracy can be evaluated using the voltage pipeline as
+```
+cd ../..
+conda deactivate
+conda activate <voltage>
+python pipeline.py params/volpy/eval_volpy_{l1,teg,hpc}.py
+```
+
+### Run VolPy on Archon Datasets
+
+The Archon dataset can be downloaded from: TBD
+
+Run the following script after setting the parameters.
+```
+python run_volpy_on_archon_dataset.py
+```
+Once done, the accuracy can be evaluated using the voltage pipeline as
+```
+cd ../..
+conda deactivate
+conda activate <voltage>
+python pipeline.py params/volpy/eval_volpy_archon.py
+```
+
 
 ## Train
 
@@ -57,7 +84,7 @@ Clone the Mask R-CNN repository
 ```
 git clone https://github.com/matterport/Mask_RCNN.git
 ```
-Run train.py after setting the parameters (the variables in capital letters) approapriately.
+To test, run train.py after setting the parameters (the variables in capital letters) approapriately.
 ```
 python train.py
 ```
@@ -71,4 +98,33 @@ One might need to remove ".." preceding "mrcnn" in the following lines in neuron
 ```
 from ..mrcnn.config import Config
 from ..mrcnn import model as modellib, utils
+```
+
+### Train VolPy on VolPy Datasets
+
+Run the following script after setting the parameters.
+```
+python train_volpy_on_volpy_datasets.py
+```
+VALIDATION_RATIO is set to 3 to reproduce the stratified 3-fold cross-validation in the VolPy paper.
+Once done, the validation accuracy can be evaluated in the same way as above.
+```
+cd ../..
+conda deactivate
+conda activate <voltage>
+python pipeline.py params/volpy/eval_volpy_{l1,teg,hpc}.py
+```
+
+### Train VolPy on Archon Datasets
+
+Run the following script after setting the parameters.
+```
+python train_volpy_on_archon_datasets.py
+```
+Once done, the validation accuracy can be evaluated in the same way as above.
+```
+cd ../..
+conda deactivate
+conda activate <voltage>
+python pipeline.py params/volpy/eval_volpy_archon.py
 ```
