@@ -17,6 +17,7 @@ cp preprocess.py trefide/trefide/
 cd trefide
 make
 pip install .
+cd ..
 ```
 Following [this issue](https://github.com/adamcohenlab/invivo-imaging/issues/4), trefide/trefide/preprocess.py needs to be replaced by [this](https://github.com/m-xie/trefide/blob/master/trefide/preprocess.py), whose copy is included in this directory.
 
@@ -35,11 +36,7 @@ This is to keep recent versions of numpy.delete(*arr*, *obj*) from causing an er
 Denoise and extract cell components (demix) from the test image (invivo-imaging/demo_data/raw_data.tif).
 
 ### Denoise
-MATLAB is required. Launch MATLAB, navigate to invivo-imaging/denoise, and run main.m. Or in command lines,
-```
-cd invivo-imaging/denoise
-matlab -nodisplay -nosplash -nodesktop -r "run('main.m'); exit;"
-```
+MATLAB is required. Launch MATLAB, navigate to invivo-imaging/denoise, and run main.m.
 If the conda environment name set up above is different from "invivo," edit main.m and replace the name in the line containing "source activate invivo."
 
 ### Demix
