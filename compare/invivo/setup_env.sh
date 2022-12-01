@@ -1,7 +1,5 @@
 #!/bin/sh
 
-conda create -n invivo python=3.6
-conda activate invivo
 conda install -y mkl-devel
 conda install -y cvxopt
 conda install -y -c conda-forge cvxpy
