@@ -8,24 +8,30 @@ conda create -n invivo python=3.6
 conda activate invivo
 sh ./setup_env.sh
 ```
-There is a line of code in Invivo-Imaging that assumes the environment name to be "invivo." A different name may be used, in which case that line needs to be modified (see below).
 
 Install TreFiDe (Trend Filter Denoising)
 ```
 git clone https://github.com/ikinsella/trefide.git
-cp preprocess.py trefide/trefide/
 cd trefide
+git checkout 14dbb21a0cb8a2276ef1616208ac6f69cbb9fc77
+cp ../preprocess.py trefide/
 make
 pip install .
 cd ..
 ```
-Following [this issue](https://github.com/adamcohenlab/invivo-imaging/issues/4), trefide/trefide/preprocess.py needs to be replaced by [this](https://github.com/m-xie/trefide/blob/master/trefide/preprocess.py), whose copy is included in this directory.
+The third line above is to match the TreFiDe version to the one we tested. This may not be necessary and the latest version may also work. 
+The fourth line is a workaround for [this issue](https://github.com/adamcohenlab/invivo-imaging/issues/4), where trefide/trefide/preprocess.py needs to be replaced by [this](https://github.com/m-xie/trefide/blob/master/trefide/preprocess.py), whose copy is included in this directory.
 
 Install Invivo-Imaging (SGPMD-NMF)
 ```
 git clone https://github.com/adamcohenlab/invivo-imaging.git
+cd invivo-imaging
+git checkout 985c610d667d5cab1b169e2e38e5b50e46b00801
+cd ..
 ```
-Modify Line 111 of invivo-imageing/denoise/denoise.py as follows (i.e., add dtype):
+Again, the thrid line above may not be necessary.
+
+Line 111 of invivo-imageing/denoise/denoise.py needs to be modified as follows (i.e., add "dtype=int"):
 ```
 disc_idx = np.array([], dtype=int)
 ```
@@ -45,4 +51,10 @@ Launch Jupyter Notebook and run all the cells of invivo-imaging/demix/main.ipynb
 ```
 cd invivo-imaging/demix
 jupyter notebook main.ipynb
+```
+
+### Run the entire pipeline in a single command
+For convenience, a Python script is provided that runs everything (except for visualization of results). MATLAB is still required.
+```
+python main.py
 ```
