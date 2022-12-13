@@ -26,7 +26,7 @@ $(TARGET): $(OBJS)
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 .cu.o:
-	$(CXX) -c -Xcompiler $(CXXFLAGS) $< -o $@
+	nvcc -c -Xcompiler -fPIC -std=c++11 -O3 $< -o $@
 
 
 clean:

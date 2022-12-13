@@ -4,10 +4,11 @@
 /*
 
 C++ implementation of motion/shading correction
-with OpenMP parallelization on CPU.
+with CPU multithreaded parallelization using OpenMP
+and GPU parallelization using CUDA
 
 */
-void correct_video_cpu(int num_frames, int height, int width,
+void correct_video_cpp(int num_frames, int height, int width,
                        float *in_image,
                        float **out_image,
                        float **out_x, float **out_y,
@@ -15,7 +16,7 @@ void correct_video_cpu(int num_frames, int height, int width,
                        int motion_search_level, int motion_search_size,
                        int motion_patch_size, int motion_patch_offset,
                        int shading_period,
-                       int num_threads);
+                       int use_gpu, int num_threads);
 
 #endif
 

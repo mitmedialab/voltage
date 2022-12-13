@@ -58,7 +58,7 @@ def correct_video(in_file, correction_file, motion_file,
                                    motion_search_level, motion_search_size,
                                    motion_patch_size, motion_patch_offset,
                                    shading_period,
-                                   num_threads)
+                                   1, num_threads)
 
     tiff.imwrite(correction_file, c, photometric='minisblack')
     with h5py.File(motion_file, 'w') as f:

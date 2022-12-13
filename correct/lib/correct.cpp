@@ -54,7 +54,7 @@ static void normalize_intensity(int num_frames, int width, int height, float ***
 }
 
 
-void correct_video_cpu(int num_frames, int height, int width,
+void correct_video_cpp(int num_frames, int height, int width,
                        float *in_image,
                        float **out_image,
                        float **out_x, float **out_y,
@@ -62,7 +62,7 @@ void correct_video_cpu(int num_frames, int height, int width,
                        int motion_search_level, int motion_search_size,
                        int motion_patch_size, int motion_patch_offset,
                        int shading_period,
-                       int num_threads)
+                       int use_gpu, int num_threads)
 {
     if(num_threads > 0)
     {
@@ -103,7 +103,16 @@ void correct_video_cpu(int num_frames, int height, int width,
     motion_range_t range;
 
     tu = new TimerUtil("motion correction");
-    motion_list = correct_motion(motion_param, t, w, h, img, range);
+    if(use_gpu)
+    {
+        copy3d_to_1d(t, w, h, img, in_image);
+        motion_list = correct_motion_gpu(motion_param, t, w, h, in_image, range);
+        copy1d_to_3d(t, w, h, in_image, img);
+    }
+    else
+    {
+        motion_list = correct_motion(motion_param, t, w, h, img, range);
+    }
     delete tu;
 
     *out_x = malloc_float1d(t);
