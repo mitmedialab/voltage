@@ -6,6 +6,7 @@ the MATLAB scripts are called from Python rather than the other way around.
 The relevant parts of invivo-imaging/denoise/main.m are extracted and put in
 ./run_normcorre.m and ./correct_motion.m. For the latter (main.ipynb), all the
 notebook cells except for visualization are copied to this script.
+Added code and comments are marked with "NOTES." 
 """
 import os
 import time
@@ -15,6 +16,7 @@ from pathlib import Path
 from skimage import io
 from sklearn.decomposition import TruncatedSVD
 from scipy.ndimage import center_of_mass
+from scipy.sparse.linalg import svds
 import torch
 
 import sys
@@ -30,7 +32,11 @@ def run_command(command):
     os.system(command)
 
 
-def run_invivo_segmentation(input_file, output_dir):
+def run_invivo_segmentation(input_file, output_dir,
+                            max_block_size=30,
+                            th=4, cut_off_point=0.95,
+                            length_cut=10, length_max=1000, patch_size=30,
+                            corr_th_fix=0.4):
 
     input_file = Path(input_file).absolute()
     output_dir = Path(output_dir).absolute()
@@ -48,10 +54,11 @@ def run_invivo_segmentation(input_file, output_dir):
     trunc_start = 1; # frame to start denoising
     #trunc_length = 5000; # length of movie segment to denoise on
 
-    # modified parameter settings as follows
+    # NOTES: Modified parameter (row_blocks, col_blocks, trunc_length) settings
+    # as follows. The number of blocks are determined such that the block size
+    # is maximized within the specified limit in width and height.
     raw_mov = io.imread(str(input_file))
     trunc_length = raw_mov.shape[0] - 100 # denoising removes first 100 frames
-    max_block_size = 30
     row_blocks = 1
     while(raw_mov.shape[1] // row_blocks >= max_block_size):
         row_blocks += 1
@@ -96,22 +103,31 @@ def run_invivo_segmentation(input_file, output_dir):
     movB = mov.reshape(int(mov.shape[0] / 2), 2, int(mov.shape[1] / 2), 2, mov.shape[2])
     movB = np.mean(np.mean(movB, axis=1), axis=2)
 
-    movB = mov # this seems to cancel the binning
+    movB = mov # NOTES: This seems to cancel the binning
 
     #%% Load Manually Initialized Background
-    bg_flag = os.path.isfile(path + '/ff.tif')
+
+    # NOTES: instead of loading ff.tif and fb.tif, load a background mask
+    # directly and compute ff and fb.
+    #bg_flag = os.path.isfile(path + '/ff.tif')
+    bg_flag = os.path.isfile(path + '/background.tif')
 
     if bg_flag:
         # import manually initialized background components
-        ff_ini = io.imread(path + '/ff.tif')
-        fb_ini = io.imread(path + '/fb.tif')
+        #ff_ini = io.imread(path + '/ff.tif')
+        #fb_ini = io.imread(path + '/fb.tif')
+        background_mask = io.imread(path + '/background.tif')
+        background = mov * np.expand_dims(background_mask, 2)
+        background -= np.mean(background, axis=2, keepdims=True)
+        U, S, V = svds(background.reshape(-1, mov.shape[2]), k=6)
+        ff_ini = np.transpose(V - np.mean(V, axis=1, keepdims=True))
+        fb_ini = U * S
     
         # bin the spatial components
         fb_ini = fb_ini.reshape(mov.shape[1], mov.shape[0], -1).transpose(1, 0, 2)
     #     fb_ini = fb_ini.reshape(int(fb_ini.shape[0] / 2), 2, int(fb_ini.shape[1] / 2), 2, fb_ini.shape[2])
     #     fb_ini = np.mean(np.mean(fb_ini, axis=1), axis=2)
 
-    if bg_flag:
         # select which background components to use for initialization
         bkg_components = range(3)
     
@@ -124,7 +140,7 @@ def run_invivo_segmentation(input_file, output_dir):
     # select which window to demix on
     first_frame = 1
     #last_frame = 5000
-    last_frame = mov.shape[2]
+    last_frame = mov.shape[2] # NOTES: to cover the entire movie
 
     movHP = sup.hp_filt_data(movB, spacing=10)
     
@@ -134,21 +150,21 @@ def run_invivo_segmentation(input_file, output_dir):
 
                               ##### Superpixel parameters
                               # thresholding level
-                              th = [4],
+                              th = [th],
 
                               # correlation threshold for finding superpixels
                               # (range around 0.8-0.99)
-                              cut_off_point = [0.95],
+                              cut_off_point = [cut_off_point],
 
                               # minimum pixel count of a superpixel
                               # don't need to change these unless cell sizes change
-                              length_cut = [10],
+                              length_cut = [length_cut],
 
                               # maximum pixel count of a superpixel
                               # don't need to change these unless cell sizes change
-                              length_max = [1000],
+                              length_max = [length_max],
 
-                              patch_size = [30, 30],
+                              patch_size = [patch_size, patch_size],
 
                               # correlation threshold between superpixels for merging
                               # likely don't need to change this
@@ -159,7 +175,7 @@ def run_invivo_segmentation(input_file, output_dir):
                               ##### Cell-finding, NMF parameters
                               # correlation threshold of pixel with superpixel trace to include pixel in cell
                               # (range 0.3-0.6)
-                              corr_th_fix = 0.4,
+                              corr_th_fix = corr_th_fix,
 
                               # correlation threshold for merging two cells
                               # (default 0.8, but likely don't need to change)
@@ -185,7 +201,7 @@ def run_invivo_segmentation(input_file, output_dir):
     #a = rlt["fin_rlt"]["a"][:,final_cells].copy()
     #c = rlt["fin_rlt"]["c"][:,final_cells].copy()
     b = rlt["fin_rlt"]["b"].copy()
-    # As the final_cells above looks arbitrary, use everything instead
+    # NOTES: As the final_cells above looks arbitrary, use everything instead
     a = rlt["fin_rlt"]["a"].copy()
     c = rlt["fin_rlt"]["c"].copy()
     nCells = c.shape[1]
@@ -282,7 +298,7 @@ def run_invivo_segmentation(input_file, output_dir):
                   np.linalg.inv(np.array(X2[:, :nCells].T @ X2[:, :nCells])) @ X2[:, :nCells].T)
 
     #%% Reshape footprints and generate segmentation masks
-    # What follows is newly added to what's copied from main.m and main.ipynb above
+    # NOTES: What's below is newly added to what's copied from main.m and main.ipynb above
     row_cut_lower = math.floor((raw_mov.shape[1] % (2 * row_blocks)) / 2)
     row_cut_upper = raw_mov.shape[1] - math.ceil((raw_mov.shape[1] % (2 * row_blocks)) / 2)
     col_cut_lower = math.floor((raw_mov.shape[2] % (2 * col_blocks)) / 2)
@@ -308,15 +324,3 @@ if __name__ == '__main__':
     INPUT_FILE = 'invivo-imaging/demo_data/raw_data.tif'
     OUTPUT_DIR = 'test'
     run_invivo_segmentation(INPUT_FILE, OUTPUT_DIR)
-
-"""
-INPUT_PATH = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag'
-OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/invivo/lowmag'
-input_files = sorted(Path(INPUT_PATH).glob('*.tif'))[9:]
-Path(OUTPUT_PATH).mkdir(exist_ok=True)
-for input_file in input_files:
-    dataset_name = input_file.stem
-    print('Processing ', dataset_name)
-    output_dir = Path(OUTPUT_PATH).joinpath(dataset_name)
-    run_invivo_segmentation(input_file, output_dir)
-"""
