@@ -772,7 +772,8 @@ int* get_time_frame_splits(int T, int n)
 
 
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
-                                         int num_pages, int width, int height, float *img)
+                                         int num_pages, int width, int height,
+                                         float *in_image, float *out_image)
 {
     int gpu_n;
     checkCudaErrors(cudaGetDeviceCount(&gpu_n));
@@ -783,8 +784,7 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     std::vector<std::thread> threads(gpu_n);
     int *splits_timeframes = get_time_frame_splits(num_pages, gpu_n);
     gp[0].t_start = 0;
-    float *out = (float *) malloc (num_pages * width * height * sizeof(float));
-    memcpy(out, img, height * width * sizeof(float)); // copy first frame
+    memcpy(out_image, in_image, height * width * sizeof(float)); // copy first frame
 
     std::vector<motion_t> motion_list(num_pages);
     motion_list[0].x = 0;
@@ -798,8 +798,8 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
         gp[i].total_gpus = gpu_n;
 
         gp[i].mp = param;
-        gp[i].himg = img;
-        gp[i].hout = out;
+        gp[i].himg = in_image;
+        gp[i].hout = out_image;
         gp[i].T = num_pages;
         gp[i].W = width;
         gp[i].H = height;
@@ -821,9 +821,6 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     }
 
     delete [] gp;
-
-    memcpy(img, out, num_pages * width * height * sizeof(float));
-    free(out);
 
     return motion_list;
 }

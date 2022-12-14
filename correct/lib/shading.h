@@ -11,7 +11,7 @@ typedef struct
 
 
 void correct_shading(shading_param_t &param,
-                     int num_pages, int width, int height, float ***img,
+                     int num_pages, int width, int height, float *img,
                      std::vector<motion_t> motion);
 
 #endif

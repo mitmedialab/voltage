@@ -11,7 +11,7 @@
 #include "shading.h"
 
 
-static void normalize_intensity(int num_frames, int width, int height, float *img)
+static void normalize_intensity(size_t num_frames, size_t width, size_t height, float *img)
 {
     const size_t num_pixels = width * height;
 
@@ -68,9 +68,9 @@ void correct_video_cpp(int num_frames, int height, int width,
         omp_set_num_threads(num_threads);
     }
     
-    const int t = num_frames;
-    const int h = height;
-    const int w = width;
+    const size_t t = num_frames;
+    const size_t h = height;
+    const size_t w = width;
     
     motion_param_t motion_param;
     motion_param.level = motion_search_level;
@@ -97,18 +97,21 @@ void correct_video_cpp(int num_frames, int height, int width,
     }
 
     std::vector<motion_t> motion_list;
-    float ***img = malloc_float3d(t, w, h);
+    *out_image = malloc_float1d(t * h * w);
 
     tu = new TimerUtil("motion correction");
     if(use_gpu)
     {
-        motion_list = correct_motion_gpu(motion_param, t, w, h, in_image);
-        copy1d_to_3d(t, w, h, in_image, img);
+        motion_list = correct_motion_gpu(motion_param, t, w, h,
+                                         in_image, *out_image);
     }
     else
     {
-        copy1d_to_3d(t, w, h, in_image, img);
-        motion_list = correct_motion(motion_param, t, w, h, img);
+        float ***tmp = malloc_float3d(t, w, h);
+        copy1d_to_3d(t, w, h, in_image, tmp);
+        motion_list = correct_motion(motion_param, t, w, h, tmp);
+        copy3d_to_1d(t, w, h, tmp, *out_image);
+        free_float3d(tmp);
     }
     delete tu;
 
@@ -129,11 +132,7 @@ void correct_video_cpp(int num_frames, int height, int width,
     printf("(x, y) in [%.1f, %.1f] x [%.1f, %.1f]\n", min_x, max_x, min_y, max_y);
 
     tu = new TimerUtil("shading correction");
-    correct_shading(shading_param, t, w, h, img, motion_list);
+    correct_shading(shading_param, t, w, h, *out_image, motion_list);
     delete tu;
-    
-    *out_image = malloc_float1d(t * h * w);
-    copy3d_to_1d(t, w, h, img, *out_image);
-    free_float3d(img);
 }
 
