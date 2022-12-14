@@ -246,8 +246,7 @@ static void apply_motion(int w, int h, float **in, float x, float y, float **out
 }
 
 std::vector<motion_t> correct_motion(motion_param_t &param,
-                                     int num_pages, int width, int height, float ***img,
-                                     motion_range_t &range)
+                                     int num_pages, int width, int height, float ***img)
 {    
     //const float thresh_xy = param.thresh_xy;
     const float thresh_c = param.thresh_c;
@@ -259,7 +258,6 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
     
     std::vector<motion_t> motion_list;
     float **out = malloc_float2d(width, height);
-	float min_x = 0, max_x = 0, min_y = 0, max_y = 0;
     
     // first frame
     {
@@ -301,28 +299,13 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
         m.x = x;
         m.y = y;
         m.corr = c;
-        if(valid_c)
-        {
-            m.valid = true;
-            if(min_x > x) min_x = x;
-            if(max_x < x) max_x = x;
-            if(min_y > y) min_y = y;
-            if(max_y < y) max_y = y;
-        }
-        else
-        {
-            m.valid = false;
-        }
+        m.valid = valid_c;
         motion_list.push_back(m);
 	}
     
     free_float1d(c_ring);
     free_float2d(out);
     
-    range.min_x = min_x;
-    range.max_x = max_x;
-    range.min_y = min_y;
-    range.max_y = max_y;
     return motion_list;
 }
 

@@ -772,8 +772,7 @@ int* get_time_frame_splits(int T, int n)
 
 
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
-                                         int num_pages, int width, int height, float *img,
-                                         motion_range_t &range)
+                                         int num_pages, int width, int height, float *img)
 {
     int gpu_n;
     checkCudaErrors(cudaGetDeviceCount(&gpu_n));
@@ -793,7 +792,8 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     motion_list[0].corr = 0;
     motion_list[0].valid = true;
 
-    for(int i = 0; i < gpu_n; ++i) {
+    for(int i = 0; i < gpu_n; ++i)
+    {
         gp[i].gpu_device_id = i;
         gp[i].total_gpus = gpu_n;
 

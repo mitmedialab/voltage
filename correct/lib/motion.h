@@ -28,22 +28,12 @@ typedef struct
 
 } motion_param_t;
 
-typedef struct
-{
-    float min_x;
-    float max_x;
-    float min_y;
-    float max_y;
-} motion_range_t;
-
 
 std::vector<motion_t> correct_motion(motion_param_t &param,
-                                     int num_pages, int width, int height, float ***img,
-                                     motion_range_t &range);
+                                     int num_pages, int width, int height, float ***img);
 
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
-                                        int num_pages, int width, int height, float *img,
-                                        motion_range_t &range);
+                                        int num_pages, int width, int height, float *img);
 
 #endif
 
