@@ -1,5 +1,6 @@
 import math
 import keras
+import tensorflow as tf
 import numpy as np
 import tifffile as tiff
 from pathlib import Path
@@ -9,6 +10,12 @@ from scipy.signal.windows import gaussian
 from .sequence import VI_Sequence
 from .data import get_training_data, get_inference_data
 from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
+
+
+def _prevent_tf_from_occupying_entire_gpu_memory():
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
 
 
 def _load_model(model_file):
@@ -337,6 +344,8 @@ def apply_model(input_files, model_file, out_file, ref_file,
     None.
 
     """
+    _prevent_tf_from_occupying_entire_gpu_memory()
+
     model, model_io_shape = _load_model(model_file)
 
     data_seq = VI_Sequence(batch_size, model_io_shape, tile_shape,
