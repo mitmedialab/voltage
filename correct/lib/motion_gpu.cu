@@ -30,47 +30,6 @@ inline float* loc3D(float *img, int t, int h, int w, int k, int i, int j)
 }
 
 
-typedef struct
-{
-    int t_start;
-    int delta_t;
-    float *img;
-    float *ref;
-    float *ref_l1;
-    float *ref_l0;
-    float *tgt_l1;
-    float *tgt_l0;
-    double *corr_buf;
-    double *ref_sum;
-    double *ref_var;
-    double *tgt_sum;
-    double *tgt_sum2;
-    double *corr;
-    int *narray;
-} gpu_buffer_t;
-
-typedef struct
-{
-    int T;
-    int W;
-    int H;
-    int dT;
-    int size;
-    int corr_size;
-    int w_l1;
-    int h_l1;
-    int w_l0;
-    int h_l0;
-    int loop23_ct_estimate;
-    int loop23_ct_rnd;
-    float *himg;
-    float *hout;
-    gpu_buffer_t *gbuf;
-    motion_param_t *mp;
-    std::vector<motion_t> motion_list;
-} gpuMotionCorrect_t;
-
-
 
 __forceinline__ __device__
 float* gloc3D(float *img, int t, int h, int w, int k, int i, int j)
@@ -527,10 +486,217 @@ void sum_reduction(double *in, double *out, int h, int w, int max_lim)
 
 }
 
-static double estimate_motion_recursive(int level, bool top,
-                                        int search_size, int patch_size, int patch_offset,
-                                        float x_range, float y_range,
-                                        int w, int h, float *ref, float *tgt, float *x, float *y, double *corr, float *ref_l1, float *ref_l0, float *tgt_l1, float *tgt_l0, double *corr_buf, double *ref_sum, double *ref_var, int *narray, double *tgt_sum, double *tgt_sum2)
+
+__device__
+static float sample_bilinear(float *dat, int w, int h, float x, float y)
+{
+    int ym1;
+    int yp1;
+    int xm1;
+    int xp1;
+    float frac_y;
+    float frac_x;
+
+    ym1 = (int)y;
+    xm1 = (int)x;
+    yp1 = ym1 + 1;
+    xp1 = xm1 + 1;
+    frac_y = __fsub_rd(y, ym1);
+    frac_x = __fsub_rd(x, xm1);
+    
+    if(ym1 < 0) 
+        ym1 = 0;
+    else if(ym1 >= h) 
+        ym1 = h - 1;
+    
+    if(xm1 < 0) 
+        xm1 = 0;
+    else if(xm1 >= w) 
+        xm1 = w - 1;
+    
+    if(yp1 < 0) 
+        yp1 = 0;
+    else if(yp1 >= h) 
+        yp1 = h - 1;
+    
+    if(xp1 < 0) 
+        xp1 = 0;
+    else if(xp1 >= w) 
+        xp1 = w - 1;
+
+    return    __fadd_rd(__fmul_rd(__fadd_rd(__fmul_rd(*gloc2D(dat, h, w, ym1, xm1), __fsub_rd(1, frac_x)), __fmul_rd(*gloc2D(dat, h, w, ym1, xp1), frac_x)), __fsub_rd(1, frac_y)), 
+        __fmul_rd(__fadd_rd(__fmul_rd(*gloc2D(dat, h, w, yp1, xm1), __fsub_rd(1, frac_x)), __fmul_rd(*gloc2D(dat, h, w, yp1, xp1), frac_x)), frac_y));
+
+}
+
+__global__
+void apply_motion(int w, int h, float *in, float x, float y, float *out)
+{
+    *gloc2D(out, h, w, blockIdx.x, threadIdx.x) = sample_bilinear(in, w, h, threadIdx.x+x, blockIdx.x+y);
+}
+
+
+typedef struct
+{
+    int T;         // video length (# frames)
+    int W;         // width
+    int H;         // height
+    int dT;        // segment length per batch
+    int size;
+    int corr_size;
+    int w_l1;
+    int h_l1;
+    int w_l0;
+    int h_l0;
+    int loop23_ct_estimate;
+    int loop23_ct_rnd;
+    float *himg;   // input image on host
+    float *hout;   // output image on host
+    motion_param_t *mp;
+    std::vector<motion_t> motion_list;
+} gpuParam_t;
+
+
+class gpuMotionCorrect
+{
+private:
+    int gpu_id = -1;
+    int t_start = 0;
+    int delta_t = 0;
+    float *img = nullptr;
+    float *ref = nullptr;
+    float *ref_l1 = nullptr;
+    float *ref_l0 = nullptr;
+    float *tgt_l1 = nullptr;
+    float *tgt_l0 = nullptr;
+    double *corr_buf = nullptr;
+    double *ref_sum = nullptr;
+    double *ref_var = nullptr;
+    double *tgt_sum = nullptr;
+    double *tgt_sum2 = nullptr;
+    double *corr = nullptr;
+    int *narray = nullptr;
+    gpuParam_t *param = nullptr;
+public:
+    gpuMotionCorrect(int gpu_id, gpuParam_t *param);
+    void allocate();
+    void free();
+    void set_batch(int index);
+    void process();
+private:
+    double estimate_motion(float *in, float *x, float *y);
+    double estimate_motion_recursive(int level, bool top,
+                                     int search_size, int patch_size, int patch_offset,
+                                     float x_range, float y_range,
+                                     int w, int h, float *ref, float *tgt, float *x, float *y);
+};
+
+
+gpuMotionCorrect::gpuMotionCorrect(int gpu_id, gpuParam_t *param)
+{
+    this->gpu_id = gpu_id;
+    this->param = param;
+}
+
+void gpuMotionCorrect::allocate()
+{
+    cudaSetDevice(gpu_id);
+
+    const size_t frame_size = param->W * param->H * sizeof(float);
+    checkCudaErrors(cudaMalloc((void **)&img, (param->dT + 1) * frame_size));
+    checkCudaErrors(cudaMalloc((void **)&ref, frame_size));
+
+    const size_t l1_size = param->h_l1 * param->w_l1 * sizeof(float);
+    const size_t l0_size = param->h_l0 * param->w_l0 * sizeof(float);
+    checkCudaErrors(cudaMalloc((void **)&ref_l1, l1_size));
+    checkCudaErrors(cudaMalloc((void **)&ref_l0, l0_size));
+    checkCudaErrors(cudaMalloc((void **)&tgt_l1, l1_size));
+    checkCudaErrors(cudaMalloc((void **)&tgt_l0, l0_size));
+
+    checkCudaErrors(cudaMallocManaged((void **)&corr, param->corr_size * sizeof(double)));
+
+    const size_t ref_size = param->loop23_ct_rnd * sizeof(double);
+    const size_t tgt_size = param->size * param->size * ref_size;
+    checkCudaErrors(cudaMalloc((void **)&corr_buf, tgt_size));
+    checkCudaErrors(cudaMalloc((void **)&ref_sum, ref_size));
+    checkCudaErrors(cudaMalloc((void **)&ref_var, ref_size));
+    checkCudaErrors(cudaMalloc((void **)&tgt_sum,  tgt_size));
+    checkCudaErrors(cudaMalloc((void **)&tgt_sum2, tgt_size));
+    checkCudaErrors(cudaMalloc((void **)&narray, param->loop23_ct_rnd * sizeof(int)));
+}
+
+void gpuMotionCorrect::free()
+{
+    cudaSetDevice(gpu_id);
+
+    cudaFree(img);
+    cudaFree(ref);
+    cudaFree(ref_l1);
+    cudaFree(ref_l0);
+    cudaFree(tgt_l1);
+    cudaFree(tgt_l0);
+    cudaFree(corr);
+    cudaFree(corr_buf);
+    cudaFree(ref_sum);
+    cudaFree(ref_var);
+    cudaFree(tgt_sum);
+    cudaFree(tgt_sum2);
+    cudaFree(narray);
+}
+
+void gpuMotionCorrect::set_batch(int index)
+{
+    t_start = 1 + param->dT * index;
+    delta_t = param->dT;
+    if(t_start + delta_t > param->T)
+    {
+        delta_t = param->T - t_start;
+    }
+}
+
+void gpuMotionCorrect::process()
+{
+    cudaSetDevice(gpu_id);
+
+    const int blockSize = 256;
+    int numBlocks;
+
+    checkCudaErrors(cudaMemcpy(img + param->W * param->H, loc3D(param->himg, param->T, param->H, param->W, t_start, 0, 0), delta_t * param->W * param->H * sizeof(float), cudaMemcpyHostToDevice));
+
+    checkCudaErrors(cudaMemcpy(ref, param->himg, param->W * param->H * sizeof(float), cudaMemcpyHostToDevice));
+
+    numBlocks = (param->w_l1 * param->h_l1 + blockSize - 1) / blockSize;
+    downsample_image<<<numBlocks, blockSize>>>(param->w_l1, param->h_l1, param->W, param->H, ref, ref_l1);
+
+    numBlocks = (param->w_l0 * param->h_l0 + blockSize - 1) / blockSize;
+    downsample_image<<<numBlocks, blockSize>>>(param->w_l0, param->h_l0, param->w_l1, param->h_l1, ref_l1, ref_l0);
+
+    cudaMemset(corr, 0, param->corr_size * sizeof(double));
+
+    for(int i = 0; i < delta_t; i++)
+    {
+        float x = 0, y = 0;
+        double c = estimate_motion(loc3D(img, param->T, param->H, param->W, i+1, 0, 0), &x, &y);
+#ifdef DEBUG
+        if(i < 100)
+            printf("[%d] C: %f, x %f , y %f\n", i, c, x, y);
+#endif
+        apply_motion<<<param->H, param->W>>>(param->W, param->H, loc3D(img, param->T, param->H, param->W, i+1, 0, 0), x, y, loc3D(img, param->T, param->H, param->W, i, 0, 0));
+        motion_t m;
+        m.x = x;
+        m.y = y;
+        m.corr = c;
+        m.valid = true;
+        param->motion_list.at(t_start + i) = m;
+    }
+
+    cudaMemcpy(loc3D(param->hout, param->T, param->H, param->W, t_start, 0, 0), img, delta_t * param->H * param->W * sizeof(float), cudaMemcpyDeviceToHost);
+}
+
+double gpuMotionCorrect::estimate_motion_recursive(int level, bool top,
+                                                   int search_size, int patch_size, int patch_offset,
+                                                   float x_range, float y_range,
+                                                   int w, int h, float *ref, float *tgt, float *x, float *y)
 {
     int by = 0;
     int bx = 0;
@@ -561,7 +727,7 @@ static double estimate_motion_recursive(int level, bool top,
         estimate_motion_recursive(level - 1, false,
                                   search_size, patch_size_half, patch_offset_half,
                                   x_range, y_range,
-                                  w_half, h_half, ref_half, tgt_half, &x_half, &y_half, corr, ref_l1, ref_l0, tgt_l1, tgt_l0, corr_buf, ref_sum, ref_var, narray, tgt_sum, tgt_sum2);
+                                  w_half, h_half, ref_half, tgt_half, &x_half, &y_half);
 
         by = (int)(2 * y_half);
         bx = (int)(2 * x_half);
@@ -625,149 +791,14 @@ static double estimate_motion_recursive(int level, bool top,
     return corr[0];
 }
 
-static double estimate_motion(gpuMotionCorrect_t *gmc, int gpu_id, float *in, float *x, float *y)
+double gpuMotionCorrect::estimate_motion(float *in, float *x, float *y)
 {
-    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
-    return estimate_motion_recursive(gmc->mp->level, true,
-                                     gmc->mp->search_size, gmc->mp->patch_size, gmc->mp->patch_offset,
-                                     gmc->mp->x_range, gmc->mp->y_range,
-                                     gmc->W, gmc->H, gp->ref, in, x, y, gp->corr, gp->ref_l1, gp->ref_l0, gp->tgt_l1, gp->tgt_l0, gp->corr_buf, gp->ref_sum, gp->ref_var, gp->narray, gp->tgt_sum, gp->tgt_sum2);
+    return estimate_motion_recursive(param->mp->level, true,
+                                     param->mp->search_size, param->mp->patch_size, param->mp->patch_offset,
+                                     param->mp->x_range, param->mp->y_range,
+                                     param->W, param->H, ref, in, x, y);
 }
 
-__device__
-static float sample_bilinear(float *dat, int w, int h, float x, float y)
-{
-    int ym1;
-    int yp1;
-    int xm1;
-    int xp1;
-    float frac_y;
-    float frac_x;
-
-    ym1 = (int)y;
-    xm1 = (int)x;
-    yp1 = ym1 + 1;
-    xp1 = xm1 + 1;
-    frac_y = __fsub_rd(y, ym1);
-    frac_x = __fsub_rd(x, xm1);
-    
-    if(ym1 < 0) 
-        ym1 = 0;
-    else if(ym1 >= h) 
-        ym1 = h - 1;
-    
-    if(xm1 < 0) 
-        xm1 = 0;
-    else if(xm1 >= w) 
-        xm1 = w - 1;
-    
-    if(yp1 < 0) 
-        yp1 = 0;
-    else if(yp1 >= h) 
-        yp1 = h - 1;
-    
-    if(xp1 < 0) 
-        xp1 = 0;
-    else if(xp1 >= w) 
-        xp1 = w - 1;
-
-    return    __fadd_rd(__fmul_rd(__fadd_rd(__fmul_rd(*gloc2D(dat, h, w, ym1, xm1), __fsub_rd(1, frac_x)), __fmul_rd(*gloc2D(dat, h, w, ym1, xp1), frac_x)), __fsub_rd(1, frac_y)), 
-        __fmul_rd(__fadd_rd(__fmul_rd(*gloc2D(dat, h, w, yp1, xm1), __fsub_rd(1, frac_x)), __fmul_rd(*gloc2D(dat, h, w, yp1, xp1), frac_x)), frac_y));
-
-}
-
-__global__
-void apply_motion(int w, int h, float *in, float x, float y, float *out)
-{
-    *gloc2D(out, h, w, blockIdx.x, threadIdx.x) = sample_bilinear(in, w, h, threadIdx.x+x, blockIdx.x+y);
-}
-
-
-
-void allocate_device_buffers(gpuMotionCorrect_t *gmc, int gpu_id)
-{   
-    cudaSetDevice(gpu_id);
-
-    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
-
-    checkCudaErrors(cudaMalloc((void **)&gp->img, (gmc->dT + 1) * gmc->W * gmc->H * sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&gp->ref, gmc->W * gmc->H * sizeof(float)));
-
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_l1, gmc->h_l1 * gmc->w_l1 * sizeof(float)));
-
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_l0, gmc->h_l0 * gmc->w_l0 * sizeof(float)));
-
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_l1, gmc->h_l1 * gmc->w_l1 * sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_l0, gmc->h_l0 * gmc->w_l0 * sizeof(float)));
-    checkCudaErrors(cudaMallocManaged((void **)&gp->corr, gmc->corr_size * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->corr_buf, gmc->size * gmc->size * gmc->loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_sum, gmc->loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_var, gmc->loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_sum, gmc->size * gmc->size * gmc->loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_sum2, gmc->size * gmc->size * gmc->loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->narray, gmc->loop23_ct_rnd * sizeof(int)));
-}
-
-void process_gpu_threads(gpuMotionCorrect_t *gmc, int gpu_id)
-{
-    cudaSetDevice(gpu_id);
-
-    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
-
-    const int blockSize = 256;
-    int numBlocks;
-
-    checkCudaErrors(cudaMemcpy(gp->img + gmc->W * gmc->H, loc3D(gmc->himg, gmc->T, gmc->H, gmc->W, gp->t_start, 0, 0), gp->delta_t * gmc->W * gmc->H * sizeof(float), cudaMemcpyHostToDevice));
-
-    checkCudaErrors(cudaMemcpy(gp->ref, gmc->himg, gmc->W * gmc->H * sizeof(float), cudaMemcpyHostToDevice));
-
-    numBlocks = (gmc->w_l1 * gmc->h_l1 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize>>>(gmc->w_l1, gmc->h_l1, gmc->W, gmc->H, gp->ref, gp->ref_l1);
-
-    numBlocks = (gmc->w_l0 * gmc->h_l0 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize>>>(gmc->w_l0, gmc->h_l0, gmc->w_l1, gmc->h_l1, gp->ref_l1, gp->ref_l0);
-
-    cudaMemset(gp->corr, 0, gmc->corr_size * sizeof(double));
-
-    for(int i = 0; i < gp->delta_t; i++) {
-        float x = 0, y = 0;
-        double c = estimate_motion(gmc, gpu_id, loc3D(gp->img, gmc->T, gmc->H, gmc->W, i+1, 0, 0), &x, &y);
-#ifdef DEBUG
-        if(i < 100)
-            printf("[%d] C: %f, x %f , y %f\n", i, c, x, y);
-#endif
-        apply_motion<<<gmc->H, gmc->W>>>(gmc->W, gmc->H, loc3D(gp->img, gmc->T, gmc->H, gmc->W, i+1, 0, 0), x, y, loc3D(gp->img, gmc->T, gmc->H, gmc->W, i, 0, 0));
-        motion_t m;
-        m.x = x;
-        m.y = y;
-        m.corr = c;
-        m.valid = true;
-        gmc->motion_list.at(gp->t_start + i) = m;
-    }
-
-    cudaMemcpy(loc3D(gmc->hout, gmc->T, gmc->H, gmc->W, gp->t_start, 0, 0), gp->img, gp->delta_t * gmc->H * gmc->W * sizeof(float), cudaMemcpyDeviceToHost);
-}
-
-
-void free_device_buffers(gpuMotionCorrect_t *gmc, int gpu_id)
-{
-    cudaSetDevice(gpu_id);
-
-    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
-    cudaFree(gp->img);
-    cudaFree(gp->ref);
-    cudaFree(gp->ref_l1);
-    cudaFree(gp->ref_l0);
-    cudaFree(gp->tgt_l1);
-    cudaFree(gp->tgt_l0);
-    cudaFree(gp->corr);
-    cudaFree(gp->corr_buf);
-    cudaFree(gp->ref_sum);
-    cudaFree(gp->ref_var);
-    cudaFree(gp->tgt_sum);
-    cudaFree(gp->tgt_sum2);
-    cudaFree(gp->narray);
-}
 
 
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
@@ -782,60 +813,54 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     const size_t data_size_per_frame = width * height * sizeof(float);
 
 
-    gpuMotionCorrect_t gmc;
-    gmc.size = (param.search_size << 1) + 1;
-    gmc.corr_size = pow(2, ceil(log(gmc.size * gmc.size) / log(2)));
-    gmc.w_l1 = width >> 1;
-    gmc.h_l1 = height >> 1;
-    gmc.w_l0 = gmc.w_l1 >> 1;
-    gmc.h_l0 = gmc.h_l1 >> 1;
-    gmc.loop23_ct_estimate = int((height / param.patch_offset) * (width / param.patch_offset)); 
-    gmc.loop23_ct_rnd = pow(2, ceil(log(gmc.loop23_ct_estimate) / log(2)));
+    gpuParam_t gp;
+    gp.size = (param.search_size << 1) + 1;
+    gp.corr_size = pow(2, ceil(log(gp.size * gp.size) / log(2)));
+    gp.w_l1 = width >> 1;
+    gp.h_l1 = height >> 1;
+    gp.w_l0 = gp.w_l1 >> 1;
+    gp.h_l0 = gp.h_l1 >> 1;
+    gp.loop23_ct_estimate = int((height / param.patch_offset) * (width / param.patch_offset)); 
+    gp.loop23_ct_rnd = pow(2, ceil(log(gp.loop23_ct_estimate) / log(2)));
 
-    gmc.gbuf = new gpu_buffer_t[num_gpus];
-    gmc.T = num_pages;
-    gmc.W = width;
-    gmc.H = height;
-    gmc.dT = gpu_mem_size / data_size_per_frame;
-    gmc.himg = in_image;
-    gmc.hout = out_image;
-    gmc.mp = &param;
+    gp.T = num_pages;
+    gp.W = width;
+    gp.H = height;
+    gp.dT = gpu_mem_size / data_size_per_frame;
+    gp.himg = in_image;
+    gp.hout = out_image;
+    gp.mp = &param;
 
     memcpy(out_image, in_image, height * width * sizeof(float)); // copy first frame
 
-    gmc.motion_list.resize(num_pages);
-    gmc.motion_list[0].x = 0;
-    gmc.motion_list[0].y = 0;
-    gmc.motion_list[0].corr = 0;
-    gmc.motion_list[0].valid = true;
+    gp.motion_list.resize(num_pages);
+    gp.motion_list[0].x = 0;
+    gp.motion_list[0].y = 0;
+    gp.motion_list[0].corr = 0;
+    gp.motion_list[0].valid = true;
 
+    gpuMotionCorrect *gmc[num_gpus];
     for(int i = 0; i < num_gpus; i++)
     {
-        allocate_device_buffers(&gmc, i);
+        gmc[i] = new gpuMotionCorrect(i, &gp);
+        gmc[i]->allocate();
     }
 
-    const int num_batches = (num_pages + gmc.dT - 1) / gmc.dT;
+    const int num_batches = (num_pages + gp.dT - 1) / gp.dT;
     int gpu_id = 0;
     for(int i = 0; i < num_batches; i++)
     {
-        gpu_buffer_t *gp = &(gmc.gbuf[gpu_id]);
-        gp->t_start = 1 + gmc.dT * i;
-        gp->delta_t = gmc.dT;
-        if(gp->t_start + gp->delta_t > num_pages)
-        {
-            gp->delta_t = num_pages - gp->t_start;
-        }
-        process_gpu_threads(&gmc, gpu_id);
+        gmc[gpu_id]->set_batch(i);
+        gmc[gpu_id]->process();
         gpu_id = (gpu_id + 1) % num_gpus;
     }
 
     for(int i = 0; i < num_gpus; i++)
     {
-        free_device_buffers(&gmc, i);
+        gmc[i]->free();
+        delete gmc[i];
     }
 
-    delete [] gmc.gbuf;
-
-    return gmc.motion_list;
+    return gp.motion_list;
 }
 
