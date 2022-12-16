@@ -30,13 +30,9 @@ inline float* loc3D(float *img, int t, int h, int w, int k, int i, int j)
 }
 
 
-typedef struct gpuMotionCorrect_t {
-
+typedef struct
+{
     int gpu_device_id;
-    int total_gpus;
-    int T;
-    int W;
-    int H;
     int t_start;
     int t_end;
     int delta_t;
@@ -47,8 +43,6 @@ typedef struct gpuMotionCorrect_t {
     float *ref_l0;
     float *tgt_l1;
     float *tgt_l0;
-    float *himg;
-    float *hout;
     double *corr_buf;
     double *ref_sum;
     double *ref_var;
@@ -56,9 +50,29 @@ typedef struct gpuMotionCorrect_t {
     double *tgt_sum2;
     double *corr;
     int *narray;
-    motion_param_t mp;
-    std::vector<motion_t> *motion_list;
+} gpu_buffer_t;
+
+typedef struct
+{
+    int T;
+    int W;
+    int H;
+    int size;
+    int corr_size;
+    int w_l1;
+    int h_l1;
+    int w_l0;
+    int h_l0;
+    int loop23_ct_estimate;
+    int loop23_ct_rnd;
+    float *himg;
+    float *hout;
+    gpu_buffer_t *gbuf;
+    motion_param_t *mp;
+    std::vector<motion_t> motion_list;
 } gpuMotionCorrect_t;
+
+
 
 __forceinline__ __device__
 float* gloc3D(float *img, int t, int h, int w, int k, int i, int j)
@@ -613,12 +627,13 @@ static double estimate_motion_recursive(int level, bool top,
     return corr[0];
 }
 
-static double estimate_motion(gpuMotionCorrect_t *gp, float *in, float *x, float *y)
+static double estimate_motion(gpuMotionCorrect_t *gmc, int gpu_id, float *in, float *x, float *y)
 {
-    return estimate_motion_recursive(gp->mp.level, true,
-                                     gp->mp.search_size, gp->mp.patch_size, gp->mp.patch_offset,
-                                     gp->mp.x_range, gp->mp.y_range,
-                                     gp->W, gp->H, gp->ref, in, x, y, gp->corr, gp->ref_l1, gp->ref_l0, gp->tgt_l1, gp->tgt_l0, gp->corr_buf, gp->ref_sum, gp->ref_var, gp->narray, gp->tgt_sum, gp->tgt_sum2);
+    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
+    return estimate_motion_recursive(gmc->mp->level, true,
+                                     gmc->mp->search_size, gmc->mp->patch_size, gmc->mp->patch_offset,
+                                     gmc->mp->x_range, gmc->mp->y_range,
+                                     gmc->W, gmc->H, gp->ref, in, x, y, gp->corr, gp->ref_l1, gp->ref_l0, gp->tgt_l1, gp->tgt_l0, gp->corr_buf, gp->ref_sum, gp->ref_var, gp->narray, gp->tgt_sum, gp->tgt_sum2);
 }
 
 __device__
@@ -670,75 +685,87 @@ void apply_motion(int w, int h, float *in, float x, float y, float *out)
 }
 
 
-void process_gpu_threads(gpuMotionCorrect_t *gp)
+
+void allocate_device_buffers(gpuMotionCorrect_t *gmc, int gpu_id)
 {   
-    cudaSetDevice(gp->gpu_device_id);
+    cudaSetDevice(gpu_id);
 
+    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
 
-    const int size = (gp->mp.search_size<<1) + 1;
-    int corr_size = pow(2, ceil(log(size * size)/log(2)));
-    int w_l1 = (int)(gp->W>>1);
-    int h_l1 = (int)(gp->H>>1);
-    int w_l0 = (int)(w_l1>>1);
-    int h_l0 = (int)(h_l1>>1);
-    int loop23_ct_estimate = int((gp->H/gp->mp.patch_offset) * (gp->W/gp->mp.patch_offset)); 
-    int loop23_ct_rnd = pow(2, ceil(log(loop23_ct_estimate)/log(2)));
+    checkCudaErrors(cudaMalloc((void **)&gp->in, (gp->delta_t + 1) * gmc->W * gmc->H * sizeof(float)));
+    checkCudaErrors(cudaMalloc((void **)&gp->ref, gmc->W * gmc->H * sizeof(float)));
 
-    int blockSize = 256;
+    checkCudaErrors(cudaMalloc((void **)&gp->ref_l1, gmc->h_l1 * gmc->w_l1 * sizeof(float)));
+
+    checkCudaErrors(cudaMalloc((void **)&gp->ref_l0, gmc->h_l0 * gmc->w_l0 * sizeof(float)));
+
+    //checkCudaErrors(cudaMalloc((void **)&gp->out, gp->delta_t * gmc->W * gmc->H * sizeof(float)));
+
+    checkCudaErrors(cudaMalloc((void **)&gp->tgt_l1, gmc->h_l1 * gmc->w_l1 * sizeof(float)));
+    checkCudaErrors(cudaMalloc((void **)&gp->tgt_l0, gmc->h_l0 * gmc->w_l0 * sizeof(float)));
+    checkCudaErrors(cudaMallocManaged((void **)&gp->corr, gmc->corr_size * sizeof(double)));
+    checkCudaErrors(cudaMalloc((void **)&gp->corr_buf, gmc->size * gmc->size * gmc->loop23_ct_rnd * sizeof(double)));
+    checkCudaErrors(cudaMalloc((void **)&gp->ref_sum, gmc->loop23_ct_rnd * sizeof(double)));
+    checkCudaErrors(cudaMalloc((void **)&gp->ref_var, gmc->loop23_ct_rnd * sizeof(double)));
+    checkCudaErrors(cudaMalloc((void **)&gp->tgt_sum, gmc->size * gmc->size * gmc->loop23_ct_rnd * sizeof(double)));
+    checkCudaErrors(cudaMalloc((void **)&gp->tgt_sum2, gmc->size * gmc->size * gmc->loop23_ct_rnd * sizeof(double)));
+    checkCudaErrors(cudaMalloc((void **)&gp->narray, gmc->loop23_ct_rnd * sizeof(int)));
+}
+
+void process_gpu_threads(gpuMotionCorrect_t *gmc, int gpu_id)
+{
+    cudaSetDevice(gpu_id);
+
+    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
+
+    const int blockSize = 256;
     int numBlocks;
 
-    checkCudaErrors(cudaMalloc((void **)&gp->in, gp->delta_t * gp->W * gp->H * sizeof(float)));
-    checkCudaErrors(cudaMemcpyAsync(gp->in, loc3D(gp->himg, gp->T, gp->H, gp->W, gp->t_start, 0, 0), gp->delta_t * gp->W * gp->H * sizeof(float), cudaMemcpyHostToDevice));
+    //checkCudaErrors(cudaMemcpy(gp->in, loc3D(gmc->himg, gmc->T, gmc->H, gmc->W, gp->t_start, 0, 0), gp->delta_t * gmc->W * gmc->H * sizeof(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(gp->in + gmc->W * gmc->H, loc3D(gmc->himg, gmc->T, gmc->H, gmc->W, gp->t_start, 0, 0), gp->delta_t * gmc->W * gmc->H * sizeof(float), cudaMemcpyHostToDevice));
 
-    checkCudaErrors(cudaMalloc((void **)&gp->ref, gp->W * gp->H * sizeof(float)));
-    checkCudaErrors(cudaMemcpy(gp->ref, gp->himg, gp->W * gp->H * sizeof(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(gp->ref, gmc->himg, gmc->W * gmc->H * sizeof(float), cudaMemcpyHostToDevice));
 
-    numBlocks= (w_l1 * h_l1 + blockSize - 1) / blockSize;
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_l1, h_l1 * w_l1 * sizeof(float)));
-    downsample_image<<<numBlocks, blockSize>>>(w_l1, h_l1, gp->W, gp->H, gp->ref, gp->ref_l1);
+    numBlocks = (gmc->w_l1 * gmc->h_l1 + blockSize - 1) / blockSize;
+    downsample_image<<<numBlocks, blockSize>>>(gmc->w_l1, gmc->h_l1, gmc->W, gmc->H, gp->ref, gp->ref_l1);
 
-    numBlocks = (w_l0 * h_l0 + blockSize - 1) / blockSize;
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_l0, h_l0 * w_l0 * sizeof(float)));
-    downsample_image<<<numBlocks, blockSize>>>(w_l0, h_l0, w_l1, h_l1, gp->ref_l1, gp->ref_l0);
+    numBlocks = (gmc->w_l0 * gmc->h_l0 + blockSize - 1) / blockSize;
+    downsample_image<<<numBlocks, blockSize>>>(gmc->w_l0, gmc->h_l0, gmc->w_l1, gmc->h_l1, gp->ref_l1, gp->ref_l0);
 
-    checkCudaErrors(cudaMalloc((void **)&gp->out, gp->delta_t * gp->W * gp->H * sizeof(float)));       
-
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_l1, h_l1 * w_l1 * sizeof(float)));
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_l0, h_l0 * w_l0 * sizeof(float)));
-    checkCudaErrors(cudaMallocManaged((void **)&gp->corr, corr_size * sizeof(double)));
-    cudaMemset(gp->corr, 0, corr_size * sizeof(double));
-    checkCudaErrors(cudaMalloc((void **)&gp->corr_buf, size * size * loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_sum, loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->ref_var, loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_sum, size * size * loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->tgt_sum2, size * size * loop23_ct_rnd * sizeof(double)));
-    checkCudaErrors(cudaMalloc((void **)&gp->narray, loop23_ct_rnd * sizeof(int)));
-
-
+    cudaMemset(gp->corr, 0, gmc->corr_size * sizeof(double));
 
     for(int i = 0; i < gp->delta_t; i++) {
         float x = 0, y = 0;
-        double c = estimate_motion(gp, loc3D(gp->in, gp->T, gp->H, gp->W, i, 0, 0), &x, &y);
+        double c = estimate_motion(gmc, gpu_id, loc3D(gp->in, gmc->T, gmc->H, gmc->W, i+1, 0, 0), &x, &y);
 #ifdef DEBUG
         if(i < 100)
             printf("[%d] C: %f, x %f , y %f\n", i, c, x, y);
 #endif
-        apply_motion<<<gp->H, gp->W>>>(gp->W, gp->H, loc3D(gp->in, gp->T, gp->H, gp->W, i, 0, 0), x, y, loc3D(gp->out, gp->T, gp->H, gp->W, i, 0, 0));
+        //apply_motion<<<gmc->H, gmc->W>>>(gmc->W, gmc->H, loc3D(gp->in, gmc->T, gmc->H, gmc->W, i, 0, 0), x, y, loc3D(gp->out, gmc->T, gmc->H, gmc->W, i, 0, 0));
+        apply_motion<<<gmc->H, gmc->W>>>(gmc->W, gmc->H, loc3D(gp->in, gmc->T, gmc->H, gmc->W, i+1, 0, 0), x, y, loc3D(gp->in, gmc->T, gmc->H, gmc->W, i, 0, 0));
         motion_t m;
         m.x = x;
         m.y = y;
         m.corr = c;
         m.valid = true;
-        gp->motion_list->at(gp->t_start + i) = m;
+        gmc->motion_list.at(gp->t_start + i) = m;
     }
 
+    //cudaMemcpy(loc3D(gmc->hout, gmc->T, gmc->H, gmc->W, gp->t_start, 0, 0), gp->out, gp->delta_t * gmc->H * gmc->W * sizeof(float), cudaMemcpyDeviceToHost);
+    cudaMemcpy(loc3D(gmc->hout, gmc->T, gmc->H, gmc->W, gp->t_start, 0, 0), gp->in, gp->delta_t * gmc->H * gmc->W * sizeof(float), cudaMemcpyDeviceToHost);
+}
 
-    cudaMemcpy(loc3D(gp->hout, gp->T, gp->H, gp->W, gp->t_start, 0, 0), gp->out, gp->delta_t * gp->H * gp->W * sizeof(float), cudaMemcpyDeviceToHost);
+
+void free_device_buffers(gpuMotionCorrect_t *gmc, int gpu_id)
+{
+    cudaSetDevice(gpu_id);
+
+    gpu_buffer_t *gp = &(gmc->gbuf[gpu_id]);
     cudaFree(gp->in);
     cudaFree(gp->ref);
     cudaFree(gp->ref_l1);
     cudaFree(gp->ref_l0);
-    cudaFree(gp->out);
+    //cudaFree(gp->out);
     cudaFree(gp->tgt_l1);
     cudaFree(gp->tgt_l0);
     cudaFree(gp->corr);
@@ -748,9 +775,7 @@ void process_gpu_threads(gpuMotionCorrect_t *gp)
     cudaFree(gp->tgt_sum);
     cudaFree(gp->tgt_sum2);
     cudaFree(gp->narray);
-
 }
-
 
 
 int* get_time_frame_splits(int T, int n)
@@ -778,50 +803,70 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     int gpu_n;
     checkCudaErrors(cudaGetDeviceCount(&gpu_n));
     printf("Motion Correction GPU NUM %d\n", gpu_n);
-    gpuMotionCorrect_t *gp = new gpuMotionCorrect_t[gpu_n];
 
+    //const size_t gpu_mem_size = 2L * 1024 * 1024 * 1024;
+    //const size_t data_size_per_frame = width * height * sizeof(float);
+    //const size_t num_streams = (gpu_mem_size + data_size_per_frame - 1) / data_size_per_frame;
+
+
+    gpuMotionCorrect_t gmc;
+    gmc.size = (param.search_size << 1) + 1;
+    gmc.corr_size = pow(2, ceil(log(gmc.size * gmc.size) / log(2)));
+    gmc.w_l1 = width >> 1;
+    gmc.h_l1 = height >> 1;
+    gmc.w_l0 = gmc.w_l1 >> 1;
+    gmc.h_l0 = gmc.h_l1 >> 1;
+    gmc.loop23_ct_estimate = int((height / param.patch_offset) * (width / param.patch_offset)); 
+    gmc.loop23_ct_rnd = pow(2, ceil(log(gmc.loop23_ct_estimate) / log(2)));
+
+    gmc.gbuf = new gpu_buffer_t[gpu_n];
+    gmc.T = num_pages;
+    gmc.W = width;
+    gmc.H = height;
+    gmc.himg = in_image;
+    gmc.hout = out_image;
+    gmc.mp = &param;
 
     std::vector<std::thread> threads(gpu_n);
     int *splits_timeframes = get_time_frame_splits(num_pages, gpu_n);
-    gp[0].t_start = 0;
+    gmc.gbuf[0].t_start = 0;
     memcpy(out_image, in_image, height * width * sizeof(float)); // copy first frame
 
-    std::vector<motion_t> motion_list(num_pages);
-    motion_list[0].x = 0;
-    motion_list[0].y = 0;
-    motion_list[0].corr = 0;
-    motion_list[0].valid = true;
+    gmc.motion_list.resize(num_pages);
+    gmc.motion_list[0].x = 0;
+    gmc.motion_list[0].y = 0;
+    gmc.motion_list[0].corr = 0;
+    gmc.motion_list[0].valid = true;
 
-    for(int i = 0; i < gpu_n; ++i)
+    for(int i = 0; i < gpu_n; i++)
     {
-        gp[i].gpu_device_id = i;
-        gp[i].total_gpus = gpu_n;
-
-        gp[i].mp = param;
-        gp[i].himg = in_image;
-        gp[i].hout = out_image;
-        gp[i].T = num_pages;
-        gp[i].W = width;
-        gp[i].H = height;
-        gp[i].motion_list = &motion_list;
+        gmc.gbuf[i].gpu_device_id = i;
 
         if(i != 0) {
-            gp[i].t_start = gp[i-1].t_end;
+            gmc.gbuf[i].t_start = gmc.gbuf[i-1].t_end;
         }
-        gp[i].t_end = gp[i].t_start + splits_timeframes[i];
-        gp[0].t_start = 1;
-        gp[i].delta_t = gp[i].t_end - gp[i].t_start;
-
+        gmc.gbuf[i].t_end = gmc.gbuf[i].t_start + splits_timeframes[i];
+        gmc.gbuf[0].t_start = 1;
+        gmc.gbuf[i].delta_t = gmc.gbuf[i].t_end - gmc.gbuf[i].t_start;
+        allocate_device_buffers(&gmc, i);
+    }
         
-        threads[i] = std::thread(process_gpu_threads, &gp[i]);
+    for(int i = 0; i < gpu_n; i++)
+    {
+        threads[i] = std::thread(process_gpu_threads, &gmc, i);
     }
     
     for (auto& th : threads) {
         th.join();
     }
 
-    delete [] gp;
+    for(int i = 0; i < gpu_n; i++)
+    {
+        free_device_buffers(&gmc, i);
+    }
 
-    return motion_list;
+    delete [] gmc.gbuf;
+
+    return gmc.motion_list;
 }
 
