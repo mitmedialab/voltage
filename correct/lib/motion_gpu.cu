@@ -556,13 +556,18 @@ typedef struct
     std::vector<motion_t> motion_list;
 } gpuParam_t;
 
+typedef struct
+{
+    int t_start;
+    int delta_t;
+    cudaStream_t strm;
+} batch_t;
 
 class gpuMotionCorrect
 {
 private:
     int gpu_id = -1;
-    int t_start = 0;
-    int delta_t = 0;
+    std::vector<batch_t> batches;
     float *img = nullptr;
     float *ref = nullptr;
     float *ref_l1 = nullptr;
@@ -581,14 +586,16 @@ public:
     gpuMotionCorrect(int gpu_id, gpuParam_t *param);
     void allocate();
     void free();
-    void set_batch(int index);
-    void process();
+    int set_batches(int num_gpus);
+    void run();
 private:
-    double estimate_motion(float *in, float *x, float *y);
+    void process(batch_t b);
+    double estimate_motion(float *in, float *x, float *y, cudaStream_t strm);
     double estimate_motion_recursive(int level, bool top,
                                      int search_size, int patch_size, int patch_offset,
                                      float x_range, float y_range,
-                                     int w, int h, float *ref, float *tgt, float *x, float *y);
+                                     int w, int h, float *ref, float *tgt, float *x, float *y,
+                                     cudaStream_t strm);
 };
 
 
@@ -642,61 +649,89 @@ void gpuMotionCorrect::free()
     cudaFree(tgt_sum);
     cudaFree(tgt_sum2);
     cudaFree(narray);
+
+    for(auto b : batches)
+    {
+        checkCudaErrors(cudaStreamDestroy(b.strm));
+    }
+    batches.clear();
 }
 
-void gpuMotionCorrect::set_batch(int index)
+int gpuMotionCorrect::set_batches(int num_gpus)
 {
-    t_start = 1 + param->dT * index;
-    delta_t = param->dT;
-    if(t_start + delta_t > param->T)
+    cudaSetDevice(gpu_id);
+
+    const int num_batches = (param->T + param->dT - 1) / param->dT;
+    for(int i = 0; i < num_batches; i++)
     {
-        delta_t = param->T - t_start;
+        if(i % num_gpus == gpu_id)
+        {
+            batch_t b;
+            b.t_start = 1 + param->dT * i;
+            b.delta_t = param->dT;
+            if(b.t_start + b.delta_t > param->T)
+            {
+                b.delta_t = param->T - b.t_start;
+            }
+            checkCudaErrors(cudaStreamCreate(&(b.strm)));
+            batches.push_back(b);
+        }
+    }
+    return (int)batches.size();
+}
+
+void gpuMotionCorrect::run()
+{
+    for(auto b : batches)
+    {
+        process(b);
     }
 }
 
-void gpuMotionCorrect::process()
+void gpuMotionCorrect::process(batch_t b)
 {
     cudaSetDevice(gpu_id);
 
     const int blockSize = 256;
     int numBlocks;
 
-    checkCudaErrors(cudaMemcpy(img + param->W * param->H, loc3D(param->himg, param->T, param->H, param->W, t_start, 0, 0), delta_t * param->W * param->H * sizeof(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpyAsync(img + param->W * param->H, loc3D(param->himg, param->T, param->H, param->W, b.t_start, 0, 0), b.delta_t * param->W * param->H * sizeof(float), cudaMemcpyHostToDevice, b.strm));
 
-    checkCudaErrors(cudaMemcpy(ref, param->himg, param->W * param->H * sizeof(float), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpyAsync(ref, param->himg, param->W * param->H * sizeof(float), cudaMemcpyHostToDevice, b.strm));
 
     numBlocks = (param->w_l1 * param->h_l1 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize>>>(param->w_l1, param->h_l1, param->W, param->H, ref, ref_l1);
+    downsample_image<<<numBlocks, blockSize, 0, b.strm>>>(param->w_l1, param->h_l1, param->W, param->H, ref, ref_l1);
 
     numBlocks = (param->w_l0 * param->h_l0 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize>>>(param->w_l0, param->h_l0, param->w_l1, param->h_l1, ref_l1, ref_l0);
+    downsample_image<<<numBlocks, blockSize, 0, b.strm>>>(param->w_l0, param->h_l0, param->w_l1, param->h_l1, ref_l1, ref_l0);
 
-    cudaMemset(corr, 0, param->corr_size * sizeof(double));
+    checkCudaErrors(cudaMemsetAsync(corr, 0, param->corr_size * sizeof(double), b.strm));
 
-    for(int i = 0; i < delta_t; i++)
+    for(int i = 0; i < b.delta_t; i++)
     {
         float x = 0, y = 0;
-        double c = estimate_motion(loc3D(img, param->T, param->H, param->W, i+1, 0, 0), &x, &y);
+        double c = estimate_motion(loc3D(img, param->T, param->H, param->W, i+1, 0, 0), &x, &y, b.strm);
 #ifdef DEBUG
         if(i < 100)
             printf("[%d] C: %f, x %f , y %f\n", i, c, x, y);
 #endif
-        apply_motion<<<param->H, param->W>>>(param->W, param->H, loc3D(img, param->T, param->H, param->W, i+1, 0, 0), x, y, loc3D(img, param->T, param->H, param->W, i, 0, 0));
+        apply_motion<<<param->H, param->W, 0, b.strm>>>(param->W, param->H, loc3D(img, param->T, param->H, param->W, i+1, 0, 0), x, y, loc3D(img, param->T, param->H, param->W, i, 0, 0));
         motion_t m;
         m.x = x;
         m.y = y;
         m.corr = c;
         m.valid = true;
-        param->motion_list.at(t_start + i) = m;
+        param->motion_list.at(b.t_start + i) = m;
     }
 
-    cudaMemcpy(loc3D(param->hout, param->T, param->H, param->W, t_start, 0, 0), img, delta_t * param->H * param->W * sizeof(float), cudaMemcpyDeviceToHost);
+    checkCudaErrors(cudaMemcpyAsync(loc3D(param->hout, param->T, param->H, param->W, b.t_start, 0, 0), img, b.delta_t * param->H * param->W * sizeof(float), cudaMemcpyDeviceToHost, b.strm));
 }
 
 double gpuMotionCorrect::estimate_motion_recursive(int level, bool top,
                                                    int search_size, int patch_size, int patch_offset,
                                                    float x_range, float y_range,
-                                                   int w, int h, float *ref, float *tgt, float *x, float *y)
+                                                   int w, int h, float *ref, float *tgt, float *x, float *y,
+                                                   cudaStream_t strm)
 {
     int by = 0;
     int bx = 0;
@@ -721,13 +756,13 @@ double gpuMotionCorrect::estimate_motion_recursive(int level, bool top,
         int blockSize = 256;
         int numBlocks = (w_half * h_half + blockSize - 1) / blockSize;
         
-        downsample_image<<<numBlocks, blockSize>>>(w_half, h_half, w, h, tgt, tgt_half);
+        downsample_image<<<numBlocks, blockSize, 0, strm>>>(w_half, h_half, w, h, tgt, tgt_half);
         
         float x_half, y_half;
         estimate_motion_recursive(level - 1, false,
                                   search_size, patch_size_half, patch_offset_half,
                                   x_range, y_range,
-                                  w_half, h_half, ref_half, tgt_half, &x_half, &y_half);
+                                  w_half, h_half, ref_half, tgt_half, &x_half, &y_half, strm);
 
         by = (int)(2 * y_half);
         bx = (int)(2 * x_half);
@@ -766,24 +801,24 @@ double gpuMotionCorrect::estimate_motion_recursive(int level, bool top,
     int stride = pow(2, ceil(log(max_lim)/log(2)));
 
     // Get reference values for different grids
-    get_refs<<<max_lim_l1, max_lim_l0>>>(ref, w, h, search_size, patch_num_l, patch_num_b, patch_offset, patch_size, max_lim_l0, ref_sum, ref_var, narray);
+    get_refs<<<max_lim_l1, max_lim_l0, 0, strm>>>(ref, w, h, search_size, patch_num_l, patch_num_b, patch_offset, patch_size, max_lim_l0, ref_sum, ref_var, narray);
 
     // For each grid, we get the first row of tgt values
-    get_tgt_horiz<<<A, size>>>(tgt, w, h, search_size, bx, by, patch_num_l, patch_num_b, patch_offset, patch_size, max_lim_l0, tgt_sum, tgt_sum2);
+    get_tgt_horiz<<<A, size, 0, strm>>>(tgt, w, h, search_size, bx, by, patch_num_l, patch_num_b, patch_offset, patch_size, max_lim_l0, tgt_sum, tgt_sum2);
 
     // For each grid, we compute all tgt values using overlap information vertically down.
-    get_tgt_verti<<<A, B>>>(tgt, w, h, search_size, bx, by, patch_num_l, patch_num_b, patch_offset, patch_size, max_lim_l0, tgt_sum, tgt_sum2);
+    get_tgt_verti<<<A, B, 0, strm>>>(tgt, w, h, search_size, bx, by, patch_num_l, patch_num_b, patch_offset, patch_size, max_lim_l0, tgt_sum, tgt_sum2);
 
     // Compute the covariance and NCC
-    correlation_image<<<A, B>>>(ref, tgt, w, h, search_size, bx, by, patch_num_l, patch_num_b, patch_offset, patch_size, corr_buf, stride, max_lim_l0, ref_sum, ref_var, narray, tgt_sum, tgt_sum2);
+    correlation_image<<<A, B, 0, strm>>>(ref, tgt, w, h, search_size, bx, by, patch_num_l, patch_num_b, patch_offset, patch_size, corr_buf, stride, max_lim_l0, ref_sum, ref_var, narray, tgt_sum, tgt_sum2);
 
     // Sum the grids to get a correlation value of search area (7x7 for FOV2)
-    sum_reduction<<<numBlocks, stride>>>(corr_buf, corr, numBlocks, stride, max_lim);
+    sum_reduction<<<numBlocks, stride, 0, strm>>>(corr_buf, corr, numBlocks, stride, max_lim);
 
     // Get the peak points
-    get_gpu_peak<<<1,1>>>(search_size, corr, top);
+    get_gpu_peak<<<1, 1, 0, strm>>>(search_size, corr, top);
 
-    cudaDeviceSynchronize();
+    cudaStreamSynchronize(strm);
 
     *y = by + corr[1];
     *x = bx + corr[2];
@@ -791,12 +826,12 @@ double gpuMotionCorrect::estimate_motion_recursive(int level, bool top,
     return corr[0];
 }
 
-double gpuMotionCorrect::estimate_motion(float *in, float *x, float *y)
+double gpuMotionCorrect::estimate_motion(float *in, float *x, float *y, cudaStream_t strm)
 {
     return estimate_motion_recursive(param->mp->level, true,
                                      param->mp->search_size, param->mp->patch_size, param->mp->patch_offset,
                                      param->mp->x_range, param->mp->y_range,
-                                     param->W, param->H, ref, in, x, y);
+                                     param->W, param->H, ref, in, x, y, strm);
 }
 
 
@@ -811,7 +846,7 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
 
     const size_t gpu_mem_size = 2L * 1024 * 1024 * 1024;
     const size_t data_size_per_frame = width * height * sizeof(float);
-
+    const int num_frames_per_batch = 1000;
 
     gpuParam_t gp;
     gp.size = (param.search_size << 1) + 1;
@@ -827,6 +862,10 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     gp.W = width;
     gp.H = height;
     gp.dT = gpu_mem_size / data_size_per_frame;
+    if(gp.dT > num_frames_per_batch)
+    {
+        gp.dT = num_frames_per_batch;
+    }
     gp.himg = in_image;
     gp.hout = out_image;
     gp.mp = &param;
@@ -839,20 +878,19 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     gp.motion_list[0].corr = 0;
     gp.motion_list[0].valid = true;
 
+    printf("process %d frames in total\n", gp.T);
     gpuMotionCorrect *gmc[num_gpus];
     for(int i = 0; i < num_gpus; i++)
     {
         gmc[i] = new gpuMotionCorrect(i, &gp);
         gmc[i]->allocate();
+        int n = gmc[i]->set_batches(num_gpus);
+        printf("  GPU %d to process %d batches of %d frames\n", i, n, gp.dT);
     }
 
-    const int num_batches = (num_pages + gp.dT - 1) / gp.dT;
-    int gpu_id = 0;
-    for(int i = 0; i < num_batches; i++)
+    for(int i = 0; i < num_gpus; i++)
     {
-        gmc[gpu_id]->set_batch(i);
-        gmc[gpu_id]->process();
-        gpu_id = (gpu_id + 1) % num_gpus;
+        gmc[i]->run();
     }
 
     for(int i = 0; i < num_gpus; i++)
