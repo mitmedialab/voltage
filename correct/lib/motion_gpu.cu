@@ -24,11 +24,6 @@
 
 #define BYTESPERPIXEL 1
 
-inline float* loc3D(float *img, int t, int h, int w, int k, int i, int j)
-{
-    return img + ((k * w * h) + ((i * w) + j)) * BYTESPERPIXEL; 
-}
-
 
 
 __forceinline__ __device__
@@ -610,7 +605,7 @@ void gpuMotionCorrect::allocate()
     cudaSetDevice(gpu_id);
 
     const size_t frame_size = param->W * param->H * sizeof(float);
-    checkCudaErrors(cudaMalloc((void **)&img, (param->dT + 1) * frame_size));
+    checkCudaErrors(cudaMalloc((void **)&img, (param->dT + 1) * frame_size)); // +1 frame
     checkCudaErrors(cudaMalloc((void **)&ref, frame_size));
 
     const size_t l1_size = param->h_l1 * param->w_l1 * sizeof(float);
@@ -682,6 +677,22 @@ int gpuMotionCorrect::set_batches(int num_gpus)
 
 void gpuMotionCorrect::run()
 {
+    // computation for reference image needs to be done only once in the beginning
+    const cudaStream_t strm = batches[0].strm;
+    const int blockSize = 256;
+    int numBlocks;
+
+    checkCudaErrors(cudaMemcpyAsync(ref, param->himg, // copy first frame as reference
+                                    param->W * param->H * sizeof(float),
+                                    cudaMemcpyHostToDevice, strm));
+
+    numBlocks = (param->w_l1 * param->h_l1 + blockSize - 1) / blockSize;
+    downsample_image<<<numBlocks, blockSize, 0, strm>>>(param->w_l1, param->h_l1, param->W, param->H, ref, ref_l1);
+
+    numBlocks = (param->w_l0 * param->h_l0 + blockSize - 1) / blockSize;
+    downsample_image<<<numBlocks, blockSize, 0, strm>>>(param->w_l0, param->h_l0, param->w_l1, param->h_l1, ref_l1, ref_l0);
+
+    // start processing batches of frames
     for(auto b : batches)
     {
         process(b);
@@ -692,30 +703,25 @@ void gpuMotionCorrect::process(batch_t b)
 {
     cudaSetDevice(gpu_id);
 
-    const int blockSize = 256;
-    int numBlocks;
+    const size_t frame_size = param->W * param->H;
+    const size_t batch_data_size = b.delta_t * frame_size * sizeof(float);
 
-    checkCudaErrors(cudaMemcpyAsync(img + param->W * param->H, loc3D(param->himg, param->T, param->H, param->W, b.t_start, 0, 0), b.delta_t * param->W * param->H * sizeof(float), cudaMemcpyHostToDevice, b.strm));
-
-    checkCudaErrors(cudaMemcpyAsync(ref, param->himg, param->W * param->H * sizeof(float), cudaMemcpyHostToDevice, b.strm));
-
-    numBlocks = (param->w_l1 * param->h_l1 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize, 0, b.strm>>>(param->w_l1, param->h_l1, param->W, param->H, ref, ref_l1);
-
-    numBlocks = (param->w_l0 * param->h_l0 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize, 0, b.strm>>>(param->w_l0, param->h_l0, param->w_l1, param->h_l1, ref_l1, ref_l0);
+    // transfer input image to GPU by offsetting by one frame
+    checkCudaErrors(cudaMemcpyAsync(img + frame_size, param->himg + frame_size * b.t_start,
+                                    batch_data_size, cudaMemcpyHostToDevice, b.strm));
 
     checkCudaErrors(cudaMemsetAsync(corr, 0, param->corr_size * sizeof(double), b.strm));
 
+    // read i-th frame at (i+1)-th index and write motion corrected frame to i-th index
+    // to avoid allocating input and output frames separately (would consume 2x GPU memory)
     for(int i = 0; i < b.delta_t; i++)
     {
+        float *tgt_in = img + frame_size * (i+1); // offset by one frame
+        float *tgt_out = img + frame_size * i; // overwrite previous frame
         float x = 0, y = 0;
-        double c = estimate_motion(loc3D(img, param->T, param->H, param->W, i+1, 0, 0), &x, &y, b.strm);
-#ifdef DEBUG
-        if(i < 100)
-            printf("[%d] C: %f, x %f , y %f\n", i, c, x, y);
-#endif
-        apply_motion<<<param->H, param->W, 0, b.strm>>>(param->W, param->H, loc3D(img, param->T, param->H, param->W, i+1, 0, 0), x, y, loc3D(img, param->T, param->H, param->W, i, 0, 0));
+        double c = estimate_motion(tgt_in, &x, &y, b.strm);
+        apply_motion<<<param->H, param->W, 0, b.strm>>>(param->W, param->H, tgt_in, x, y, tgt_out);
+
         motion_t m;
         m.x = x;
         m.y = y;
@@ -724,7 +730,8 @@ void gpuMotionCorrect::process(batch_t b)
         param->motion_list.at(b.t_start + i) = m;
     }
 
-    checkCudaErrors(cudaMemcpyAsync(loc3D(param->hout, param->T, param->H, param->W, b.t_start, 0, 0), img, b.delta_t * param->H * param->W * sizeof(float), cudaMemcpyDeviceToHost, b.strm));
+    checkCudaErrors(cudaMemcpyAsync(param->hout + frame_size * b.t_start, img,
+                                    batch_data_size, cudaMemcpyDeviceToHost, b.strm));
 }
 
 double gpuMotionCorrect::estimate_motion_recursive(int level, bool top,
@@ -835,6 +842,10 @@ double gpuMotionCorrect::estimate_motion(float *in, float *x, float *y, cudaStre
 }
 
 
+static void process_gpu_thread(gpuMotionCorrect *gmc)
+{
+    gmc->run();
+}
 
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
                                          int num_pages, int width, int height,
@@ -888,9 +899,15 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
         printf("  GPU %d to process %d batches of %d frames\n", i, n, gp.dT);
     }
 
+    std::vector<std::thread> threads;
     for(int i = 0; i < num_gpus; i++)
     {
-        gmc[i]->run();
+        threads.push_back(std::thread(process_gpu_thread, gmc[i]));
+    }
+
+    for(auto& th : threads)
+    {
+        th.join();
     }
 
     for(int i = 0; i < num_gpus; i++)
