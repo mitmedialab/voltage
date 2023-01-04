@@ -579,7 +579,7 @@ private:
     gpuParam_t *param = nullptr;
 public:
     gpuMotionCorrect(int gpu_id, gpuParam_t *param);
-    void allocate();
+    size_t allocate();
     void free();
     int set_batches(int num_gpus);
     void run();
@@ -600,13 +600,15 @@ gpuMotionCorrect::gpuMotionCorrect(int gpu_id, gpuParam_t *param)
     this->param = param;
 }
 
-void gpuMotionCorrect::allocate()
+size_t gpuMotionCorrect::allocate()
 {
     cudaSetDevice(gpu_id);
+    size_t size = 0;
 
     const size_t frame_size = param->W * param->H * sizeof(float);
     checkCudaErrors(cudaMalloc((void **)&img, (param->dT + 1) * frame_size)); // +1 frame
     checkCudaErrors(cudaMalloc((void **)&ref, frame_size));
+    size += (param->dT + 1) * frame_size + frame_size;
 
     const size_t l1_size = param->h_l1 * param->w_l1 * sizeof(float);
     const size_t l0_size = param->h_l0 * param->w_l0 * sizeof(float);
@@ -614,8 +616,10 @@ void gpuMotionCorrect::allocate()
     checkCudaErrors(cudaMalloc((void **)&ref_l0, l0_size));
     checkCudaErrors(cudaMalloc((void **)&tgt_l1, l1_size));
     checkCudaErrors(cudaMalloc((void **)&tgt_l0, l0_size));
+    size += (l1_size + l0_size) * 2;
 
     checkCudaErrors(cudaMallocManaged((void **)&corr, param->corr_size * sizeof(double)));
+    size += param->corr_size * sizeof(double);
 
     const size_t ref_size = param->loop23_ct_rnd * sizeof(double);
     const size_t tgt_size = param->size * param->size * ref_size;
@@ -625,6 +629,9 @@ void gpuMotionCorrect::allocate()
     checkCudaErrors(cudaMalloc((void **)&tgt_sum,  tgt_size));
     checkCudaErrors(cudaMalloc((void **)&tgt_sum2, tgt_size));
     checkCudaErrors(cudaMalloc((void **)&narray, param->loop23_ct_rnd * sizeof(int)));
+    size += tgt_size * 3 + ref_size * 2 + param->loop23_ct_rnd * sizeof(int);
+
+    return size;
 }
 
 void gpuMotionCorrect::free()
@@ -849,15 +856,12 @@ static void process_gpu_thread(gpuMotionCorrect *gmc)
 
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
                                          int num_pages, int width, int height,
+                                         int num_frames_per_batch,
                                          float *in_image, float *out_image)
 {
     int num_gpus;
     checkCudaErrors(cudaGetDeviceCount(&num_gpus));
-    printf("Motion Correction GPU NUM %d\n", num_gpus);
-
-    const size_t gpu_mem_size = 2L * 1024 * 1024 * 1024;
-    const size_t data_size_per_frame = width * height * sizeof(float);
-    const int num_frames_per_batch = 1000;
+    printf("Motion Correction on %d GPUs\n", num_gpus);
 
     gpuParam_t gp;
     gp.size = (param.search_size << 1) + 1;
@@ -872,11 +876,7 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     gp.T = num_pages;
     gp.W = width;
     gp.H = height;
-    gp.dT = gpu_mem_size / data_size_per_frame;
-    if(gp.dT > num_frames_per_batch)
-    {
-        gp.dT = num_frames_per_batch;
-    }
+    gp.dT = num_frames_per_batch;
     gp.himg = in_image;
     gp.hout = out_image;
     gp.mp = &param;
@@ -894,9 +894,10 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     for(int i = 0; i < num_gpus; i++)
     {
         gmc[i] = new gpuMotionCorrect(i, &gp);
-        gmc[i]->allocate();
+        size_t s = gmc[i]->allocate();
         int n = gmc[i]->set_batches(num_gpus);
-        printf("  GPU %d to process %d batches of %d frames\n", i, n, gp.dT);
+        printf("  GPU %d to process %d batches of %d frames using %.1f GB of memory\n",
+               i, n, gp.dT, s / (float)(1024L * 1024L * 1024L));
     }
 
     std::vector<std::thread> threads;

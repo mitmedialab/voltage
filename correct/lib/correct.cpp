@@ -60,8 +60,9 @@ void correct_video_cpp(int num_frames, int height, int width,
                        int normalize,
                        int motion_search_level, int motion_search_size,
                        int motion_patch_size, int motion_patch_offset,
+                       float motion_x_range, float motion_y_range,
                        int shading_period,
-                       int use_gpu, int num_threads)
+                       int use_gpu, int num_frames_per_batch, int num_threads)
 {
     if(num_threads > 0)
     {
@@ -77,8 +78,8 @@ void correct_video_cpp(int num_frames, int height, int width,
     motion_param.search_size = motion_search_size;
     motion_param.patch_size = motion_patch_size;
     motion_param.patch_offset = motion_patch_offset;
-    motion_param.x_range = 0.7;//1.0;
-    motion_param.y_range = 1.0;
+    motion_param.x_range = motion_x_range;
+    motion_param.y_range = motion_y_range;
     //motion_param.thresh_xy = 10.0;
     motion_param.length = 1000;
     motion_param.thresh_c = 1.0;
@@ -103,6 +104,7 @@ void correct_video_cpp(int num_frames, int height, int width,
     if(use_gpu)
     {
         motion_list = correct_motion_gpu(motion_param, t, w, h,
+                                         num_frames_per_batch,
                                          in_image, *out_image);
     }
     else

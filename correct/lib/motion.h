@@ -34,6 +34,7 @@ std::vector<motion_t> correct_motion(motion_param_t &param,
 
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
                                         int num_pages, int width, int height,
+                                        int num_frames_per_batch,
                                         float *in_image, float *out_image);
 
 #endif

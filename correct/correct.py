@@ -7,8 +7,9 @@ def correct_video(in_file, correction_file, motion_file,
                   first_frame=0, normalize=True,
                   motion_search_level=2, motion_search_size=5,
                   motion_patch_size=10, motion_patch_offset=7,
+                  motion_x_range=1.0, motion_y_range=1.0,
                   shading_period=1000,
-                  num_threads=0):
+                  use_gpu=True, num_frames_per_batch=1000, num_threads=0):
     """
     Correct motion and shading in a video.
 
@@ -29,6 +30,7 @@ def correct_video(in_file, correction_file, motion_file,
         If True (default), the video intensity will be normalized.
     motion_search_level : integer, optional
         Max level of multiresolution motion correction. The default is 2.
+        The GPU implementation does not support more than 2.
     motion_search_size : integer, optional
         [-search_size, +search_size] pixels will be searched in X and Y at
         each level as motion vector candidates. The default is 5.
@@ -39,9 +41,28 @@ def correct_video(in_file, correction_file, motion_file,
     motion_patch_offset : integer, optional
         Offset (both in X and Y) between adjacent patches. A larger value
         leads to fewer patches with smaller overlaps. The default is 7.
+    motion_x_range : float, optional
+        Fractional image range in X to be used in motion correction.
+        For instance, 0.5 means patch-based correlation will be computed for
+        50% of the image width around the center. The image outside of that
+        range will not be referenced. This is useful when the image periphery
+        does not contain much usable information to match.
+        The default is 1.0 (full width).
+    motion_y_range : float, optional
+        Fractional image range in Y to be used in motion correction.
+        The default is 1.0 (full height).
     shading_period : integer, optional
         Time period (in frames) for modeling shading variation.
         The default is 1000.
+    use_gpu : boolean, optional
+        GPUs will be used for the part of the algorithms whose GPU
+        implementation is available. The default is True.
+    num_frames_per_batch : integer, optional
+        If use_gpu=True, the input video will be split into batches each having
+        this number of frames, and will be processed one batch at a time.
+        This will reduce the GPU memory usage and can improve performance as
+        GPU data transfer can be overlapped with GPU processing.
+        The default is 1000. This parameter will be ignored if use_gpu=False.
     num_threads : integer, optional
         The number of threads to run the preprocessing on. The default is 0,
         in which case all the available cores will be used.
@@ -57,8 +78,10 @@ def correct_video(in_file, correction_file, motion_file,
                                    1 if normalize else 0,
                                    motion_search_level, motion_search_size,
                                    motion_patch_size, motion_patch_offset,
+                                   motion_x_range, motion_y_range,
                                    shading_period,
-                                   1, num_threads)
+                                   1 if use_gpu else 0,
+                                   num_frames_per_batch, num_threads)
 
     tiff.imwrite(correction_file, c, photometric='minisblack')
     with h5py.File(motion_file, 'w') as f:

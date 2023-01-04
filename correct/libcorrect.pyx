@@ -13,15 +13,19 @@ cdef extern from "correct.h":
                            int normalize,
                            int motion_search_level, int motion_search_size,
                            int motion_patch_size, int motion_patch_offset,
+                           float motion_x_range, float motion_y_range,
                            int shading_period,
-                           int use_gpu, int num_threads)
+                           int use_gpu, int num_frames_per_batch,
+                           int num_threads)
 
 def correct_video_cython(np.ndarray[np.float32_t, ndim=3] in_image,
                          int normalize,
                          int motion_search_level, int motion_search_size,
                          int motion_patch_size, int motion_patch_offset,
+                         float motion_x_range, float motion_y_range,
                          int shading_period,
-                         int use_gpu, int num_threads):
+                         int use_gpu, int num_frames_per_batch,
+                         int num_threads):
     """
     Binder function to call a C++ implementation of correct_video().
     Refer to correct_video() in correct.py for parameter definitions.
@@ -42,8 +46,9 @@ def correct_video_cython(np.ndarray[np.float32_t, ndim=3] in_image,
                       normalize,
                       motion_search_level, motion_search_size,
                       motion_patch_size, motion_patch_offset,
+                      motion_x_range, motion_y_range,
                       shading_period,
-                      use_gpu, num_threads)
+                      use_gpu, num_frames_per_batch, num_threads)
 
     cdef cvarray arr_c = <float [:t, :h, :w]>out_image
     cdef cvarray arr_x = <float [:t]>out_x

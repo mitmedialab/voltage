@@ -21,6 +21,10 @@ params.setdefault('FIRST_FRAME', 0)
 params.setdefault('SIGNAL_METHOD', 'max-med')
 params.setdefault('SIGNAL_BINNING', 1)
 params.setdefault('BACKGROUND_SIGMA', 10)
+params.setdefault('MOTION_X_RANGE', 1.0)
+params.setdefault('MOTION_Y_RANGE', 1.0)
+params.setdefault('USE_GPU_CORRECT', True)
+params.setdefault('BATCH_SIZE_CORRECT', 1000)
 
 
 def set_dir(base_path, dirname):
@@ -99,7 +103,9 @@ def correct(in_dir, correction_dir, filename):
                          params['MOTION_SEARCH_SIZE'],
                          params['MOTION_PATCH_SIZE'],
                          params['MOTION_PATCH_OFFSET'],
-                         params['TIME_SEGMENT_SIZE'], 1))
+                         1.0, 1.0,
+                         params['TIME_SEGMENT_SIZE'],
+                         False, 1000, 1)) # use CPU instead of GPU
 
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(correct_video, args)
@@ -282,6 +288,10 @@ elif(params['RUN_MODE'] == 'run'):
                           motion_search_size=params['MOTION_SEARCH_SIZE'],
                           motion_patch_size=params['MOTION_PATCH_SIZE'],
                           motion_patch_offset=params['MOTION_PATCH_OFFSET'],
+                          motion_x_range=params['MOTION_X_RANGE'],
+                          motion_y_range=params['MOTION_Y_RANGE'],
+                          use_gpu=params['USE_GPU_CORRECT'],
+                          num_frames_per_batch=params['BATCH_SIZE_CORRECT'],
                           num_threads=params['NUM_THREADS_CORRECT'])
             timer.stop('Correct')
         else:
@@ -322,7 +332,8 @@ elif(params['RUN_MODE'] == 'run'):
         if(params['RUN_DEMIX']):
             timer.start()
             compute_masks(segment_file, spatial_file, demix_file,
-                          0.95, params['AREA_THRESHOLD'],
+                          params['PROBABILITY_THRESHOLD'],
+                          params['AREA_THRESHOLD'],
                           params['BACKGROUND_SIGMA'])
             timer.stop('Mask')
         else:
