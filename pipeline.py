@@ -19,8 +19,11 @@ if(len(sys.argv) != 2):
 params = runpy.run_path(sys.argv[1])
 params.setdefault('FIRST_FRAME', 0)
 params.setdefault('SIGNAL_METHOD', 'max-med')
-params.setdefault('SIGNAL_BINNING', 1)
+params.setdefault('SIGNAL_SCALE', 3.0)
+params.setdefault('SIGNAL_DOWNSAMPLING', 1.0)
 params.setdefault('BACKGROUND_SIGMA', 10)
+params.setdefault('BACKGROUND_EDGE', 1.0)
+params.setdefault('MASK_DILATION', 0)
 params.setdefault('MOTION_X_RANGE', 1.0)
 params.setdefault('MOTION_Y_RANGE', 1.0)
 params.setdefault('USE_GPU_CORRECT', True)
@@ -307,7 +310,7 @@ elif(params['RUN_MODE'] == 'run'):
                              params['SIGNAL_METHOD'],
                              params['TIME_SEGMENT_SIZE'],
                              params['SIGNAL_SCALE'],
-                             params['SIGNAL_BINNING'],
+                             params['SIGNAL_DOWNSAMPLING'],
                              params['NUM_THREADS_PREPROC'])
             timer.stop('Preproc')
         else:
@@ -321,6 +324,7 @@ elif(params['RUN_MODE'] == 'run'):
             apply_model([temporal_file, spatial_file],
                         params['MODEL_FILE'],
                         segment_file, reference_file,
+                        params['NORM_CHANNEL'], params['NORM_SHIFTS'],
                         params['TILE_SHAPE'], params['TILE_STRIDES'],
                         params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
             timer.stop('Segment')
@@ -333,8 +337,16 @@ elif(params['RUN_MODE'] == 'run'):
             timer.start()
             compute_masks(segment_file, spatial_file, demix_file,
                           params['PROBABILITY_THRESHOLD'],
-                          params['AREA_THRESHOLD'],
-                          params['BACKGROUND_SIGMA'])
+                          params['AREA_THRESHOLD_MIN'],
+                          params['AREA_THRESHOLD_MAX'],
+                          params['CONCAVITY_THRESHOLD'],
+                          params['INTENSITY_THRESHOLD'],
+                          params['ACTIVITY_THRESHOLD'],
+                          params['BACKGROUND_SIGMA'],
+                          params['BACKGROUND_EDGE'],
+                          params['BACKGROUND_THRESHOLD'],
+                          params['MASK_DILATION'],
+                          params['SIGNAL_DOWNSAMPLING'])
             timer.stop('Mask')
         else:
             timer.skip('Mask')
@@ -345,7 +357,7 @@ elif(params['RUN_MODE'] == 'run'):
         # evaluate the accuracy of detections
         if(params['RUN_EVALUATE']):
             gt_file = params['GT_FILES'][i]
-            run_ipynb_evaluate_each(demix_file, gt_file, spatial_file,
+            run_ipynb_evaluate_each(demix_file, gt_file, correction_file, #spatial_file,
                                     out_dir, tag)
 
     if(params['RUN_EVALUATE']):

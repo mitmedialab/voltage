@@ -8,6 +8,7 @@ from evaluate import read_roi
 
 INPUTS = [
     ('/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag_GT', '*.tif'),
+    ('/media/bandy/nvme_data/voltage/datasets_v0.5/highmag_GT', '*.tif'),
     ('/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_L1', '*/*.zip'),
     ('/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_TEG', '*/*.zip'),
     ('/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_HPC', '*/*.zip'),
@@ -25,3 +26,4 @@ for input_dir, pat in INPUTS:
     max_area = max(areas)
     print('area range [%d, %d]  (sqrt [%.1f, %.1f])'
           % (min_area, max_area, math.sqrt(min_area), math.sqrt(max_area)))
+

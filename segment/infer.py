@@ -187,7 +187,7 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
     preds = preds[:, :, :, 0] # remove last dimension (its length is one)
     if(preds.shape[1:] != data_seq.patch_shape):
         preds = resize(preds, (len(preds),) + data_seq.patch_shape,
-                       mode='constant', anti_aliasing=True)
+                       mode='edge', anti_aliasing=True)
 
     Ys, Xs = data_seq.get_tile_pos()
     num_tiles = len(Ys)
@@ -314,6 +314,7 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
 
 
 def apply_model(input_files, model_file, out_file, ref_file,
+                norm_axis, norm_shifts,
                 tile_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Apply a learned U-Net by making inference on a test/real data set.
@@ -350,6 +351,7 @@ def apply_model(input_files, model_file, out_file, ref_file,
 
     data_seq = VI_Sequence(batch_size, model_io_shape, tile_shape,
                            [input_files], None,
+                           norm_axis, norm_shifts,
                            tiled=True, tile_strides=tile_strides)
 
     _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,

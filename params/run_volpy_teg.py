@@ -2,20 +2,26 @@
 TIME_SEGMENT_SIZE = 50
 
 # motion/shading correction parameters
-MOTION_SEARCH_LEVEL = 0
-MOTION_SEARCH_SIZE = 0
-MOTION_PATCH_SIZE = 1
-MOTION_PATCH_OFFSET = 1000
+MOTION_SEARCH_LEVEL = 2
+MOTION_SEARCH_SIZE = 3
+MOTION_PATCH_SIZE = 10
+MOTION_PATCH_OFFSET = 7
+MOTION_X_RANGE = 0.5
+MOTION_Y_RANGE = 0.5
 
 # preprocessing parameters
 SIGNAL_METHOD = 'med-min'
-SIGNAL_SCALE = 3.0
-SIGNAL_BINNING = 2
 
 # demixing parameters
-AREA_THRESHOLD = 100
-ACTIVITY_LEVEL_THRESHOLD_RELATIVE = 0
-ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE = 0.0001
+PROBABILITY_THRESHOLD = 0.2
+AREA_THRESHOLD_MIN = 120
+AREA_THRESHOLD_MAX = 600
+CONCAVITY_THRESHOLD = 1.5
+INTENSITY_THRESHOLD = 0.005
+ACTIVITY_THRESHOLD = 0
+BACKGROUND_EDGE = 3.0
+BACKGROUND_THRESHOLD = 0.003
+MASK_DILATION = 2
 
 
 # runtime parameters
@@ -30,20 +36,21 @@ RUN_EVALUATE = True
 # performance parameters (optimal values depend on the computer environment)
 NUM_THREADS_CORRECT = 0  # 0 uses all the available logical cores
 NUM_THREADS_PREPROC = 0  # 0 uses all the available logical cores
-NUM_THREADS_DEMIXING = 16
 GPU_MEM_SIZE = 5 # GB
 
 
 # real data parameters
-TILE_SHAPE = (128, 128)
-TILE_STRIDES = (16, 16)
+TILE_SHAPE = (64, 64)
+TILE_STRIDES = (8, 8)
 BATCH_SIZE = 128
+NORM_CHANNEL = 1
+NORM_SHIFTS = [False, True]
 
 
 # file paths
-import pathlib
+from pathlib import Path
 INPUT_DIR = '/media/bandy/nvme_data/VolPy_Data/Extracted/voltage_TEG'
-INPUT_FILES = sorted(pathlib.Path(INPUT_DIR).glob('*/*.tif'))
+INPUT_FILES = sorted(Path(INPUT_DIR).glob('*/*.tif'))
 GT_FILES = [f.with_name(f.stem + '_ROI.zip') for f in INPUT_FILES]
-MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220106_dendrites/model.h5'
+MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220620_patchnorm/model_e11_v0.0456.h5'
 OUTPUT_DIR = '/media/bandy/nvme_work/voltage/volpyTEG'

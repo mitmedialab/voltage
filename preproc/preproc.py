@@ -1,11 +1,12 @@
+import numpy as np
 import tifffile as tiff
 from libpreproc import preprocess_video_cython
-from skimage.transform import downscale_local_mean, resize
+from skimage.transform import resize_local_mean
 
 
 def preprocess_video(in_file, temporal_file, spatial_file,
                      signal_method, signal_period, signal_scale,
-                     binning=1,
+                     downsampling=1.0,
                      num_threads=0):
     """
     Preprocess video for signal extraction.
@@ -28,9 +29,10 @@ def preprocess_video(in_file, temporal_file, spatial_file,
         Signal extraction will be performed after smoothing the corrected
         video with a spatial Gaussian filter of this scale (standard
         deviation).
-    binning : integer, optional
-        Downscale input video by spatial binning, where binning x binning
-        pixels are averaged to yield one pixel. The default is 1 (no binning).
+    downsampling : float, optional
+        Input video will be spatially downsampled by this factor. The width and
+        height of the resultant video will be 1/downsampling of the original.
+        The default is 1.0 (no downsampling).
     num_threads : integer, optional
         The number of threads to run the preprocessing on. The default is 0,
         in which case all the available cores will be used.
@@ -48,17 +50,17 @@ def preprocess_video(in_file, temporal_file, spatial_file,
         method_id = 2
 
     in_image = tiff.imread(in_file).astype('float32')
-    if(binning > 1):
-        orig_shape = in_image.shape[1:]
-        in_image = downscale_local_mean(in_image, (1, binning, binning))
+    if(downsampling > 1):
+        h = int(in_image.shape[1] / downsampling)
+        w = int(in_image.shape[2] / downsampling)
+        down = np.zeros((len(in_image), h, w), dtype='float32')
+        for i, im in enumerate(in_image):
+            down[i] = resize_local_mean(im, (h, w))
+        in_image = down
 
     t, s = preprocess_video_cython(in_image,
                                    method_id, signal_period, signal_scale,
                                    num_threads)
-
-    if(binning > 1):
-        t = resize(t, (len(t),) + orig_shape, mode='constant')
-        s = resize(s, (len(s),) + orig_shape, mode='constant')
 
     tiff.imwrite(temporal_file, t, photometric='minisblack')
     tiff.imwrite(spatial_file, s, photometric='minisblack')

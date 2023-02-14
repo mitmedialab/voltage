@@ -10,6 +10,7 @@ class VI_Sequence(Sequence):
 
     def __init__(self, batch_size, model_io_shape, patch_shape,
                  input_img_paths, target_img_paths,
+                 norm_channel=-1, norm_shifts=[],
                  num_darts=1, tiled=False, tile_strides=(1, 1),
                  shuffle=False, padding='magnify'):
         """
@@ -42,6 +43,14 @@ class VI_Sequence(Sequence):
             List of file paths to target images specifing expected outputs
             from the U-Net. Each file (tiff) must contain the same number of
             images of the same size as the corresponding input file.
+        norm_channel : integer, optional
+            The channel used to determine the scale for patch normalization.
+            If -1 (default), the max/min intensities of a given patch across
+            all the channels will be used. If nonnegative, the max/min of the
+            specified channel will be used.
+        norm_shifts : list of boolean, optional
+            Whether or not to shift the intensities of an image patch so the
+            channel-wise minimum becomes zero. The default is [] (no shifting).
         num_darts : integer, optional
             The number of darts to be thrown per image to extract patches
             from the image. If num_darts=1 (default), one image patch is
@@ -75,6 +84,8 @@ class VI_Sequence(Sequence):
         self.batch_size = batch_size
         self.model_io_shape = model_io_shape
         self.patch_shape = patch_shape
+        self.norm_channel = norm_channel
+        self.norm_shifts = norm_shifts
         self.num_darts = num_darts
         self.tiled = tiled
         self.shuffle = shuffle
@@ -245,13 +256,23 @@ class VI_Sequence(Sequence):
                 targets[i] = self.target_images[img_idx, ys:ye, xs:xe]
             else:
                 in_tmp = resize(self.input_images[img_idx, ys:ye, xs:xe],
-                                self.model_io_shape, mode='reflect')
+                                self.model_io_shape, mode='edge')
                 targets[i] = resize(self.target_images[img_idx, ys:ye, xs:xe],
-                                    self.model_io_shape, mode='reflect')
+                                    self.model_io_shape, mode='edge')
             # patch-wise normalization
-            vmax = np.amax(in_tmp)
-            vmin = np.amin(in_tmp)
-            inputs[i] = (in_tmp - vmin) / (vmax - vmin)
+            if(self.norm_channel in range(self.num_channels)):
+                # use max/min of specified channel
+                vmax = np.amax(in_tmp[:, :, self.norm_channel])
+                vmin = np.amin(in_tmp[:, :, self.norm_channel])
+            else: # use max/min of all channels
+                vmax = np.amax(in_tmp)
+                vmin = np.amin(in_tmp)
+            norm_scale = 1 / (vmax - vmin)
+            norm_shift_vals = np.zeros((1, 1, self.num_channels))
+            for j in range(self.num_channels):
+                if(self.norm_shifts and self.norm_shifts[j]):
+                    norm_shift_vals[:, :, j] = np.amin(in_tmp[:, :, j])
+            inputs[i] = (in_tmp - norm_shift_vals) * norm_scale
 
         targets = targets[:, :, :, np.newaxis] # add 4th dimension of size 1
         return inputs, targets

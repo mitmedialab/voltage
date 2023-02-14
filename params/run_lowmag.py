@@ -3,17 +3,21 @@ TIME_SEGMENT_SIZE = 50
 
 # motion/shading correction parameters
 MOTION_SEARCH_LEVEL = 2
-MOTION_SEARCH_SIZE = 5
-MOTION_PATCH_SIZE = 15
+MOTION_SEARCH_SIZE = 3
+MOTION_PATCH_SIZE = 10
 MOTION_PATCH_OFFSET = 7
-
-# preprocessing parameters
-SIGNAL_SCALE = 3.0
+MOTION_X_RANGE = 0.7
 
 # demixing parameters
-AREA_THRESHOLD = 55
-ACTIVITY_LEVEL_THRESHOLD_RELATIVE = 1/9
-ACTIVITY_LEVEL_THRESHOLD_ABSOLUTE = 0.0001
+PROBABILITY_THRESHOLD = 0.95
+AREA_THRESHOLD_MIN = 110
+AREA_THRESHOLD_MAX = 1000
+CONCAVITY_THRESHOLD = 1.5
+INTENSITY_THRESHOLD = 0.01
+ACTIVITY_THRESHOLD = 0.001
+BACKGROUND_EDGE = 1.0
+BACKGROUND_THRESHOLD = 0.003
+MASK_DILATION = 1
 
 
 # runtime parameters
@@ -28,7 +32,6 @@ RUN_EVALUATE = True
 # performance parameters (optimal values depend on the computer environment)
 NUM_THREADS_CORRECT = 0  # 0 uses all the available logical cores
 NUM_THREADS_PREPROC = 0  # 0 uses all the available logical cores
-NUM_THREADS_DEMIXING = 16
 GPU_MEM_SIZE = 5 # GB
 
 
@@ -36,13 +39,15 @@ GPU_MEM_SIZE = 5 # GB
 TILE_SHAPE = (64, 64)
 TILE_STRIDES = (8, 8)
 BATCH_SIZE = 128
+NORM_CHANNEL = 1
+NORM_SHIFTS = [True, True]
 
 
 # file paths
-import pathlib
-INPUT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.3/lowmag'
-INPUT_FILES = sorted(pathlib.Path(INPUT_DIR).glob('*.tif'))
-GT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.3/lowmag_GT_v20201027'
-GT_FILES = [pathlib.Path(GT_DIR).joinpath(f.name) for f in INPUT_FILES]
-MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220106_dendrites/model.h5'
-OUTPUT_DIR = '/media/bandy/nvme_work/voltage/lowmag_v0.3'
+from pathlib import Path
+INPUT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag'
+INPUT_FILES = sorted(Path(INPUT_DIR).glob('*.tif'))
+GT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag_GT'
+GT_FILES = [Path(GT_DIR).joinpath(f.name) for f in INPUT_FILES]
+MODEL_FILE = '/media/bandy/nvme_work/voltage/models/model20220620_patchnorm/model_e11_v0.0456.h5'
+OUTPUT_DIR = '/media/bandy/nvme_work/voltage/lowmag_v0.5'
