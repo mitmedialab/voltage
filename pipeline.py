@@ -2,6 +2,7 @@ import sys
 import time
 import runpy
 import pathlib
+import tifffile as tiff
 import multiprocessing as mp
 
 from simulate import create_synthetic_data, decimate_video
@@ -285,19 +286,20 @@ elif(params['RUN_MODE'] == 'run'):
         motion_file = out_dir.joinpath(tag + '_motion.hdf5')
         if(params['RUN_CORRECT']):
             timer.start()
-            correct_video(filename, correction_file, motion_file,
-                          first_frame=params['FIRST_FRAME'],
-                          motion_search_level=params['MOTION_SEARCH_LEVEL'],
-                          motion_search_size=params['MOTION_SEARCH_SIZE'],
-                          motion_patch_size=params['MOTION_PATCH_SIZE'],
-                          motion_patch_offset=params['MOTION_PATCH_OFFSET'],
-                          motion_x_range=params['MOTION_X_RANGE'],
-                          motion_y_range=params['MOTION_Y_RANGE'],
-                          use_gpu=params['USE_GPU_CORRECT'],
-                          num_frames_per_batch=params['BATCH_SIZE_CORRECT'],
-                          num_threads=params['NUM_THREADS_CORRECT'])
+            c = correct_video(filename, motion_file,
+                              first_frame=params['FIRST_FRAME'],
+                              motion_search_level=params['MOTION_SEARCH_LEVEL'],
+                              motion_search_size=params['MOTION_SEARCH_SIZE'],
+                              motion_patch_size=params['MOTION_PATCH_SIZE'],
+                              motion_patch_offset=params['MOTION_PATCH_OFFSET'],
+                              motion_x_range=params['MOTION_X_RANGE'],
+                              motion_y_range=params['MOTION_Y_RANGE'],
+                              use_gpu=params['USE_GPU_CORRECT'],
+                              num_frames_per_batch=params['BATCH_SIZE_CORRECT'],
+                              num_threads=params['NUM_THREADS_CORRECT'])
             timer.stop('Correct')
         else:
+            c = tiff.imread(correction_file).astype('float32')
             timer.skip('Correct')
 
         # extract signal
@@ -305,8 +307,7 @@ elif(params['RUN_MODE'] == 'run'):
         spatial_file = out_dir.joinpath(tag + '_spatial.tif')
         if(params['RUN_PREPROC']):
             timer.start()
-            preprocess_video(correction_file,
-                             temporal_file, spatial_file,
+            preprocess_video(c, temporal_file, spatial_file,
                              params['SIGNAL_METHOD'],
                              params['TIME_SEGMENT_SIZE'],
                              params['SIGNAL_SCALE'],
@@ -353,6 +354,9 @@ elif(params['RUN_MODE'] == 'run'):
 
         # save speed stats
         timer.save(filename)
+
+        # save large file later
+        tiff.imwrite(correction_file, c, photometric='minisblack')
 
         # evaluate the accuracy of detections
         if(params['RUN_EVALUATE']):

@@ -45,6 +45,7 @@ class Timer:
         if(self.df is None):
             return
         elapsed_time_total = sum(self.stage2time.values())
+        print('Total: %.2f seconds' % elapsed_time_total)
         if('Dataset ID' not in self.df.columns):
             self.df.insert(0, 'Dataset ID', data_filename.stem)
         self.df['Total [sec]'] = elapsed_time_total

@@ -3,7 +3,7 @@ import h5py
 from libcorrect import correct_video_cython
 
 
-def correct_video(in_file, correction_file, motion_file,
+def correct_video(in_file, motion_file,
                   first_frame=0, normalize=True,
                   motion_search_level=2, motion_search_size=5,
                   motion_patch_size=10, motion_patch_offset=7,
@@ -17,9 +17,6 @@ def correct_video(in_file, correction_file, motion_file,
     ----------
     in_file : string or pathlib.Path
         Input file path of a multi-page tiff containig voltage imaging video.
-    correction_file : string or pathlib.Path
-        Output tiff file path to which motion/shading-corrected video will be
-        saved.
     motion_file : string or pathlib.Path
         Output hdf5 file path to which estimated motion vectors will be saved.
     first_frame : integer, optional
@@ -69,12 +66,13 @@ def correct_video(in_file, correction_file, motion_file,
 
     Returns
     -------
-    None.
+    c : 3D numpy.ndarray of float32
+        Motion/shading-corrected video.
 
     """
-    in_image = tiff.imread(in_file).astype('float32')
-    in_image = in_image[first_frame:] # skip first frames
-    c, x, y = correct_video_cython(in_image,
+    in_video = tiff.imread(in_file).astype('float32')
+    in_video = in_video[first_frame:] # skip first frames
+    c, x, y = correct_video_cython(in_video,
                                    1 if normalize else 0,
                                    motion_search_level, motion_search_size,
                                    motion_patch_size, motion_patch_offset,
@@ -83,7 +81,8 @@ def correct_video(in_file, correction_file, motion_file,
                                    1 if use_gpu else 0,
                                    num_frames_per_batch, num_threads)
 
-    tiff.imwrite(correction_file, c, photometric='minisblack')
     with h5py.File(motion_file, 'w') as f:
         f.create_dataset('x', data=x)
         f.create_dataset('y', data=y)
+
+    return c
