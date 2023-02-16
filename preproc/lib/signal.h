@@ -4,7 +4,7 @@
 
 typedef struct
 {
-    int method;       // 0: PCA, 1: max-median
+    int method;       // 0: PCA, 1: max-median, 2: median-min
     int period;       // signal detection will be performed per this time period [frames]
     float frames_per_sec; // video frame rate
     float freq_max;   // cutoff frequency [Hz] for temporal Gaussian low-pass filter (2 sigma)
@@ -19,8 +19,8 @@ typedef struct
 
 
 int extract_signal(signal_param_t &param,
-                   int num_pages, int width, int height, float ***img,
-                   float ****temporal, float ****spatial);
+                   int num_pages, int width, int height, float *img,
+                   float **temporal, float **spatial);
 
 
 #endif

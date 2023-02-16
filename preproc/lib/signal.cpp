@@ -205,7 +205,7 @@ static void upsample2x2(int size, float **in, float **out, int x, int y)
 }
 
 static float ***temporal_filter(int start, int end,
-                                int t, int w, int h, float ***img, float stdev)
+                                int t, int w, int h, float *img, float stdev)
 {
     const int len = end - start;
     float ***out = malloc_float3d(len, w, h);
@@ -215,10 +215,11 @@ static float ***temporal_filter(int start, int end,
         for(int f = start; f < end; f++)
         {
             int k = f - start;
-            for(int i = 0; i < w; i++)
+            size_t p = (size_t)f * w * h;
             for(int j = 0; j < h; j++)
+            for(int i = 0; i < w; i++)
             {
-                out[k][i][j] = img[f][i][j];
+                out[k][i][j] = img[p++];
             }
         }
     }
@@ -235,10 +236,10 @@ static float ***temporal_filter(int start, int end,
         {
             for(int k = 0; k < ext_len; k++)
             {
-                int f = start - margin + k;
+                size_t f = start - margin + k;
                 if(f < 0) f = 0;
                 else if(f >= t) f = t - 1;
-                dat[k] = img[f][i][j];
+                dat[k] = img[(f * h + j) * w + i];
             }
             recursive_gauss_apply_filter(c, ext_len, dat);
             for(int k = 0; k < len; k++)
@@ -253,8 +254,8 @@ static float ***temporal_filter(int start, int end,
 }
 
 int extract_signal(signal_param_t &param,
-                   int num_pages, int width, int height, float ***img,
-                   float ****temporal, float ****spatial)
+                   int num_pages, int width, int height, float *img,
+                   float **temporal, float **spatial)
 
 {
     const int method = param.method;
@@ -290,16 +291,16 @@ int extract_signal(signal_param_t &param,
     }
     free_float2d(one);
 
-    const int n = num_pages / period;
-    float ***out = malloc_float3d(n, width, height);
-    float ***avg = malloc_float3d(n, width, height);
+    const int num_out = num_pages / period;
+    const size_t num_pixels = width * height;
+    float *out = malloc_float1d(num_out * num_pixels);
+    float *avg = malloc_float1d(num_out * num_pixels);
+    memset(out, 0, num_out * num_pixels * sizeof(float));
+    memset(avg, 0, num_out * num_pixels * sizeof(float));
     
     #pragma omp parallel for
-	for(int k = 0; k < n; k++)
-	{
-        memset(out[k][0], 0, width * height * sizeof(float));
-        memset(avg[k][0], 0, width * height * sizeof(float));
-
+    for(int k = 0; k < num_out; k++)
+    {
         std::vector<int> frames;
         int start_frame = k * period;
         int end_frame = start_frame + period;
@@ -320,18 +321,20 @@ int extract_signal(signal_param_t &param,
                                        num_pages, width, height, img, temp_stdev);
 
         // spatial signal extraction (average)
+        size_t p;
         for(auto f : frames)
         {
-            for(int i = 0; i < width; i++)
+            p = k * num_pixels;
             for(int j = 0; j < height; j++)
+            for(int i = 0; i < width; i++)
             {
-                avg[k][i][j] += buf[f][i][j];
+                avg[p++] += buf[f][i][j];
             }
         }
-        for(int i = 0; i < width; i++)
-        for(int j = 0; j < height; j++)
+        p = k * num_pixels;
+        for(int i = 0; i < width * height; i++)
         {
-            avg[k][i][j] /= frames.size();
+            avg[p++] /= frames.size();
         }
 
         // temporal signal extraction
@@ -348,24 +351,37 @@ int extract_signal(signal_param_t &param,
                                                          normalize, downsample);
                 if(downsample)
                 {
-                    upsample2x2(patch_size, pc, out[k], i, j);
+                    float **tmp = malloc_float2d(width, height);
+                    memset(tmp[0], 0, width * height * sizeof(float));
+                    upsample2x2(patch_size, pc, tmp, i, j);
+                    p = k * num_pixels;
+                    for(int v = 0; v < height; v++)
+                    for(int u = 0; u < width; u++)
+                    {
+                        out[p++] += tmp[u][v];
+                    }
+                    free_float2d(tmp);
                 }
                 else
                 {
                     for(int u = 0; u < patch_size; u++)
                     for(int v = 0; v < patch_size; v++)
                     {
-                        out[k][i + u][j + v] += fabsf(pc[u][v]);
+                        int x = i + u;
+                        int y = j + v;
+                        p = k * num_pixels + y * width + x;
+                        out[p] += fabsf(pc[u][v]);
                     }
                 }
                 
                 free_float2d(pc);
             }
 
-            for(int i = 0; i < width; i++)
+            p = k * num_pixels;
             for(int j = 0; j < height; j++)
+            for(int i = 0; i < width; i++)
             {
-                if(cnt[i][j] > 0) out[k][i][j] /= cnt[i][j];
+                if(cnt[i][j] > 0) out[p++] /= cnt[i][j];
             }
         }
         else if(method == 1) // max-median
@@ -380,8 +396,9 @@ int extract_signal(signal_param_t &param,
                 }
             }
             const size_t m = frames.size() / 2;
-            for(int i = 0; i < width; i++)
+            p = k * num_pixels;
             for(int j = 0; j < height; j++)
+            for(int i = 0; i < width; i++)
             {
                 std::vector<float> v;
                 float max = 0;
@@ -392,7 +409,7 @@ int extract_signal(signal_param_t &param,
                     if(max < val) max = val;
                 }
                 std::nth_element(v.begin(), v.begin() + m, v.end());
-                out[k][i][j] = max - v[m];
+                out[p++] = max - v[m];
             }
         }
         else // median-min
@@ -407,8 +424,9 @@ int extract_signal(signal_param_t &param,
                 }
             }
             const size_t m = frames.size() / 2;
-            for(int i = 0; i < width; i++)
+            p = k * num_pixels;
             for(int j = 0; j < height; j++)
+            for(int i = 0; i < width; i++)
             {
                 std::vector<float> v;
                 float min = 1.0;
@@ -419,7 +437,7 @@ int extract_signal(signal_param_t &param,
                     if(min > val) min = val;
                 }
                 std::nth_element(v.begin(), v.begin() + m, v.end());
-                out[k][i][j] = v[m] - min;
+                out[p++] = v[m] - min;
             }
         }
 
@@ -430,6 +448,6 @@ int extract_signal(signal_param_t &param,
     
     *temporal = out;
     *spatial = avg;
-    return n;
+    return num_out;
 }
 
