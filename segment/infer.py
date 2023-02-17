@@ -238,6 +238,7 @@ def _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,
 
 def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
                    seed, validation_ratio,
+                   norm_channel, norm_shifts,
                    tile_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Validate a learned U-Net by making inference on a validation data set.
@@ -301,6 +302,7 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
 
     valid_seq = VI_Sequence(batch_size, model_io_shape, tile_shape,
                             valid_input_paths, valid_target_paths,
+                            norm_channel, norm_shifts,
                             tiled=True, tile_strides=tile_strides)
 
     out_paths = [out_dir.joinpath(p.name) for p in valid_target_paths]
@@ -314,7 +316,7 @@ def validate_model(input_dir_list, target_dir, model_dir, out_dir, ref_dir,
 
 
 def apply_model(input_files, model_file, out_file, ref_file,
-                norm_axis, norm_shifts,
+                norm_channel, norm_shifts,
                 tile_shape, tile_strides, batch_size, gpu_mem_size=None):
     """
     Apply a learned U-Net by making inference on a test/real data set.
@@ -351,7 +353,7 @@ def apply_model(input_files, model_file, out_file, ref_file,
 
     data_seq = VI_Sequence(batch_size, model_io_shape, tile_shape,
                            [input_files], None,
-                           norm_axis, norm_shifts,
+                           norm_channel, norm_shifts,
                            tiled=True, tile_strides=tile_strides)
 
     _predict_and_merge(model, data_seq, tile_strides, gpu_mem_size,

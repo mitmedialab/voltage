@@ -4,13 +4,19 @@ MODEL_IO_SHAPE = (64, 64)
 
 # motion/shading correction parameters
 MOTION_SEARCH_LEVEL = 2
-MOTION_SEARCH_SIZE = 5
+MOTION_SEARCH_SIZE = 3
 MOTION_PATCH_SIZE = 10
 MOTION_PATCH_OFFSET = 7
 
-# preprocessing parameters
-SIGNAL_METHOD = 'max-med'
-SIGNAL_SCALE = 3.0
+# demixing parameters
+PROBABILITY_THRESHOLD = 0.5
+AREA_THRESHOLD_MIN = 0
+AREA_THRESHOLD_MAX = 1000
+CONCAVITY_THRESHOLD = 2
+INTENSITY_THRESHOLD = 0
+ACTIVITY_THRESHOLD = 0
+BACKGROUND_EDGE = 1.0
+BACKGROUND_THRESHOLD = 0.003
 
 
 # runtime parameters
@@ -38,6 +44,8 @@ NUM_DARTS = 10
 BATCH_SIZE = 128
 EPOCHS = 20
 TILE_STRIDES = (16, 16)
+NORM_CHANNEL = 1
+NORM_SHIFTS = [False, True]
 
 DATA_DIR = '/media/bandy/nvme_data/voltage/train/synthetic'
 PREPROC_DIR = '/media/bandy/nvme_data/voltage/train/preproc'

@@ -3,7 +3,7 @@ import h5py
 from libcorrect import correct_video_cython
 
 
-def correct_video(in_file, motion_file,
+def correct_video(in_file, motion_file, correction_file='',
                   first_frame=0, normalize=True,
                   motion_search_level=2, motion_search_size=5,
                   motion_patch_size=10, motion_patch_offset=7,
@@ -19,6 +19,10 @@ def correct_video(in_file, motion_file,
         Input file path of a multi-page tiff containig voltage imaging video.
     motion_file : string or pathlib.Path
         Output hdf5 file path to which estimated motion vectors will be saved.
+    correction_file : string or pathlib.Path, optional
+        Output tiff file path to which motion/shading-corrected video will be
+        saved. The default is an empty string, in which case the video will be
+        returned rather than saved.
     first_frame : integer, optional
         First frame number of the video. If nonzero, the input video will be
         treated as if it starts with that frame number by skipping the first
@@ -85,4 +89,8 @@ def correct_video(in_file, motion_file,
         f.create_dataset('x', data=x)
         f.create_dataset('y', data=y)
 
-    return c
+    if(correction_file):
+        tiff.imwrite(correction_file, c, photometric='minisblack')
+        return None
+    else:
+        return c

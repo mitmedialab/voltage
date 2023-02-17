@@ -8,6 +8,7 @@ from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 def train_model(input_dir_list, target_dir, model_dir, log_file,
                 seed, validation_ratio,
+                norm_channel, norm_shifts,
                 model_io_shape, num_darts, batch_size, epochs):
     """
     Train the U-Net for cell segmentation.
@@ -57,10 +58,12 @@ def train_model(input_dir_list, target_dir, model_dir, log_file,
 
     train_seq = VI_Sequence(batch_size, model_io_shape, model_io_shape,
                             train_input_paths, train_target_paths,
+                            norm_channel, norm_shifts,
                             num_darts=num_darts, shuffle=True)
 
     valid_seq = VI_Sequence(batch_size, model_io_shape, model_io_shape,
                             valid_input_paths, valid_target_paths,
+                            norm_channel, norm_shifts,
                             num_darts=num_darts)
 
     # Free up RAM in case the model definition has been executed multiple times

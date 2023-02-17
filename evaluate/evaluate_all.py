@@ -102,18 +102,24 @@ def _aggregate_times(out_dir):
 
     """
     first = True
+    df_all = None
     filenames = sorted(out_dir.glob('*/*.html'))
     for in_file in filenames:
         basename = in_file.stem
-        df = pd.read_csv(in_file.with_name(basename + '_times.csv'))
-        if(first):
-            df_all = df
-            first = False
-        else:
-            df_all = pd.concat([df_all, df], ignore_index=True)
+        time_file = in_file.with_name(basename + '_times.csv')
+        if(time_file.exists()):
+            df = pd.read_csv(time_file)
+            if(first):
+                df_all = df
+                first = False
+            else:
+                df_all = pd.concat([df_all, df], ignore_index=True)
 
-    df_all.to_csv(out_dir.joinpath('all_times.csv'), index=False)
-    return df_all
+    if(df_all is not None):
+        df_all.to_csv(out_dir.joinpath('all_times.csv'), index=False)
+        return df_all
+    else:
+        return 'No runtime was measured.'
 
 
 def evaluate_all(out_dir):

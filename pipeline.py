@@ -19,16 +19,18 @@ if(len(sys.argv) != 2):
 
 params = runpy.run_path(sys.argv[1])
 params.setdefault('FIRST_FRAME', 0)
+params.setdefault('NORMALIZE', True)
+params.setdefault('MOTION_X_RANGE', 1.0)
+params.setdefault('MOTION_Y_RANGE', 1.0)
+params.setdefault('SHADING_PERIOD', 1000)
+params.setdefault('USE_GPU_CORRECT', True)
+params.setdefault('BATCH_SIZE_CORRECT', 1000)
 params.setdefault('SIGNAL_METHOD', 'max-med')
 params.setdefault('SIGNAL_SCALE', 3.0)
 params.setdefault('SIGNAL_DOWNSAMPLING', 1.0)
 params.setdefault('BACKGROUND_SIGMA', 10)
 params.setdefault('BACKGROUND_EDGE', 1.0)
 params.setdefault('MASK_DILATION', 0)
-params.setdefault('MOTION_X_RANGE', 1.0)
-params.setdefault('MOTION_Y_RANGE', 1.0)
-params.setdefault('USE_GPU_CORRECT', True)
-params.setdefault('BATCH_SIZE_CORRECT', 1000)
 
 
 def set_dir(base_path, dirname):
@@ -87,21 +89,22 @@ def correct(in_dir, correction_dir, filename):
         in_file = in_dir.joinpath(filename + '.tif')
         correction_file = correction_dir.joinpath(in_file.name)
         motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
-        correct_video(in_file, correction_file, motion_file,
-                      motion_search_level=params['MOTION_SEARCH_LEVEL'],
-                      motion_search_size=params['MOTION_SEARCH_SIZE'],
-                      motion_patch_size=params['MOTION_PATCH_SIZE'],
-                      motion_patch_offset=params['MOTION_PATCH_OFFSET'],
-                      shading_period=params['TIME_SEGMENT_SIZE'],
-                      num_threads=params['NUM_THREADS_CORRECT'])
-        
+        correct_video(in_file, motion_file, correction_file,
+                      0, True,
+                      params['MOTION_SEARCH_LEVEL'],
+                      params['MOTION_SEARCH_SIZE'],
+                      params['MOTION_PATCH_SIZE'],
+                      params['MOTION_PATCH_OFFSET'],
+                      1.0, 1.0,
+                      params['TIME_SEGMENT_SIZE'])
+
     else: # batch mode, single-threaded jobs for multiple files
         filenames = sorted(in_dir.glob('*.tif'))
         args = []
         for in_file in filenames:
             correction_file = correction_dir.joinpath(in_file.name)
             motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
-            args.append((in_file, correction_file, motion_file,
+            args.append((in_file, motion_file, correction_file,
                          0, True,
                          params['MOTION_SEARCH_LEVEL'],
                          params['MOTION_SEARCH_SIZE'],
@@ -126,12 +129,11 @@ def preprocess(in_dir, temporal_dir, spatial_dir, filename):
         in_file = in_dir.joinpath(filename + '.tif')
         temporal_file = temporal_dir.joinpath(in_file.name)
         spatial_file = spatial_dir.joinpath(in_file.name)
-        preprocess_video(in_file,
+        preprocess_video(in_file, None,
                          temporal_file, spatial_file,
                          params['SIGNAL_METHOD'],
                          params['TIME_SEGMENT_SIZE'],
-                         params['SIGNAL_SCALE'],
-                         num_threads=params['NUM_THREADS_PREPROC'])
+                         params['SIGNAL_SCALE'])
         
     else: # batch mode, single-threaded jobs for multiple files
         filenames = sorted(in_dir.glob('*.tif'))
@@ -139,12 +141,12 @@ def preprocess(in_dir, temporal_dir, spatial_dir, filename):
         for in_file in filenames:
             temporal_file = temporal_dir.joinpath(in_file.name)
             spatial_file = spatial_dir.joinpath(in_file.name)
-            args.append((in_file,
+            args.append((in_file, None,
                          temporal_file, spatial_file,
                          params['SIGNAL_METHOD'],
                          params['TIME_SEGMENT_SIZE'],
                          params['SIGNAL_SCALE'],
-                         1, 1))
+                         1.0, 1))
 
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(preprocess_video, args)
@@ -161,10 +163,12 @@ def train(in_dirs, target_dir, model_dir, log_file, out_dir, ref_dir):
     validation_ratio = 5
     train_model(in_dirs, target_dir, model_dir, log_file,
                 seed, validation_ratio,
+                params['NORM_CHANNEL'], params['NORM_SHIFTS'],
                 params['MODEL_IO_SHAPE'], params['NUM_DARTS'],
                 params['BATCH_SIZE'], params['EPOCHS'])
     validate_model(in_dirs, target_dir, model_dir, out_dir, ref_dir,
                    seed, validation_ratio,
+                   params['NORM_CHANNEL'], params['NORM_SHIFTS'],
                    params['MODEL_IO_SHAPE'], params['TILE_STRIDES'],
                    params['BATCH_SIZE'])
 
@@ -172,33 +176,43 @@ def train(in_dirs, target_dir, model_dir, log_file, out_dir, ref_dir):
     print('%.1f seconds to train' % (toc - tic))
 
 
-def segment(in_dirs, model_dir, out_dir, ref_dir, filename):
-    tic = time.perf_counter()
-    
-    apply_model(in_dirs, model_dir, out_dir, ref_dir, filename,
-                params['TILE_SHAPE'], params['TILE_STRIDES'],
-                params['BATCH_SIZE'])
-    
-    toc = time.perf_counter()
-    print('%.1f seconds to segment' % (toc - tic))
-
-
-def demix(in_dir, out_dir, correction_dir, filename):
+def demix(in_dir, out_dir, spatial_dir, filename):
     tic = time.perf_counter()
     
     if(filename):
         in_file = in_dir.joinpath(filename + '.tif')
         out_file = out_dir.joinpath(in_file.name)
-        corr_file = correction_dir.joinpath(in_file.name)
-        compute_masks(in_file, corr_file, out_file,
-                      num_threads=params['NUM_THREADS_DEMIXING'])
+        img_file = spatial_dir.joinpath(in_file.name)
+        compute_masks(in_file, img_file, out_file,
+                      params['PROBABILITY_THRESHOLD'],
+                      params['AREA_THRESHOLD_MIN'],
+                      params['AREA_THRESHOLD_MAX'],
+                      params['CONCAVITY_THRESHOLD'],
+                      params['INTENSITY_THRESHOLD'],
+                      params['ACTIVITY_THRESHOLD'],
+                      params['BACKGROUND_SIGMA'],
+                      params['BACKGROUND_EDGE'],
+                      params['BACKGROUND_THRESHOLD'],
+                      params['MASK_DILATION'],
+                      params['SIGNAL_DOWNSAMPLING'])
     else:
         filenames = sorted(in_dir.glob('*.tif'))
         args = []
         for in_file in filenames:
             out_file = out_dir.joinpath(in_file.name)
-            corr_file = correction_dir.joinpath(in_file.name)
-            args.append((in_file, corr_file, out_file))
+            img_file = spatial_dir.joinpath(in_file.name)
+            args.append((in_file, img_file, out_file,
+                         params['PROBABILITY_THRESHOLD'],
+                         params['AREA_THRESHOLD_MIN'],
+                         params['AREA_THRESHOLD_MAX'],
+                         params['CONCAVITY_THRESHOLD'],
+                         params['INTENSITY_THRESHOLD'],
+                         params['ACTIVITY_THRESHOLD'],
+                         params['BACKGROUND_SIGMA'],
+                         params['BACKGROUND_EDGE'],
+                         params['BACKGROUND_THRESHOLD'],
+                         params['MASK_DILATION'],
+                         params['SIGNAL_DOWNSAMPLING']))
 
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(compute_masks, args)
@@ -220,7 +234,8 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
         print('evaluating ' + in_file.stem)
         gt_file = gt_dir.joinpath(in_file.name)
         img_file = img_dir.joinpath(in_file.name)
-        run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir, in_file.stem)
+        out_subdir = set_dir(out_dir, in_file.stem)
+        run_ipynb_evaluate_each(in_file, gt_file, img_file, out_subdir, in_file.stem)
     run_ipynb_evaluate_all(out_dir)
 
     toc = time.perf_counter()
@@ -264,7 +279,7 @@ if(params['RUN_MODE'] == 'train'):
     # demix cells from U-Net outputs
     demix_dir = set_dir(params['OUTPUT_DIR'], 'demixed')
     if(params['RUN_DEMIX']):
-        demix(segment_dir, demix_dir, correction_dir, params['FILENAME'])
+        demix(segment_dir, demix_dir, spatial_dir, params['FILENAME'])
 
     # evaluate the accuracy of detections
     eval_dir = set_dir(params['OUTPUT_DIR'], 'evaluated')
@@ -286,17 +301,18 @@ elif(params['RUN_MODE'] == 'run'):
         motion_file = out_dir.joinpath(tag + '_motion.hdf5')
         if(params['RUN_CORRECT']):
             timer.start()
-            c = correct_video(filename, motion_file,
-                              first_frame=params['FIRST_FRAME'],
-                              motion_search_level=params['MOTION_SEARCH_LEVEL'],
-                              motion_search_size=params['MOTION_SEARCH_SIZE'],
-                              motion_patch_size=params['MOTION_PATCH_SIZE'],
-                              motion_patch_offset=params['MOTION_PATCH_OFFSET'],
-                              motion_x_range=params['MOTION_X_RANGE'],
-                              motion_y_range=params['MOTION_Y_RANGE'],
-                              use_gpu=params['USE_GPU_CORRECT'],
-                              num_frames_per_batch=params['BATCH_SIZE_CORRECT'],
-                              num_threads=params['NUM_THREADS_CORRECT'])
+            c = correct_video(filename, motion_file, '',
+                              params['FIRST_FRAME'], params['NORMALIZE'],
+                              params['MOTION_SEARCH_LEVEL'],
+                              params['MOTION_SEARCH_SIZE'],
+                              params['MOTION_PATCH_SIZE'],
+                              params['MOTION_PATCH_OFFSET'],
+                              params['MOTION_X_RANGE'],
+                              params['MOTION_Y_RANGE'],
+                              params['SHADING_PERIOD'],
+                              params['USE_GPU_CORRECT'],
+                              params['BATCH_SIZE_CORRECT'],
+                              params['NUM_THREADS_CORRECT'])
             timer.stop('Correct')
         else:
             c = tiff.imread(correction_file).astype('float32')
@@ -307,7 +323,7 @@ elif(params['RUN_MODE'] == 'run'):
         spatial_file = out_dir.joinpath(tag + '_spatial.tif')
         if(params['RUN_PREPROC']):
             timer.start()
-            preprocess_video(c, temporal_file, spatial_file,
+            preprocess_video('', c, temporal_file, spatial_file,
                              params['SIGNAL_METHOD'],
                              params['TIME_SEGMENT_SIZE'],
                              params['SIGNAL_SCALE'],
@@ -356,7 +372,8 @@ elif(params['RUN_MODE'] == 'run'):
         timer.save(filename)
 
         # save large file later
-        tiff.imwrite(correction_file, c, photometric='minisblack')
+        if(params['RUN_CORRECT']):
+            tiff.imwrite(correction_file, c, photometric='minisblack')
 
         # evaluate the accuracy of detections
         if(params['RUN_EVALUATE']):
