@@ -8,7 +8,7 @@ import multiprocessing as mp
 from simulate import create_synthetic_data, decimate_video
 from correct import correct_video
 from preproc import preprocess_video
-from segment import train_model, validate_model, apply_model
+from segment import VI_Segment
 from demix import compute_masks
 from evaluate import run_ipynb_evaluate_each, run_ipynb_evaluate_all, Timer
 
@@ -161,16 +161,15 @@ def train(in_dirs, target_dir, model_dir, log_file, out_dir, ref_dir):
 
     seed = 0
     validation_ratio = 5
-    train_model(in_dirs, target_dir, model_dir, log_file,
-                seed, validation_ratio,
-                params['NORM_CHANNEL'], params['NORM_SHIFTS'],
-                params['MODEL_IO_SHAPE'], params['NUM_DARTS'],
-                params['BATCH_SIZE'], params['EPOCHS'])
-    validate_model(in_dirs, target_dir, model_dir, out_dir, ref_dir,
-                   seed, validation_ratio,
-                   params['NORM_CHANNEL'], params['NORM_SHIFTS'],
-                   params['MODEL_IO_SHAPE'], params['TILE_STRIDES'],
-                   params['BATCH_SIZE'])
+    segmenter = VI_Segment()
+    segmenter.set_training(in_dirs, target_dir, seed, validation_ratio,
+                           params['MODEL_IO_SHAPE'],
+                           params['NORM_CHANNEL'], params['NORM_SHIFTS'])
+    segmenter.train(model_dir, log_file, params['NUM_DARTS'],
+                    params['BATCH_SIZE'], params['EPOCHS'])
+    segmenter.validate(model_dir, out_dir, ref_dir,
+                       params['TILE_STRIDES'],
+                       params['BATCH_SIZE'])
 
     toc = time.perf_counter()
     print('%.1f seconds to train' % (toc - tic))
@@ -289,6 +288,9 @@ if(params['RUN_MODE'] == 'train'):
 
 
 elif(params['RUN_MODE'] == 'run'):
+    segmenter = VI_Segment()
+    segmenter.set_inference(params['MODEL_FILE'])
+
     for i, filename in enumerate(params['INPUT_FILES']):
         tag = filename.stem
         print('')
@@ -338,12 +340,11 @@ elif(params['RUN_MODE'] == 'run'):
         reference_file = out_dir.joinpath(tag + '_reference.tif')
         if(params['RUN_SEGMENT']):
             timer.start()
-            apply_model([temporal_file, spatial_file],
-                        params['MODEL_FILE'],
-                        segment_file, reference_file,
-                        params['NORM_CHANNEL'], params['NORM_SHIFTS'],
-                        params['TILE_SHAPE'], params['TILE_STRIDES'],
-                        params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
+            segmenter.predict([temporal_file, spatial_file],
+                              segment_file, reference_file,
+                              params['NORM_CHANNEL'], params['NORM_SHIFTS'],
+                              params['TILE_SHAPE'], params['TILE_STRIDES'],
+                              params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
             timer.stop('Segment')
         else:
             timer.skip('Segment')
