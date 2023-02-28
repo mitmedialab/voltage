@@ -386,6 +386,40 @@ elif(params['RUN_MODE'] == 'run'):
         run_ipynb_evaluate_all(params['OUTPUT_DIR'])
 
 
+elif(params['RUN_MODE'] == 'online'):
+    segmenter = VI_Segment()
+    segmenter.set_inference(params['MODEL_FILE'])
+
+    tag = pathlib.Path(params['FILENAME']).stem
+    print('')
+    print('Processing ' + tag)
+    out_dir = set_dir(params['OUTPUT_DIR'], tag)
+
+    temporal_file = out_dir.joinpath(tag + '_temporal.tif')
+    spatial_file = out_dir.joinpath(tag + '_spatial.tif')
+    image_t = tiff.imread(temporal_file)
+    image_s = tiff.imread(spatial_file)
+
+    tic = time.perf_counter()
+
+    num_frames = len(image_t)
+    step = 1000 // params['TIME_SEGMENT_SIZE']
+    import numpy as np
+    out = np.zeros(image_t.shape)
+    for s in range(0, num_frames, step):
+        e = min(s + step, num_frames)
+        out[s:e] = segmenter.predict_online([image_t[s:e], image_s[s:e]],
+                                            params['NORM_CHANNEL'], params['NORM_SHIFTS'],
+                                            params['TILE_SHAPE'], params['TILE_STRIDES'],
+                                            params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
+
+    toc = time.perf_counter()
+    print('%.1f seconds in total' % (toc - tic))
+
+    segment_file = out_dir.joinpath(tag + '_segmented.tif')
+    tiff.imwrite(segment_file, out.astype('float32'), photometric='minisblack')
+
+
 else:
     print('Unexpected RUN_MODE: ' + params['RUN_MODE'])
     sys.exit(1)

@@ -9,7 +9,7 @@ from keras.utils import Sequence
 class VI_Sequence(Sequence):
 
     def __init__(self, batch_size, model_io_shape, patch_shape,
-                 input_img_paths, target_img_paths,
+                 input_img_paths, target_img_paths, input_imgs=None,
                  norm_channel=-1, norm_shifts=[],
                  num_darts=1, tiled=False, tile_strides=(1, 1),
                  shuffle=False, padding='magnify'):
@@ -34,15 +34,22 @@ class VI_Sequence(Sequence):
             expected to be larger than patch_shape in general, but when it is
             smaller, images will be padded.
         input_img_paths : list of list of pathlib.Path
-            List of file paths to input images to be fed into the U-Net.
-            Each element of the list is a list of file paths corresponding
-            to multiple channels.
-            Each file (tiff) can contain multiple images. The number of images
-            per file and the image size must be the same for all the files.
+            List of file paths to input images to be fed into the U-Net. Each
+            element of the list is a list of file paths corresponding to
+            multiple channels. Each file (tiff) can contain multiple images.
+            The number of images per file and the image size must be the same
+            for all the files. This parameter may be None, in which case
+            input_imgs will be used as input.
         target_img_paths : list of pathlib.Path
-            List of file paths to target images specifing expected outputs
-            from the U-Net. Each file (tiff) must contain the same number of
-            images of the same size as the corresponding input file.
+            List of file paths to target images specifing expected outputs from
+            the U-Net. Each file (tiff) must contain the same number of images
+            of the same size as the corresponding input file. This parameter is
+            used only for training. It should be None for inference.
+        input_imgs : list of list of 3D numpy.ndarray of float, optional
+            List of input images to be fed into the U-Net. Each element of the
+            list is a list of images corresponding to multiple channels.
+            The default is None, in which case the input images will be loaded
+            from input_image_paths.
         norm_channel : integer, optional
             The channel used to determine the scale for patch normalization.
             If -1 (default), the max/min intensities of a given patch across
@@ -92,10 +99,17 @@ class VI_Sequence(Sequence):
         self.num_splits = 1
         self.split_idx = 0
 
-        self.num_channels = len(input_img_paths[0])
-        tmp = tiff.imread(input_img_paths[0][0])
+        if(input_img_paths is not None):
+            self.num_videos = len(input_img_paths)
+            self.num_channels = len(input_img_paths[0])
+            tmp = tiff.imread(input_img_paths[0][0])
+        else:
+            self.num_videos = len(input_imgs)
+            self.num_channels = len(input_imgs[0])
+            tmp = input_imgs[0][0]
         self.num_frames = tmp.shape[0]
-        self.image_shape = tmp.shape[1:]
+        self.image_shape = tmp.shape[1:] # this may get modified later
+        self.orig_image_shape = tmp.shape[1:] # this will stay the same
         # handle cases where input images are smaller than the patch
         ratio_y = patch_shape[0] / self.image_shape[0]
         ratio_x = patch_shape[1] / self.image_shape[1]
@@ -119,16 +133,19 @@ class VI_Sequence(Sequence):
         else:
             self.needs_padding = 'no'
 
-        num_images = len(input_img_paths) * self.num_frames
+        num_images = self.num_videos * self.num_frames
         buf_shape = (num_images,) + self.image_shape
         self.input_images = np.zeros(buf_shape + (self.num_channels,),
                                      dtype='float32')
         self.target_images = np.zeros(buf_shape, dtype='uint8')
-        for i, paths in enumerate(input_img_paths):
+        for i in range(self.num_videos):
             s = i * self.num_frames
             e = s + self.num_frames
-            for j, path in enumerate(paths):
-                tmp = tiff.imread(path)
+            for j in range(self.num_channels):
+                if(input_img_paths is not None):
+                    tmp = tiff.imread(input_img_paths[i][j])
+                else:
+                    tmp = input_imgs[i][j]
                 if(self.needs_padding == 'magnify'):
                     # mode='constant' leads to false positives near boundaries
                     tmp = resize(tmp, (self.num_frames,) + self.image_shape,

@@ -28,7 +28,7 @@ class VI_Segment:
         """
         Make prediction on sliding tiles/patches and merge them into single
         probability maps.
-    
+
         Parameters
         ----------
         data_seq : VI_Sequence
@@ -50,11 +50,12 @@ class VI_Segment:
         ref_paths : list of pathlib.Path
             List of file paths to which U-Net inputs, outputs, and targets (i.e.,
             ground truth) if any, are juxtaposed and saved for visual inspection.
-    
+
         Returns
         -------
-        None.
-    
+        3D numpy.ndarray of float
+            U-Net outputs.
+
         """
         # model.predict() allocates a buffer on the GPU to hold all the output
         # prediction data before passing it back to the main memory, which can
@@ -83,8 +84,8 @@ class VI_Segment:
             preds = resize(preds, (len(preds),) + data_seq.patch_shape,
                            mode='edge', anti_aliasing=True)
 
-        merge_patches(preds, data_seq, tile_strides,
-                      input_paths, target_paths, out_paths, ref_paths)
+        return merge_patches(preds, data_seq, tile_strides,
+                             input_paths, target_paths, out_paths, ref_paths)
 
 
     def set_training(self, input_dir_list, target_dir, seed, validation_ratio,
@@ -162,13 +163,13 @@ class VI_Segment:
 
         train_seq = VI_Sequence(batch_size,
                                 self.model_io_shape, self.model_io_shape,
-                                train_input_paths, train_target_paths,
+                                train_input_paths, train_target_paths, None,
                                 self.norm_channel, self.norm_shifts,
                                 num_darts=num_darts, shuffle=True)
 
         valid_seq = VI_Sequence(batch_size,
                                 self.model_io_shape, self.model_io_shape,
-                                valid_input_paths, valid_target_paths,
+                                valid_input_paths, valid_target_paths, None,
                                 self.norm_channel, self.norm_shifts,
                                 num_darts=num_darts)
 
@@ -246,7 +247,7 @@ class VI_Segment:
 
         valid_seq = VI_Sequence(batch_size,
                                 self.model_io_shape, self.model_io_shape,
-                                valid_input_paths, valid_target_paths,
+                                valid_input_paths, valid_target_paths, None,
                                 self.norm_channel, self.norm_shifts,
                                 tiled=True, tile_strides=tile_strides)
 
@@ -314,7 +315,7 @@ class VI_Segment:
 
         """
         data_seq = VI_Sequence(batch_size, self.model_io_shape, tile_shape,
-                               [input_files], None,
+                               [input_files], None, None,
                                norm_channel, norm_shifts,
                                tiled=True, tile_strides=tile_strides)
 
@@ -322,3 +323,15 @@ class VI_Segment:
                                 [input_files], None, [out_file], [ref_file])
 
         keras.backend.clear_session()
+
+
+    def predict_online(self, input_images, norm_channel, norm_shifts,
+                       tile_shape, tile_strides, batch_size, gpu_mem_size=None):
+
+        data_seq = VI_Sequence(batch_size, self.model_io_shape, tile_shape,
+                               None, None, [input_images],
+                               norm_channel, norm_shifts,
+                               tiled=True, tile_strides=tile_strides)
+
+        return self._predict_and_merge(data_seq, tile_strides, gpu_mem_size,
+                                       None, None, None, None)

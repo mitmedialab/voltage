@@ -100,23 +100,26 @@ def merge_patches(patches, seq, tile_strides,
         Spacing between adjacent tiles.
     input_paths : list of list of pathlib.Path
         List of file paths to input images. Each element of the list is
-        a list of file paths corresponding to multiple channels.
+        a list of file paths corresponding to multiple channels. It may be
+        None, in which case input images will not be saved to ref_paths.
     target_paths : list of pathlib.Path
-        List of file paths to target images specifing expected outputs.
-        It can be None, in which case only U-Net inputs and outputs will
-        be saved to ref_paths.
+        List of file paths to target images specifing expected outputs. It may
+        be None, in which case target images will not be saved to ref_paths.
     out_paths : list of pathlib.Path
         List of file paths to which merged U-Net outputs will be saved.
+        It may be None, in which case the outputs will be returned.
     ref_paths : list of pathlib.Path
         List of file paths to which U-Net inputs, merged outputs, and targets
         (ground truth) if any, are juxtaposed and saved for visual inspection.
+        It may be None, in which case the reference images will not be saved.
 
     Returns
     -------
-    None.
+    out : 3D numpy.ndarray of float
+        Merged probability maps.
+        The shape is (number_of_frames, patch_height, patch_width).
 
     """
-
     Ys, Xs = seq.get_tile_pos()
     num_tiles = len(Ys)
     num_frames = seq.num_frames
@@ -129,6 +132,9 @@ def merge_patches(patches, seq, tile_strides,
     gauss_x = gaussian(patch_w, sigma)
     weight = np.outer(gauss_y, gauss_x)
 
+    if(input_paths is None):
+        input_paths = [None] # assume there is one input video
+
     for i, paths in enumerate(input_paths):
         out = np.zeros((num_frames,) + image_shape)
         for j in range(num_frames):
@@ -136,29 +142,32 @@ def merge_patches(patches, seq, tile_strides,
             frame_patches = patches[idx:idx+num_tiles]
             out[j] = _merge_frame_patches(image_shape, frame_patches, Xs, Ys,
                                           'average', weight, tile_strides)
-        
-        input_imgs = []
-        for path in paths:
-            input_imgs.append(tiff.imread(path))
 
         if(seq.needs_padding == 'magnify'): # undo magnification
-            out = resize(out, input_imgs[0].shape,
+            out = resize(out, (len(out),) + seq.orig_image_shape,
                          mode='constant', anti_aliasing=True)
         elif(seq.needs_padding == 'padding'): # remove padding
-            h, w = input_imgs[0].shape[1:]
+            h, w = seq.orig_image_shape
             y = max((patch_h - h) // 2, 0)
             x = max((patch_w - w) // 2, 0)
             out = out[:, y:y+h, x:x+w]
-        tiff.imwrite(out_paths[i], out.astype('float32'),
-                     photometric='minisblack')
+
+        if(out_paths is not None):
+            tiff.imwrite(out_paths[i], out.astype('float32'),
+                         photometric='minisblack')
 
         # reference output for visual inspection
-        video = np.zeros(out.shape[:2] + (0,))
-        for img in input_imgs:
-            video = np.append(video, img / np.max(img), axis=2)
-        if(target_paths is not None):
-            target_img = tiff.imread(target_paths[i])
-            video = np.append(video, target_img, axis=2)
-        video = np.append(video, out, axis=2)
-        tiff.imwrite(ref_paths[i], video.astype('float32'),
-                     photometric='minisblack')
+        if(ref_paths is not None):
+            video = np.zeros(out.shape[:2] + (0,))
+            if(paths is not None):
+                for path in paths:
+                    img = tiff.imread(path)
+                    video = np.append(video, img / np.max(img), axis=2)
+            if(target_paths is not None):
+                target_img = tiff.imread(target_paths[i])
+                video = np.append(video, target_img, axis=2)
+            video = np.append(video, out, axis=2)
+            tiff.imwrite(ref_paths[i], video.astype('float32'),
+                         photometric='minisblack')
+
+    return out
