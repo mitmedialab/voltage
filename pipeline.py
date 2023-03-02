@@ -182,7 +182,7 @@ def demix(in_dir, out_dir, spatial_dir, filename):
         in_file = in_dir.joinpath(filename + '.tif')
         out_file = out_dir.joinpath(in_file.name)
         img_file = spatial_dir.joinpath(in_file.name)
-        compute_masks(in_file, img_file, out_file,
+        compute_masks(None, None, in_file, img_file, out_file,
                       params['PROBABILITY_THRESHOLD'],
                       params['AREA_THRESHOLD_MIN'],
                       params['AREA_THRESHOLD_MAX'],
@@ -193,14 +193,14 @@ def demix(in_dir, out_dir, spatial_dir, filename):
                       params['BACKGROUND_EDGE'],
                       params['BACKGROUND_THRESHOLD'],
                       params['MASK_DILATION'],
-                      params['SIGNAL_DOWNSAMPLING'])
+                      None)
     else:
         filenames = sorted(in_dir.glob('*.tif'))
         args = []
         for in_file in filenames:
             out_file = out_dir.joinpath(in_file.name)
             img_file = spatial_dir.joinpath(in_file.name)
-            args.append((in_file, img_file, out_file,
+            args.append((None, None, in_file, img_file, out_file,
                          params['PROBABILITY_THRESHOLD'],
                          params['AREA_THRESHOLD_MIN'],
                          params['AREA_THRESHOLD_MAX'],
@@ -211,7 +211,7 @@ def demix(in_dir, out_dir, spatial_dir, filename):
                          params['BACKGROUND_EDGE'],
                          params['BACKGROUND_THRESHOLD'],
                          params['MASK_DILATION'],
-                         params['SIGNAL_DOWNSAMPLING']))
+                         None))
 
         pool = mp.Pool(mp.cpu_count())
         pool.starmap(compute_masks, args)
@@ -353,7 +353,7 @@ elif(params['RUN_MODE'] == 'run'):
         demix_file = out_dir.joinpath(tag + '_masks.tif')
         if(params['RUN_DEMIX']):
             timer.start()
-            compute_masks(segment_file, spatial_file, demix_file,
+            compute_masks(None, None, segment_file, spatial_file, demix_file,
                           params['PROBABILITY_THRESHOLD'],
                           params['AREA_THRESHOLD_MIN'],
                           params['AREA_THRESHOLD_MAX'],
@@ -364,7 +364,7 @@ elif(params['RUN_MODE'] == 'run'):
                           params['BACKGROUND_EDGE'],
                           params['BACKGROUND_THRESHOLD'],
                           params['MASK_DILATION'],
-                          params['SIGNAL_DOWNSAMPLING'])
+                          c.shape[1:])
             timer.stop('Mask')
         else:
             timer.skip('Mask')
@@ -387,21 +387,70 @@ elif(params['RUN_MODE'] == 'run'):
 
 
 elif(params['RUN_MODE'] == 'online'):
-    segmenter = VI_Segment()
-    segmenter.set_inference(params['MODEL_FILE'])
+    #segmenter = VI_Segment()
+    #segmenter.set_inference(params['MODEL_FILE'])
 
-    tag = pathlib.Path(params['FILENAME']).stem
+    filename = pathlib.Path(params['INPUT_FILE'])
+    tag = filename.stem
     print('')
     print('Processing ' + tag)
     out_dir = set_dir(params['OUTPUT_DIR'], tag)
 
-    temporal_file = out_dir.joinpath(tag + '_temporal.tif')
-    spatial_file = out_dir.joinpath(tag + '_spatial.tif')
-    image_t = tiff.imread(temporal_file)
-    image_s = tiff.imread(spatial_file)
+    video = tiff.imread(filename).astype('float32')
+    num_frames, h, w = video.shape
 
+    CHUNK_FRAME_SIZE = 1000
+    chunk_data_size = CHUNK_FRAME_SIZE * h * w * 4
+    print('%d = %d x %d x %d' % (chunk_data_size, CHUNK_FRAME_SIZE, h, w))
+    mmap_file = out_dir.joinpath('tmp.mmap')
+    with open(mmap_file, 'wb') as f:
+        f.write(b'\0' * chunk_data_size)
+
+    import mmap
+    mmap_fd = open(mmap_file, 'r+b')
+    mmap_obj = mmap.mmap(mmap_fd.fileno(), 0, access=mmap.ACCESS_WRITE)
+
+    import os
+    PIPE_P2C_PATH = '/tmp/fifo_p2c'
+    if(not os.path.exists(PIPE_P2C_PATH)):
+        os.mkfifo(PIPE_P2C_PATH)
+    PIPE_C2P_PATH = '/tmp/fifo_c2p'
+    if(not os.path.exists(PIPE_C2P_PATH)):
+        os.mkfifo(PIPE_C2P_PATH)
+
+    import subprocess
+    sp = subprocess.Popen('online/online')#, stdout=subprocess.PIPE)
+    # blocks until the other process opens the pipes
+    fifo_p2c = open(PIPE_P2C_PATH, 'w')
+    fifo_c2p = open(PIPE_C2P_PATH, 'r')
+
+    print('subprocess started')
     tic = time.perf_counter()
+        
+    import time
+    for s in range(0, num_frames, CHUNK_FRAME_SIZE):
+        e = min(s + CHUNK_FRAME_SIZE, num_frames)
+        chunk = video[s:e]
+        mmap_obj.seek(0)
+        #a = chunk.tobytes()
+        mmap_obj.write(chunk.tobytes())
+        fifo_p2c.write('%d %d\n' % (s, e))
+        fifo_p2c.flush()
+        print(fifo_c2p.readline())
+        break
 
+    fifo_p2c.write('end\n')
+    fifo_p2c.flush()
+    if(sp.poll() is None):
+        pass
+        #print(sp.communicate()[0].decode('utf-8'))
+    else:
+        sp.terminate()
+    fifo_p2c.close()
+    fifo_c2p.close()
+    mmap_obj.close()
+    mmap_fd.close()
+    """
     num_frames = len(image_t)
     step = 1000 // params['TIME_SEGMENT_SIZE']
     import numpy as np
@@ -413,11 +462,25 @@ elif(params['RUN_MODE'] == 'online'):
                                             params['TILE_SHAPE'], params['TILE_STRIDES'],
                                             params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
 
+        if((s // 20) % 2 == 1):
+            masks = compute_masks(out[:e], image_s[:e], '', '', None,
+                                  params['PROBABILITY_THRESHOLD'],
+                                  params['AREA_THRESHOLD_MIN'],
+                                  params['AREA_THRESHOLD_MAX'],
+                                  params['CONCAVITY_THRESHOLD'],
+                                  params['INTENSITY_THRESHOLD'],
+                                  params['ACTIVITY_THRESHOLD'],
+                                  params['BACKGROUND_SIGMA'],
+                                  params['BACKGROUND_EDGE'],
+                                  params['BACKGROUND_THRESHOLD'],
+                                  params['MASK_DILATION'],
+                                  None)
+    """
     toc = time.perf_counter()
     print('%.1f seconds in total' % (toc - tic))
 
-    segment_file = out_dir.joinpath(tag + '_segmented.tif')
-    tiff.imwrite(segment_file, out.astype('float32'), photometric='minisblack')
+    #segment_file = out_dir.joinpath(tag + '_segmented.tif')
+    #tiff.imwrite(segment_file, out.astype('float32'), photometric='minisblack')
 
 
 else:

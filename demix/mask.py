@@ -1,7 +1,7 @@
 import numpy as np
 import tifffile as tiff
 from skimage import measure
-from skimage.transform import rescale
+from skimage.transform import resize
 from skimage.morphology import binary_dilation, disk
 from skimage.filters import threshold_otsu
 from sklearn.decomposition import NMF
@@ -82,35 +82,41 @@ def run_demixing(masks, avg_prob, avg_image,
             break
 
         Xm1 = X.astype(float) - r1a
-        #print('r1a in [%f, %f]' % (np.amin(r1a), np.amax(r1a)))
-        #print('Y in [%f, %f]' % (np.amin(Y), np.amax(Y)))
-        #print('Xm1 in [%f, %f]' % (np.amin(Xm1), np.amax(Xm1)))
         X = Xm1 > 0.95 # binarize
         masks = X.reshape((t, h, w))
 
     return component_list
 
 
-def compute_masks(prob_file, img_file, out_file,
+def compute_masks(prob_data, img_data, prob_file, img_file, out_file,
                   prob_thresh, area_thresh_min, area_thresh_max,
                   concavity_thresh, intensity_thresh, activity_thresh,
                   background_sigma, background_edge, background_thresh,
-                  mask_dilation, downsampling):
+                  mask_dilation, orig_image_shape):
     """
     Compute binary masks representing the footprints of neurons based on their
     firing probability maps while demixing their spatial overlaps if any.
 
     Parameters
     ----------
-    prob_file : string
+    prob_data : 3D numpy.ndarray of float, or None
+        Input sequence of probability maps of firing neurons.
+        If None, the data will be loaded from prob_file.
+    img_data : 3D numpy.ndarray of float, or None
+        Input sequence of motion/shading corrected images.
+        If None, the data will be loaded from img_file.
+    prob_file : string or pathlib.Path
         Input file path of a multi-page tiff containig a sequence of
         probability maps of firing neurons.
-    img_file : string
+        It will not be referenced if prob_data is not None.
+    img_file : string or pathlib.Path
         Input file path of a multi-page tiff containing a sequence of
         motion/shading corrected images.
-    out_file : string
+        It will not be referenced if img_data is not None.
+    out_file : string, pathlib.Path, or None
         Output tiff file path to which binary masks representing the footprints
         of detected and demixed neurons will be saved.
+        If None, no file will be saved.
     prob_thresh : float
         Probability value in [0, 1] above which pixels are considered
         belonging to firing neurons.
@@ -145,25 +151,28 @@ def compute_masks(prob_file, img_file, out_file,
         The computed masks will be dilated by this size. This may be useful
         for accuracy evaluation against manual annotation because humans tend
         to draw ROIs around neurons, resulting in slightly larger masks.
-    save_images : boolean, optional
-        If True, intermediate images will be saved for debugging.
-        The default is False.
+    orig_image_shape : tuple of int, or None
+        The original image shape (height, width) before downsampling if any.
 
     Returns
     -------
-    None.
+    masks : 3D numpy.ndarray of bool
+        Binary masks representing the footprints of detected and demixed neurons.
 
     """
-    prob_data = tiff.imread(prob_file).astype(float)
+    if(prob_data is None):
+        prob_data = tiff.imread(prob_file).astype(float)
     avg_prob = np.mean(prob_data, axis=0)
-    
-    img_data = tiff.imread(img_file).astype(float)
+
+    if(img_data is None):
+        img_data = tiff.imread(img_file).astype(float)
     avg_image = np.mean(img_data, axis=0)
     # subtract background to leave the intensity of foreground cells
     background = gaussian_filter(avg_image, background_sigma, mode='nearest')
 
-    vignette = gaussian_filter(np.ones(avg_image.shape), background_edge,
-                               mode='constant')
+    vignette = np.ones(avg_image.shape)
+    if(background_edge > 0):
+        vignette = gaussian_filter(vignette, background_edge, mode='constant')
     foreground = avg_image * vignette - background > background_thresh
     foreground = binary_dilation(foreground, disk(3))
     foreground = binary_fill_holes(foreground)
@@ -206,18 +215,26 @@ def compute_masks(prob_file, img_file, out_file,
             ymin, xmin, ymax, xmax = c[0]
             cell_list.append((ys + ymin, xs + xmin, ys + ymax, xs + xmax, c[1]))
 
-    masks = np.zeros((0, h, w), dtype=bool)
+    if(orig_image_shape is None):
+        masks = np.zeros((0, h, w), dtype=bool)
+    else:
+        masks = np.zeros((0,) + orig_image_shape, dtype=bool)
+
     for c in cell_list:
         ymin, xmin, ymax, xmax, image = c
         tmp = np.zeros((h, w), dtype=bool)
         tmp[ymin:ymax, xmin:xmax] = image
         if(mask_dilation > 0):
             tmp = binary_dilation(tmp, disk(mask_dilation))
+        if(orig_image_shape is not None and tmp.shape is not orig_image_shape):
+            tmp = resize(tmp, orig_image_shape, mode='constant')
         masks = np.concatenate((masks, tmp[np.newaxis]), axis=0)
 
-    if(len(masks) == 0):
-        # add a blank image so the file has at least one page
-        masks = np.zeros((1, h, w), dtype=bool)
-    masks = rescale(masks, (1, downsampling, downsampling), mode='constant')
-    tiff.imwrite(out_file, masks.astype('uint8') * 255,
-                 photometric='minisblack')
+    if(out_file is not None):
+        if(len(masks) == 0):
+            # add a blank image so the file has at least one page
+            masks = np.zeros((1,) + orig_image_shape, dtype=bool)
+        tiff.imwrite(out_file, masks.astype('uint8') * 255,
+                     photometric='minisblack')
+
+    return masks
