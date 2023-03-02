@@ -684,6 +684,8 @@ int gpuMotionCorrect::set_batches(int num_gpus)
 
 void gpuMotionCorrect::run()
 {
+    cudaSetDevice(gpu_id);
+
     // computation for reference image needs to be done only once in the beginning
     const cudaStream_t strm = batches[0].strm;
     const int blockSize = 256;
