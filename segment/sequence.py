@@ -33,19 +33,19 @@ class VI_Sequence(Sequence):
             larger than (when num_darts>1) patch_shape. The test image size is
             expected to be larger than patch_shape in general, but when it is
             smaller, images will be padded.
-        input_img_paths : list of list of pathlib.Path
+        input_img_paths : list of list of pathlib.Path, or None
             List of file paths to input images to be fed into the U-Net. Each
             element of the list is a list of file paths corresponding to
             multiple channels. Each file (tiff) can contain multiple images.
             The number of images per file and the image size must be the same
             for all the files. This parameter may be None, in which case
             input_imgs will be used as input.
-        target_img_paths : list of pathlib.Path
+        target_img_paths : list of pathlib.Path, or None
             List of file paths to target images specifing expected outputs from
             the U-Net. Each file (tiff) must contain the same number of images
             of the same size as the corresponding input file. This parameter is
             used only for training. It should be None for inference.
-        input_imgs : list of list of 3D numpy.ndarray of float, optional
+        input_imgs : list of list of 3D numpy.ndarray of float, or None, optional
             List of input images to be fed into the U-Net. Each element of the
             list is a list of images corresponding to multiple channels.
             The default is None, in which case the input images will be loaded

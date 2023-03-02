@@ -98,17 +98,17 @@ def merge_patches(patches, seq, tile_strides,
         Sequence object used to feed data to the model for prediction.
     tile_strides : tuple (y, x) of integer
         Spacing between adjacent tiles.
-    input_paths : list of list of pathlib.Path
+    input_paths : list of list of pathlib.Path, or None
         List of file paths to input images. Each element of the list is
         a list of file paths corresponding to multiple channels. It may be
         None, in which case input images will not be saved to ref_paths.
-    target_paths : list of pathlib.Path
+    target_paths : list of pathlib.Path, or None
         List of file paths to target images specifing expected outputs. It may
         be None, in which case target images will not be saved to ref_paths.
-    out_paths : list of pathlib.Path
-        List of file paths to which merged U-Net outputs will be saved.
-        It may be None, in which case the outputs will be returned.
-    ref_paths : list of pathlib.Path
+    out_paths : list of pathlib.Path, or None
+        List of file paths to which merged U-Net outputs will be saved. It may
+        be None, in which case the outputs will not be saved.
+    ref_paths : list of pathlib.Path, or None
         List of file paths to which U-Net inputs, merged outputs, and targets
         (ground truth) if any, are juxtaposed and saved for visual inspection.
         It may be None, in which case the reference images will not be saved.

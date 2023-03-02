@@ -38,18 +38,20 @@ class VI_Segment:
         gpu_mem_size : float or None
             GPU memory size in gigabytes (GB) that can be allocated for
             buffering prediction outputs. If None, no limit is assumed.
-        input_paths : list of list of pathlib.Path
+        input_paths : list of list of pathlib.Path, or None
             List of file paths to input images. Each element of the list is
-            a list of file paths corresponding to multiple channels.
-        target_paths : list of pathlib.Path
-            List of file paths to target images specifing expected outputs.
-            It can be None, in which case only U-Net inputs and outputs will
-            be saved to ref_paths.
-        out_paths : list of pathlib.Path
-            List of file paths to which U-Net outputs will be saved.
-        ref_paths : list of pathlib.Path
-            List of file paths to which U-Net inputs, outputs, and targets (i.e.,
-            ground truth) if any, are juxtaposed and saved for visual inspection.
+            a list of file paths corresponding to multiple channels. It may be
+            None, in which case input images will not be saved to ref_paths.
+        target_paths : list of pathlib.Path, or None
+            List of file paths to target images specifing expected outputs. It may
+            be None, in which case target images will not be saved to ref_paths.
+        out_paths : list of pathlib.Path, or None
+            List of file paths to which merged U-Net outputs will be saved. It
+            may be None, in which case the outputs will not be saved.
+        ref_paths : list of pathlib.Path, or None
+            List of file paths to which U-Net inputs, merged outputs, and targets
+            (ground truth) if any, are juxtaposed and saved for visual inspection.
+            It may be None, in which case the reference images will not be saved.
 
         Returns
         -------
@@ -279,7 +281,7 @@ class VI_Segment:
                 norm_channel, norm_shifts,
                 tile_shape, tile_strides, batch_size, gpu_mem_size=None):
         """
-        Make predictions on a test/real data set.
+        Make offline predictions on a test/real data set stored in files.
 
         Parameters
         ----------
@@ -327,7 +329,22 @@ class VI_Segment:
 
     def predict_online(self, input_images, norm_channel, norm_shifts,
                        tile_shape, tile_strides, batch_size, gpu_mem_size=None):
+        """
+        Make online predictions on a test/real data set on memory.
 
+        Parameters
+        ----------
+        input_images : list of 3D numpy.ndarray of float
+            List of input images. Each corresponds to one channel of the input.
+
+        Refer to predict() for the definitions of other parameters.
+
+        Returns
+        -------
+        3D numpy.ndarray of float
+            U-Net output.
+
+        """
         data_seq = VI_Sequence(batch_size, self.model_io_shape, tile_shape,
                                None, None, [input_images],
                                norm_channel, norm_shifts,
