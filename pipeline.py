@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import runpy
@@ -31,6 +32,16 @@ params.setdefault('SIGNAL_DOWNSAMPLING', 1.0)
 params.setdefault('BACKGROUND_SIGMA', 10)
 params.setdefault('BACKGROUND_EDGE', 1.0)
 params.setdefault('MASK_DILATION', 0)
+
+
+# set # GPUs if specified in the parameters, otherwise use all available GPUs
+if('NUM_GPUS' in params):
+    n = params['NUM_GPUS']
+    os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
+    os.environ['CUDA_VISIBLE_DEVICES'] = ','.join([str(i) for i in range(n)])
+    if(n == 0):
+        params['USE_GPU_CORRECT'] = False
+
 
 
 def set_dir(base_path, dirname):
@@ -402,13 +413,18 @@ elif(params['RUN_MODE'] == 'online'):
     CHUNK_FRAME_SIZE = 1000
     chunk_data_size = CHUNK_FRAME_SIZE * h * w * 4
     print('%d = %d x %d x %d' % (chunk_data_size, CHUNK_FRAME_SIZE, h, w))
-    mmap_file = out_dir.joinpath('tmp.mmap')
-    with open(mmap_file, 'wb') as f:
+
+    MMAP_P2C_PATH = out_dir.joinpath('p2c.mmap')
+    MMAP_C2P_PATH = out_dir.joinpath('c2p.mmap')
+    with open(MMAP_P2C_PATH, 'wb') as f:
         f.write(b'\0' * chunk_data_size)
 
+    #with open(MMAP_C2P_PATH, 'wb') as f:
+    #    f.write(b'\0' * chunk_data_size)
+
     import mmap
-    mmap_fd = open(mmap_file, 'r+b')
-    mmap_obj = mmap.mmap(mmap_fd.fileno(), 0, access=mmap.ACCESS_WRITE)
+    file_p2c = open(MMAP_P2C_PATH, 'r+b')
+    mmap_p2c = mmap.mmap(file_p2c.fileno(), 0, access=mmap.ACCESS_WRITE)
 
     import os
     PIPE_P2C_PATH = '/tmp/fifo_p2c'
@@ -431,9 +447,8 @@ elif(params['RUN_MODE'] == 'online'):
     for s in range(0, num_frames, CHUNK_FRAME_SIZE):
         e = min(s + CHUNK_FRAME_SIZE, num_frames)
         chunk = video[s:e]
-        mmap_obj.seek(0)
-        #a = chunk.tobytes()
-        mmap_obj.write(chunk.tobytes())
+        mmap_p2c.seek(0)
+        mmap_p2c.write(chunk.tobytes())
         fifo_p2c.write('%d %d\n' % (s, e))
         fifo_p2c.flush()
         print(fifo_c2p.readline())
@@ -448,8 +463,8 @@ elif(params['RUN_MODE'] == 'online'):
         sp.terminate()
     fifo_p2c.close()
     fifo_c2p.close()
-    mmap_obj.close()
-    mmap_fd.close()
+    mmap_p2c.close()
+    file_p2c.close()
     """
     num_frames = len(image_t)
     step = 1000 // params['TIME_SEGMENT_SIZE']

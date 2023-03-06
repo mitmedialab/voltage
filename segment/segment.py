@@ -1,6 +1,7 @@
 import math
-import keras
+import time
 import tensorflow as tf
+from tensorflow import keras
 import numpy as np
 from pathlib import Path
 from skimage.transform import resize
@@ -14,12 +15,11 @@ from .patch import merge_patches
 class VI_Segment:
 
     def __init__(self):
-        pass
+        self.gpus = tf.config.list_physical_devices('GPU')
 
 
     def _prevent_tf_from_occupying_entire_gpu_memory(self):
-        gpus = tf.config.experimental.list_physical_devices('GPU')
-        for gpu in gpus:
+        for gpu in self.gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
 
 
@@ -74,6 +74,8 @@ class VI_Segment:
         if(num_splits > 1):
             print('splitting %.1f GB output data into %d parts'
                   % (data_size, num_splits))
+
+        tic = time.perf_counter()
         for i in range(num_splits):
             data_seq.split_samples(num_splits, i)
             ret = self.model.predict(data_seq, verbose=1)
@@ -82,6 +84,9 @@ class VI_Segment:
             else:
                 preds = np.append(preds, ret, axis=0)
         preds = preds[:, :, :, 0] # remove last dimension (its length is one)
+        toc = time.perf_counter()
+        print('U-Net prediction: %.1f sec' % (toc - tic))
+
         if(preds.shape[1:] != data_seq.patch_shape):
             preds = resize(preds, (len(preds),) + data_seq.patch_shape,
                            mode='edge', anti_aliasing=True)
@@ -181,7 +186,7 @@ class VI_Segment:
                           3, 32, 0.5, 'conv_transpose', False)
         model.summary()
         opt = keras.optimizers.RMSprop()
-        model.compile(optimizer=opt, loss='binary_crossentropy')    
+        model.compile(optimizer=opt, loss='binary_crossentropy')
         model_file = model_dir.joinpath('model_e{epoch:02d}_v{val_loss:.4f}.h5')
         callbacks = [
             keras.callbacks.ModelCheckpoint(model_file,
@@ -274,7 +279,12 @@ class VI_Segment:
         """
         self._prevent_tf_from_occupying_entire_gpu_memory()    
         keras.backend.clear_session()
-        self.model, self.model_io_shape = load_model(model_file)
+        if(len(self.gpus) > 1):
+            strategy = tf.distribute.MirroredStrategy()
+            with strategy.scope():
+                self.model, self.model_io_shape = load_model(model_file)
+        else:
+            self.model, self.model_io_shape = load_model(model_file)
 
 
     def predict(self, input_files, out_file, ref_file,

@@ -1,5 +1,5 @@
-import keras.backend as K
-from keras.losses import binary_crossentropy
+import tensorflow.keras.backend as K
+from tensorflow.keras.losses import binary_crossentropy
 
 # Class weight for foreground firing cells (corresponding to y_true=1)
 # relative to the background (y_true=0) to compensate for the fact

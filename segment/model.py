@@ -1,4 +1,4 @@
-from keras import layers, models
+from tensorflow.keras import layers, models
 from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 
@@ -77,7 +77,7 @@ def load_model(model_file):
 
     Returns
     -------
-    model : keras.Model
+    model : tensorflow.keras.Model
         The loaded model.
     io_shape : tuple (height, width) of integer
         Input/output shape of the model.
