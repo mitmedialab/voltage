@@ -107,6 +107,27 @@ def _predict_multi(model, data_seq, gpu_mem_size,
                                           num_gpus, gpu_id, gpu_index)
 
 
+def _prerun_predict(model):
+    """
+    Run dummy prediction to prime the model, which seems to allow faster
+    launch of subsequent prediction.
+
+    Parameters
+    ----------
+    model : tensorflow.keras.Model
+        U-Net model.
+
+    Returns
+    -------
+    None.
+
+    """
+    _, h, w, num_channels = model.input_shape # first element is batch size
+    tmp = np.random.random((num_channels, 1, h, w)) # single frame
+    seq = VI_Sequence(1, (h, w), (h, w), None, None, [tmp])
+    model.predict(seq, verbose=0)
+
+
 class VI_Segment:
 
     def __init__(self):
@@ -274,8 +295,8 @@ class VI_Segment:
         model_files = sorted(Path(model_dir).glob('model*.h5'),
                              key=lambda x: float(x.stem.split('v')[-1]))
         # first item of the sorted list has the lowest validation loss
-        model, model_io_shape = load_model(model_files[0])
-        assert(model_io_shape == self.model_io_shape)
+        model = load_model(model_files[0])
+        assert(model.input_shape[1:3] == self.model_io_shape)
 
         valid_seq = VI_Sequence(batch_size,
                                 self.model_io_shape, self.model_io_shape,
@@ -308,13 +329,17 @@ class VI_Segment:
         self._prevent_tf_from_occupying_entire_gpu_memory()    
         keras.backend.clear_session()
         if(len(self.gpus) < 2): # CPU or single GPU
-            self.model, self.model_io_shape = load_model(model_file)
+            self.model = load_model(model_file)
+            _prerun_predict(self.model)
+            self.model_io_shape = self.model.input_shape[1:3]
         else:
             self.models = []
             for gpu in self.gpus:
                 with tf.device(gpu.name.replace('physical_', '')):
-                    model, self.model_io_shape = load_model(model_file)
+                    model = load_model(model_file)
                     self.models.append(model)
+                    _prerun_predict(model)
+            self.model_io_shape = self.models[0].input_shape[1:3]
 
 
     def predict(self, input_files, out_file, ref_file,

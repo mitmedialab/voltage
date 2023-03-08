@@ -79,8 +79,6 @@ def load_model(model_file):
     -------
     model : tensorflow.keras.Model
         The loaded model.
-    io_shape : tuple (height, width) of integer
-        Input/output shape of the model.
 
     """
     loss_dict = {'weighted_bce': weighted_bce,
@@ -88,7 +86,4 @@ def load_model(model_file):
                  'bce_dice_loss': bce_dice_loss,
                  'iou_loss': iou_loss}
     model = models.load_model(model_file, custom_objects=loss_dict)
-    # model.input_shape = (None, height, width, num_channels), where the first
-    # element represents the batch size, which is undefined at this point
-    io_shape = model.input_shape[1:3]
-    return model, io_shape
+    return model

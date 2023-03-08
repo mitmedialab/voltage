@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import tifffile as tiff
 from skimage.transform import resize
@@ -120,6 +121,8 @@ def merge_patches(patches, seq, tile_strides,
         The shape is (number_of_frames, patch_height, patch_width).
 
     """
+    tic = time.perf_counter()
+
     Ys, Xs = seq.get_tile_pos()
     num_tiles = len(Ys)
     num_frames = seq.num_frames
@@ -169,5 +172,8 @@ def merge_patches(patches, seq, tile_strides,
             video = np.append(video, out, axis=2)
             tiff.imwrite(ref_paths[i], video.astype('float32'),
                          photometric='minisblack')
+
+    toc = time.perf_counter()
+    print('Patch merger: %.1f sec' % (toc - tic))
 
     return out
