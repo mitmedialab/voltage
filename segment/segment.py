@@ -1,15 +1,110 @@
 import math
 import time
+import copy
 import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 from pathlib import Path
+from threading import Thread
 from skimage.transform import resize
 
 from .sequence import VI_Sequence
 from .data import get_training_data
 from .model import get_model, load_model
 from .patch import merge_patches
+
+
+
+def _predict_sub(model, data_seq, gpu_mem_size,
+                 num_gpus, gpu_id=None, gpu_index=0):
+    """
+    Make prediction on sliding tiles/patches.
+
+    Parameters
+    ----------
+    model : tensorflow.keras.Model
+        U-Net model.
+    data_seq : VI_Sequence
+        Sequence object used to feed data to the model.
+    gpu_mem_size : float or None
+        GPU memory size in gigabytes (GB) that can be allocated for
+        buffering prediction outputs. If None, no limit is assumed.
+    num_gpus : int
+        The number of available GPUs.
+    gpu_id : tensorflow.config.PhysicalDevice or None, optional
+        ID of the GPU for which this function is invoked. The default is None.
+    gpu_index : int, optional
+        Index of the GPU for which this function is invoked.
+        The range is [0, num_gpus). The default is 0.
+
+    Returns
+    -------
+    preds : 3D numpy.ndarray of float
+        U-Net outputs in patches.
+
+    """
+    # model.predict() allocates a buffer on the GPU to hold all the output
+    # prediction data before passing it back to the main memory, which can
+    # cause GPU out-of-memory error if data_seq feeds too many samples.
+    # When this happens, it cannot be avoided by reducing the batch size, as
+    # the number of batches increases and the output data size stays the same.
+    # To avoid the error, we can split the data_seq sequence into multiple
+    # subsequences and run predict() for each of them, after which we join
+    # the outputs together on the main memory.
+    if(num_gpus == 0):
+        num_splits = 1 # no splitting by assuming we have enough CPU RAM
+    elif(gpu_mem_size is None):
+        num_splits = 1 # no splitting if there is no GPU memory limit
+    else:
+        data_size = data_seq.output_data_size() / num_gpus / 1e9 # in gigabytes
+        num_splits = math.ceil(data_size / gpu_mem_size)
+        if(num_splits > 1):
+            print('splitting %.1f GB output data into %d parts on %s'
+                  % (data_size, num_splits, gpu_id.name))
+
+    tic = time.perf_counter()
+    for i in range(num_splits):
+        data_seq.split_samples(num_splits * max(num_gpus, 1),
+                               num_splits * gpu_index + i)
+        ret = model.predict(data_seq, verbose=1)
+        if(i == 0):
+            preds = ret
+        else:
+            preds = np.append(preds, ret, axis=0)
+    preds = preds[:, :, :, 0] # remove last dimension (its length is one)
+    toc = time.perf_counter()
+    print('U-Net prediction: %.1f sec' % (toc - tic))
+
+    if(preds.shape[1:] != data_seq.patch_shape):
+        preds = resize(preds, (len(preds),) + data_seq.patch_shape,
+                       mode='edge', anti_aliasing=True)
+
+    return preds
+
+
+def _predict_multi(model, data_seq, gpu_mem_size,
+                   num_gpus, gpu_id, gpu_index, results):
+    """
+    Make prediction on sliding tiles/patches using one of multiple GPUs.
+
+    Parameters
+    ----------
+    See _predict_sub().
+
+    results : list of num_gpus elements
+        The prediction result will be stored in results[gpu_index].
+
+    Returns
+    -------
+    None.
+
+    """
+    with tf.device(gpu_id.name.replace('physical_', '')):
+        # data_seq needs to be shallow-copied as _predict_sub() will modify it
+        # differently via split_samples() depending on gpu_index
+        results[gpu_index] = _predict_sub(model, copy.copy(data_seq),
+                                          gpu_mem_size,
+                                          num_gpus, gpu_id, gpu_index)
 
 
 class VI_Segment:
@@ -23,76 +118,6 @@ class VI_Segment:
             tf.config.experimental.set_memory_growth(gpu, True)
 
 
-    def _predict_and_merge(self, data_seq, tile_strides, gpu_mem_size,
-                           input_paths, target_paths, out_paths, ref_paths):
-        """
-        Make prediction on sliding tiles/patches and merge them into single
-        probability maps.
-
-        Parameters
-        ----------
-        data_seq : VI_Sequence
-            Sequence object used to feed data to the model.
-        tile_strides : tuple (y, x) of integer
-            Spacing between adjacent tiles.
-        gpu_mem_size : float or None
-            GPU memory size in gigabytes (GB) that can be allocated for
-            buffering prediction outputs. If None, no limit is assumed.
-        input_paths : list of list of pathlib.Path, or None
-            List of file paths to input images. Each element of the list is
-            a list of file paths corresponding to multiple channels. It may be
-            None, in which case input images will not be saved to ref_paths.
-        target_paths : list of pathlib.Path, or None
-            List of file paths to target images specifing expected outputs. It may
-            be None, in which case target images will not be saved to ref_paths.
-        out_paths : list of pathlib.Path, or None
-            List of file paths to which merged U-Net outputs will be saved. It
-            may be None, in which case the outputs will not be saved.
-        ref_paths : list of pathlib.Path, or None
-            List of file paths to which U-Net inputs, merged outputs, and targets
-            (ground truth) if any, are juxtaposed and saved for visual inspection.
-            It may be None, in which case the reference images will not be saved.
-
-        Returns
-        -------
-        3D numpy.ndarray of float
-            U-Net outputs.
-
-        """
-        # model.predict() allocates a buffer on the GPU to hold all the output
-        # prediction data before passing it back to the main memory, which can
-        # cause GPU out-of-memory error if data_seq feeds too many samples.
-        # When this happens, it cannot be avoided by reducing the batch size, as
-        # the number of batches increases and the output data size stays the same.
-        # To avoid the error, we can split the data_seq sequence into multiple
-        # subsequences and run predict() for each of them, after which we join
-        # the outputs together on the main memory.
-        data_size = data_seq.output_data_size() / 1000000000 # in gigabytes
-        if(gpu_mem_size is None):
-            gpu_mem_size = data_size
-        num_splits = math.ceil(data_size / gpu_mem_size)
-        if(num_splits > 1):
-            print('splitting %.1f GB output data into %d parts'
-                  % (data_size, num_splits))
-
-        tic = time.perf_counter()
-        for i in range(num_splits):
-            data_seq.split_samples(num_splits, i)
-            ret = self.model.predict(data_seq, verbose=1)
-            if(i == 0):
-                preds = ret
-            else:
-                preds = np.append(preds, ret, axis=0)
-        preds = preds[:, :, :, 0] # remove last dimension (its length is one)
-        toc = time.perf_counter()
-        print('U-Net prediction: %.1f sec' % (toc - tic))
-
-        if(preds.shape[1:] != data_seq.patch_shape):
-            preds = resize(preds, (len(preds),) + data_seq.patch_shape,
-                           mode='edge', anti_aliasing=True)
-
-        return merge_patches(preds, data_seq, tile_strides,
-                             input_paths, target_paths, out_paths, ref_paths)
 
 
     def set_training(self, input_dir_list, target_dir, seed, validation_ratio,
@@ -249,7 +274,7 @@ class VI_Segment:
         model_files = sorted(Path(model_dir).glob('model*.h5'),
                              key=lambda x: float(x.stem.split('v')[-1]))
         # first item of the sorted list has the lowest validation loss
-        self.model, model_io_shape = load_model(model_files[0])
+        model, model_io_shape = load_model(model_files[0])
         assert(model_io_shape == self.model_io_shape)
 
         valid_seq = VI_Sequence(batch_size,
@@ -258,14 +283,17 @@ class VI_Segment:
                                 self.norm_channel, self.norm_shifts,
                                 tiled=True, tile_strides=tile_strides)
 
-        out_paths = [out_dir.joinpath(p.name) for p in valid_target_paths]
-        ref_paths = [ref_dir.joinpath(p.name) for p in valid_target_paths]
-
-        self._predict_and_merge(valid_seq, tile_strides, gpu_mem_size,
-                                valid_input_paths, valid_target_paths,
-                                out_paths, ref_paths)
+        # For simplicity, use single GPU even if more are available
+        patches = _predict_sub(model, valid_seq, gpu_mem_size,
+                               min(len(self.gpus), 1))
 
         keras.backend.clear_session()
+
+        out_paths = [out_dir.joinpath(p.name) for p in valid_target_paths]
+        ref_paths = [ref_dir.joinpath(p.name) for p in valid_target_paths]
+        merge_patches(patches, valid_seq, tile_strides,
+                      valid_input_paths, valid_target_paths,
+                      out_paths, ref_paths)
 
 
     def set_inference(self, model_file):
@@ -279,12 +307,14 @@ class VI_Segment:
         """
         self._prevent_tf_from_occupying_entire_gpu_memory()    
         keras.backend.clear_session()
-        if(len(self.gpus) > 1):
-            strategy = tf.distribute.MirroredStrategy()
-            with strategy.scope():
-                self.model, self.model_io_shape = load_model(model_file)
-        else:
+        if(len(self.gpus) < 2): # CPU or single GPU
             self.model, self.model_io_shape = load_model(model_file)
+        else:
+            self.models = []
+            for gpu in self.gpus:
+                with tf.device(gpu.name.replace('physical_', '')):
+                    model, self.model_io_shape = load_model(model_file)
+                    self.models.append(model)
 
 
     def predict(self, input_files, out_file, ref_file,
@@ -331,10 +361,29 @@ class VI_Segment:
                                norm_channel, norm_shifts,
                                tiled=True, tile_strides=tile_strides)
 
-        self._predict_and_merge(data_seq, tile_strides, gpu_mem_size,
-                                [input_files], None, [out_file], [ref_file])
+        num_gpus = len(self.gpus)
+        if(num_gpus < 2): # CPU or single GPU
+            patches = _predict_sub(self.model, data_seq, gpu_mem_size, num_gpus)
+        else:
+            # tensorflow.keras.model is not picklable
+            # need to use thread rather than multiprocessing
+            threads = [None] * num_gpus
+            results = [None] * num_gpus
+            for i in range(num_gpus):
+                threads[i] = Thread(target=_predict_multi,
+                                    args=(self.models[i], data_seq, gpu_mem_size,
+                                          num_gpus, self.gpus[i], i, results))
+                threads[i].start()
+
+            for t in threads:
+                t.join()
+
+            patches = np.concatenate(results, axis=0)
 
         keras.backend.clear_session()
+
+        return merge_patches(patches, data_seq, tile_strides,
+                             [input_files], None, [out_file], [ref_file])
 
 
     def predict_online(self, input_images, norm_channel, norm_shifts,
@@ -359,6 +408,6 @@ class VI_Segment:
                                None, None, [input_images],
                                norm_channel, norm_shifts,
                                tiled=True, tile_strides=tile_strides)
-
-        return self._predict_and_merge(data_seq, tile_strides, gpu_mem_size,
-                                       None, None, None, None)
+        patches = _predict_sub(self.models[0], data_seq, gpu_mem_size, 1)
+        return merge_patches(patches, data_seq, tile_strides,
+                             None, None, None, None)
