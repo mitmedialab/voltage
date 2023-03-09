@@ -582,6 +582,7 @@ public:
     size_t allocate();
     void free();
     int set_batches(int num_gpus);
+    void init(float *ref_image);
     void run();
 private:
     void process(batch_t b);
@@ -682,25 +683,27 @@ int gpuMotionCorrect::set_batches(int num_gpus)
     return (int)batches.size();
 }
 
-void gpuMotionCorrect::run()
+// computation for reference image needs to be done only once in the beginning
+void gpuMotionCorrect::init(float *ref_image)
 {
     cudaSetDevice(gpu_id);
 
-    // computation for reference image needs to be done only once in the beginning
-    const cudaStream_t strm = batches[0].strm;
     const int blockSize = 256;
     int numBlocks;
 
-    checkCudaErrors(cudaMemcpyAsync(ref, param->himg, // copy first frame as reference
+    checkCudaErrors(cudaMemcpyAsync(ref, ref_image, // copy first frame as reference
                                     param->W * param->H * sizeof(float),
-                                    cudaMemcpyHostToDevice, strm));
+                                    cudaMemcpyHostToDevice));
 
     numBlocks = (param->w_l1 * param->h_l1 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize, 0, strm>>>(param->w_l1, param->h_l1, param->W, param->H, ref, ref_l1);
+    downsample_image<<<numBlocks, blockSize, 0>>>(param->w_l1, param->h_l1, param->W, param->H, ref, ref_l1);
 
     numBlocks = (param->w_l0 * param->h_l0 + blockSize - 1) / blockSize;
-    downsample_image<<<numBlocks, blockSize, 0, strm>>>(param->w_l0, param->h_l0, param->w_l1, param->h_l1, ref_l1, ref_l0);
+    downsample_image<<<numBlocks, blockSize, 0>>>(param->w_l0, param->h_l0, param->w_l1, param->h_l1, ref_l1, ref_l0);
+}
 
+void gpuMotionCorrect::run()
+{
     // start processing batches of frames
     for(auto b : batches)
     {
@@ -856,6 +859,30 @@ static void process_gpu_thread(gpuMotionCorrect *gmc)
     gmc->run();
 }
 
+static gpuMotionCorrect **correct_motion_gpu_init(int num_gpus, gpuParam_t &gp,
+                                                  float *first_frame)
+{
+    gp.size = (gp.mp->search_size << 1) + 1;
+    gp.corr_size = pow(2, ceil(log(gp.size * gp.size) / log(2)));
+    gp.w_l1 = gp.W >> 1;
+    gp.h_l1 = gp.H >> 1;
+    gp.w_l0 = gp.w_l1 >> 1;
+    gp.h_l0 = gp.h_l1 >> 1;
+    gp.loop23_ct_estimate = int((gp.H / gp.mp->patch_offset) * (gp.W / gp.mp->patch_offset));
+    gp.loop23_ct_rnd = pow(2, ceil(log(gp.loop23_ct_estimate) / log(2)));
+
+    gpuMotionCorrect **gmc = new gpuMotionCorrect* [num_gpus];
+    for(int i = 0; i < num_gpus; i++)
+    {
+        gmc[i] = new gpuMotionCorrect(i, &gp);
+        size_t s = gmc[i]->allocate();
+        printf("  GPU %d uses %.1f GB of memory for motion correction\n",
+               i, s / (float)(1024L * 1024L * 1024L));
+        gmc[i]->init(first_frame);
+    }
+    return gmc;
+}
+
 std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
                                          int num_pages, int width, int height,
                                          int num_frames_per_batch,
@@ -866,15 +893,6 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     printf("Motion Correction on %d GPUs\n", num_gpus);
 
     gpuParam_t gp;
-    gp.size = (param.search_size << 1) + 1;
-    gp.corr_size = pow(2, ceil(log(gp.size * gp.size) / log(2)));
-    gp.w_l1 = width >> 1;
-    gp.h_l1 = height >> 1;
-    gp.w_l0 = gp.w_l1 >> 1;
-    gp.h_l0 = gp.h_l1 >> 1;
-    gp.loop23_ct_estimate = int((height / param.patch_offset) * (width / param.patch_offset)); 
-    gp.loop23_ct_rnd = pow(2, ceil(log(gp.loop23_ct_estimate) / log(2)));
-
     gp.T = num_pages;
     gp.W = width;
     gp.H = height;
@@ -883,23 +901,21 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
     gp.hout = out_image;
     gp.mp = &param;
 
-    memcpy(out_image, in_image, height * width * sizeof(float)); // copy first frame
-
     gp.motion_list.resize(num_pages);
     gp.motion_list[0].x = 0;
     gp.motion_list[0].y = 0;
     gp.motion_list[0].corr = 0;
     gp.motion_list[0].valid = true;
 
+    memcpy(out_image, in_image, height * width * sizeof(float)); // copy first frame
+
+    gpuMotionCorrect **gmc = correct_motion_gpu_init(num_gpus, gp, in_image);
+
     printf("process %d frames in total\n", gp.T);
-    gpuMotionCorrect *gmc[num_gpus];
     for(int i = 0; i < num_gpus; i++)
     {
-        gmc[i] = new gpuMotionCorrect(i, &gp);
-        size_t s = gmc[i]->allocate();
         int n = gmc[i]->set_batches(num_gpus);
-        printf("  GPU %d to process %d batches of %d frames using %.1f GB of memory\n",
-               i, n, gp.dT, s / (float)(1024L * 1024L * 1024L));
+        printf("  GPU %d to process %d batches of %d frames\n", i, n, gp.dT);
     }
 
     std::vector<std::thread> threads;
@@ -918,6 +934,7 @@ std::vector<motion_t> correct_motion_gpu(motion_param_t &param,
         gmc[i]->free();
         delete gmc[i];
     }
+    delete [] gmc;
 
     return gp.motion_list;
 }
