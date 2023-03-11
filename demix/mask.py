@@ -217,6 +217,7 @@ def compute_masks(prob_data, img_data, prob_file, img_file, out_file,
 
     if(orig_image_shape is None):
         masks = np.zeros((0, h, w), dtype=bool)
+        orig_image_shape = (h, w)
     else:
         masks = np.zeros((0,) + orig_image_shape, dtype=bool)
 
@@ -226,7 +227,7 @@ def compute_masks(prob_data, img_data, prob_file, img_file, out_file,
         tmp[ymin:ymax, xmin:xmax] = image
         if(mask_dilation > 0):
             tmp = binary_dilation(tmp, disk(mask_dilation))
-        if(orig_image_shape is not None and tmp.shape is not orig_image_shape):
+        if(tmp.shape is not orig_image_shape):
             tmp = resize(tmp, orig_image_shape, mode='constant')
         masks = np.concatenate((masks, tmp[np.newaxis]), axis=0)
 
