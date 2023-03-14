@@ -92,6 +92,7 @@ void correct_shading(shading_param_t &param,
         float min_y = my[0];
         float max_x = mx[0];
         float max_y = my[0];
+        #pragma omp parallel for reduction(min: min_x, min_y) reduction(max: max_x, max_y) reduction(+: avg_x, avg_y)
         for(int k = 1; k < n; k++)
         {
             avg_x += mx[k];
@@ -112,12 +113,13 @@ void correct_shading(shading_param_t &param,
         // so that the constant term c[0] will correspond to the center intensity
         avg_x /= n;
         avg_y /= n;
+        #pragma omp parallel for
         for(int k = 0; k < n; k++)
         {
             mx[k] -= avg_x;
             my[k] -= avg_y;
         }
-	    
+
         #pragma omp parallel for
         for(size_t i = 0; i < num_pixels; i++)
         {

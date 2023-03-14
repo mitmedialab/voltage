@@ -24,7 +24,7 @@ static void normalize_intensity(size_t num_frames, size_t width, size_t height, 
         {
             sum += img[t * num_pixels + i];
         }
-        const float scale = 1.0 / sum;
+        const float scale = num_pixels / sum;
         for(size_t i = 0; i < num_pixels; i++)
         {
             img[t * num_pixels + i] *= scale;
@@ -122,14 +122,17 @@ void correct_video_cpp(int num_frames, int height, int width,
     *out_y = malloc_float1d(t);
     float *px = *out_x;
     float *py = *out_y;
-    for(auto m : motion_list)
+    #pragma omp parallel for reduction(min: min_x, min_y) reduction(max: max_x, max_y)
+    for(int k = 0; k < t; k++)
     {
-        *px++ = m.x;
-        *py++ = m.y;
-        if(min_x > m.x) min_x = m.x;
-        if(max_x < m.x) max_x = m.x;
-        if(min_y > m.y) min_y = m.y;
-        if(max_y < m.y) max_y = m.y;
+        float x = motion_list[k].x;
+        float y = motion_list[k].y;
+        px[k] = x;
+        py[k] = y;
+        if(min_x > x) min_x = x;
+        if(max_x < x) max_x = x;
+        if(min_y > y) min_y = y;
+        if(max_y < y) max_y = y;
     }
     printf("(x, y) in [%.1f, %.1f] x [%.1f, %.1f]\n", min_x, max_x, min_y, max_y);
 
