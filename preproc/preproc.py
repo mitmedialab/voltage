@@ -54,17 +54,9 @@ def preprocess_video(in_file, in_video, temporal_file, spatial_file,
     if(in_file):
         in_video = tiff.imread(in_file).astype('float32')
 
-    if(downsampling > 1):
-        h = int(in_video.shape[1] / downsampling)
-        w = int(in_video.shape[2] / downsampling)
-        down = np.zeros((len(in_video), h, w), dtype='float32')
-        for i, frame in enumerate(in_video):
-            down[i] = resize_local_mean(frame, (h, w))
-        in_video = down
-
     t, s = preprocess_video_cython(in_video,
                                    method_id, signal_period, signal_scale,
-                                   num_threads)
+                                   downsampling, num_threads)
 
     tiff.imwrite(temporal_file, t, photometric='minisblack')
     tiff.imwrite(spatial_file, s, photometric='minisblack')
