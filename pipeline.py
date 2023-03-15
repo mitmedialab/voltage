@@ -2,9 +2,9 @@ import os
 import sys
 import time
 import runpy
-import pathlib
 import tifffile as tiff
 import multiprocessing as mp
+from pathlib import Path
 
 from simulate import create_synthetic_data, decimate_video
 from correct import correct_video
@@ -18,20 +18,10 @@ if(len(sys.argv) != 2):
     print(sys.argv[0] + ' params.py')
     sys.exit(0)
 
-params = runpy.run_path(sys.argv[1])
-params.setdefault('FIRST_FRAME', 0)
-params.setdefault('NORMALIZE', True)
-params.setdefault('MOTION_X_RANGE', 1.0)
-params.setdefault('MOTION_Y_RANGE', 1.0)
-params.setdefault('SHADING_PERIOD', 1000)
-params.setdefault('USE_GPU_CORRECT', True)
-params.setdefault('BATCH_SIZE_CORRECT', 1000)
-params.setdefault('SIGNAL_METHOD', 'max-med')
-params.setdefault('SIGNAL_SCALE', 3.0)
-params.setdefault('SIGNAL_DOWNSAMPLING', 1.0)
-params.setdefault('BACKGROUND_SIGMA', 10)
-params.setdefault('BACKGROUND_EDGE', 1.0)
-params.setdefault('MASK_DILATION', 0)
+default_param_file = Path(sys.argv[0]).parent.joinpath('params/defaults.py')
+params = runpy.run_path(default_param_file)
+user_params = runpy.run_path(sys.argv[1])
+params.update(user_params) # overwrite default values with user parameters
 
 
 # set # GPUs if specified in the parameters, otherwise use all available GPUs
@@ -45,7 +35,7 @@ if('NUM_GPUS' in params):
 
 
 def set_dir(base_path, dirname):
-    p = pathlib.Path(base_path, dirname)
+    p = Path(base_path, dirname)
     if not p.exists():
         p.mkdir()
     return p
@@ -278,7 +268,7 @@ if(params['RUN_MODE'] == 'train'):
                    params['FILENAME'])
 
     # train the U-Net
-    model_dir = pathlib.Path(params['MODEL_DIR'])
+    model_dir = Path(params['MODEL_DIR'])
     log_file = model_dir.joinpath('log.csv')
     segment_dir = set_dir(params['OUTPUT_DIR'], 'segmented')
     validate_dir = set_dir(params['OUTPUT_DIR'], 'validate')
@@ -401,7 +391,7 @@ elif(params['RUN_MODE'] == 'online'):
     #segmenter = VI_Segment()
     #segmenter.set_inference(params['MODEL_FILE'])
 
-    filename = pathlib.Path(params['INPUT_FILE'])
+    filename = Path(params['INPUT_FILE'])
     tag = filename.stem
     print('')
     print('Processing ' + tag)
