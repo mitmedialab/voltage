@@ -55,10 +55,10 @@ logging.basicConfig(format=
 
 # %%
 def run_volpy_segmentation(input_file, output_dir,
-                           frame_rate, min_size, max_size,
-                           max_shift, use_cuda, gaussian_blur,
-                           do_motion_correction, do_summary_creation,
-                           weights_path=''):
+                           num_processes, use_cuda,
+                           do_motion_correction, max_shift, save_movie,
+                           do_summary_creation, frame_rate, gaussian_blur,
+                           min_size, max_size, weights_path=''):
     pass  # For compatibility between running under Spyder and the CLI
 
     # %%  Load demo movie and ROIs
@@ -95,13 +95,14 @@ def run_volpy_segmentation(input_file, output_dir,
         'max_deviation_rigid': max_deviation_rigid,
         'border_nan': border_nan,
         'use_cuda': use_cuda,
+        'splits_rig': num_processes,
     }
 
     opts = volparams(params_dict=opts_dict)
 
 # %% start a cluster for parallel processing
     c, dview, n_processes = cm.cluster.setup_cluster(
-        backend='local', n_processes=None, single_thread=False)
+        backend='multiprocessing', n_processes=num_processes, single_thread=False)
 
 # %%% MOTION CORRECTION
     # first we create a motion correction object with the specified parameters
@@ -109,10 +110,11 @@ def run_volpy_segmentation(input_file, output_dir,
     # Run correction
     if do_motion_correction:
         tic = time.perf_counter()
-        mc.motion_correct(save_movie=True)
+        mc.motion_correct(save_movie=save_movie)
         toc = time.perf_counter()
         with open('time_motion_correct.txt', 'w') as f:
             f.write('%f\n' % (toc - tic))
+    if do_motion_correction and save_movie:
         mv = cm.load(mc.mmap_file[0])
         tiff.imwrite(output_dir.joinpath(input_file.stem + '_corrected.tif'),
                      mv, photometric='minisblack')
@@ -169,15 +171,19 @@ def run_volpy_segmentation(input_file, output_dir,
 
 input_file = sys.argv[1]
 output_dir = sys.argv[2]
-frame_rate = int(sys.argv[3])
-min_size = int(sys.argv[4])
-max_size = int(sys.argv[5])
+num_processes = int(sys.argv[3])
+use_cuda = bool(int(sys.argv[4]))
+do_motion_correction = bool(int(sys.argv[5]))
 max_shift = int(sys.argv[6])
-use_cuda = bool(int(sys.argv[7]))
-gaussian_blur = bool(int(sys.argv[8]))
-do_motion_correction = bool(int(sys.argv[9]))
-do_summary_creation = bool(int(sys.argv[10]))
-weights_path = sys.argv[11] if len(sys.argv) > 11 else ''
-run_volpy_segmentation(input_file, output_dir, frame_rate, min_size, max_size,
-                       max_shift, use_cuda, gaussian_blur,
-                       do_motion_correction, do_summary_creation, weights_path)
+save_movie = bool(int(sys.argv[7]))
+do_summary_creation = bool(int(sys.argv[8]))
+frame_rate = int(sys.argv[9])
+gaussian_blur = bool(int(sys.argv[10]))
+min_size = int(sys.argv[11])
+max_size = int(sys.argv[12])
+weights_path = sys.argv[13] if len(sys.argv) > 13 else ''
+run_volpy_segmentation(input_file, output_dir,
+                       num_processes, use_cuda,
+                       do_motion_correction, max_shift, save_movie,
+                       do_summary_creation, frame_rate, gaussian_blur,
+                       min_size, max_size, weights_path='')
