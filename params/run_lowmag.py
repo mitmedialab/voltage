@@ -21,6 +21,7 @@ RUN_CORRECT = True
 RUN_PREPROC = True
 RUN_SEGMENT = True
 RUN_DEMIX = True
+RUN_SPIKE = True
 RUN_EVALUATE = True
 
 # file paths

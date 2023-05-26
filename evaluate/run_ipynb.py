@@ -44,7 +44,8 @@ def _run_ipynb(data, out_dir, out_basename):
         f.write(body)
 
 
-def run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir, name):
+def run_ipynb_evaluate_each(in_file, gt_file, img_file, spike_file,
+                            out_dir, name):
     """
     Run the Jupyter Notebook for single file evaluation.
 
@@ -56,6 +57,8 @@ def run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir, name):
         Path to the ground truth cell masks.
     img_file : string or pathlib.Path
         Path to the representative image of the data set.
+    spike_file : string or pathlib.Path
+        Path to the file containing extracted voltage traces and spikes.
     out_dir : string or pathlib.Path
         Directory path in which the results will be saved.
     name : string
@@ -71,6 +74,7 @@ def run_ipynb_evaluate_each(in_file, gt_file, img_file, out_dir, name):
     data = data.replace('@@@IN_FILE', str(in_file))
     data = data.replace('@@@GT_FILE', str(gt_file))
     data = data.replace('@@@IMG_FILE', str(img_file))
+    data = data.replace('@@@SPIKE_FILE', str(spike_file))
     data = data.replace('@@@OUT_DIR', str(out_dir))
     _run_ipynb(data, out_dir, name)
 

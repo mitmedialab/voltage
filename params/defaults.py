@@ -113,18 +113,30 @@ MASK_DILATION = 0            # The computed masks will be dilated by this size
                              # to draw slightly larger ROIs around neurons
 
 
+#%% Spike parameters
+
+POLARITY        = 1          # 1 for voltage indicators with positive polarity
+                             # (fluorescence increases for higher voltage) and
+                             # -1 for negative polarity (fluorescence decreases
+                             # for higher voltage like Voltron)
+
+SPIKE_THRESHOLD = 4.0        # The number of standard deviations above (below
+                             # in the case of negative polarity) which voltage
+                             # is considered spiking
+
+
 #%% Runtime parameters
 
 RUN_MODE = 'run'     # Mode for running the pipeline
                      # 'run'   : run the pipeline for neuron detection
                      # 'train' : train U-Net segmentation network
-                     # 'online': online neuron detection (under development)
 
 RUN_SIMULATE = True  # Whether to simulate video to synthesize training data
 RUN_CORRECT  = True  # Whether to run motion/shading correction
 RUN_PREPROC  = True  # Whether to run preprocessing
 RUN_SEGMENT  = True  # Whether to run segmentation
-RUN_DEMIX    = True  # Whether to run demixing 
+RUN_DEMIX    = True  # Whether to run demixing
+RUN_SPIKE    = True  # Whether to run spike detection
 RUN_EVALUATE = True  # Whether to evaluate segmentation accuracy and speed
 RUN_TRAIN    = True  # Whether to train U-Net
 

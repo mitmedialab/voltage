@@ -1,22 +1,20 @@
+import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import center_of_mass
 from skimage.segmentation import find_boundaries
-from pathlib import Path
 
 
 REPRESENTATIVE_IOU = 0.4
 
 
 
-def _savefig(plt, filename):
+def _savefig(filename):
     """
     Save plots in files. This must be called before plt.show().
 
     Parameters
     ----------
-    plt : matplotlib.pyplot
-        Plotting interface holding the plot to be saved.
     filename : string or pathlib.Path
         File path to which the plot will be saved, without extension.
 
@@ -139,12 +137,12 @@ def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU, filename=None):
     plt.subplot(1, 2, 2)
     _plot_IoU_sub(IoU)
     if(filename is not None):
-        _savefig(plt, filename)
+        _savefig(filename)
     plt.show()
 
 
 
-def _overlay_masks(masks, color):
+def _overlay_masks(masks, color, base=0):
     """
     Overlay masks on an image, and label each mask with its ID number.
     The underlying image is assumed to be already drawn, and the contours
@@ -156,6 +154,8 @@ def _overlay_masks(masks, color):
         Mask images.
     color : 3-tuple of float
         RGB color in [0, 1] for drawing mask contours
+    base : integer, optional
+        Base number for IDs. They will be offset by this number. Default is 0.
 
     Returns
     -------
@@ -174,7 +174,7 @@ def _overlay_masks(masks, color):
     plt.imshow(overlay, interpolation='bilinear')
     for i, mask in enumerate(masks):
         p = center_of_mass(mask)
-        plt.text(p[1], p[0], str(i), color=color)
+        plt.text(p[1], p[0], str(base + i), color=color)
 
 
 def _plot_masks_sub(image, eval_masks, gt_masks):
@@ -236,7 +236,7 @@ def plot_masks(image, eval_masks, gt_masks, filename=None):
     plt.subplot(1, 3, 3)
     _plot_masks_sub(image, None, gt_masks)
     if(filename is not None):
-        _savefig(plt, filename)
+        _savefig(filename)
     plt.show()
 
     
@@ -270,3 +270,62 @@ def plot_per_dataset_scores(keys, scores, label, color):
     plt.xlabel('Dataset')
     plt.title('Per-dataset ' + label + ' at IoU = %.1f' % REPRESENTATIVE_IOU)
     plt.show()
+
+
+def plot_voltage_traces(image, masks, spike_file, filename=None):
+    """
+    Plot voltage traces and their spike times.
+
+    Parameters
+    ----------
+    image : 2D numpy.ndarray of float
+        Reference image.
+    masks : 3D numpy.ndarray of boolean
+        Masks to show which area of the reference image the trace comes from.
+        The shape should be (# masks,) + image.shape.
+    spike_file : string or pathlib.Path
+        HDF5 file containing extracted voltage traces and their spike times.
+    filename : string or pathlib.Path, optional
+        File path to which the plot will be saved. The default is None,
+        in which case the plot will not be saved.
+
+    Returns
+    -------
+    None.
+
+    """
+    with h5py.File(spike_file, 'r') as f:
+        for i, mask in enumerate(masks):
+            _, (a0, a1) = plt.subplots(1, 2, width_ratios=(1, 5), figsize=(17, 3))
+            a0.axis('off')
+            a0.imshow(image, interpolation='bilinear', cmap='gray')
+            plt.axes(a0)
+            _overlay_masks(mask[np.newaxis], (1, 1, 0), i)
+
+            grp = f['neuron%d' % i]
+            voltage = grp['voltage'][:]
+            spikes = grp['spikes'][:]
+            spike_marks = np.ones_like(spikes) * max(voltage) * 1.1
+            #thresh = grp.attrs['thresh']
+            #a1.axhline(y=thresh, color='r', linestyle='-')
+            a1.plot(voltage)
+            a1.plot(spikes, spike_marks, '|')
+            plt.show()
+
+        # Plot all the voltage traces in a single file, without reference
+        # image/mask, and with much larger width
+        if(filename is not None):
+            num_neurons = len(masks)
+            plt.figure(figsize=(50, 2 * num_neurons)) # larger width
+            for i in range(num_neurons):
+                grp = f['neuron%d' % i]
+                voltage = grp['voltage'][:]
+                spikes = grp['spikes'][:]
+                spike_marks = np.ones_like(spikes) * max(voltage) * 1.1
+                plt.subplot(num_neurons, 1, i+1)
+                plt.axis('off')
+                plt.plot(voltage, linewidth=0.5)
+                plt.plot(spikes, spike_marks, '|', markeredgewidth=0.5)
+
+            _savefig(filename)
+            plt.close() # do not plot on notebook
