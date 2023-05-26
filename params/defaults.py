@@ -125,6 +125,12 @@ SPIKE_THRESHOLD = 4.0        # The number of standard deviations above (below
                              # is considered spiking
 
 
+#%% Evaluation parameters
+
+REPRESENTATIVE_IOU = 0.4     # IoU threshold at which representative F-1 scores
+                             # will be computed
+
+
 #%% Runtime parameters
 
 RUN_MODE = 'run'     # Mode for running the pipeline

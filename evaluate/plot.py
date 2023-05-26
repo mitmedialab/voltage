@@ -5,9 +5,6 @@ from scipy.ndimage import center_of_mass
 from skimage.segmentation import find_boundaries
 
 
-REPRESENTATIVE_IOU = 0.4
-
-
 
 def _savefig(filename):
     """
@@ -29,7 +26,7 @@ def _savefig(filename):
 
 
 
-def _plot_F1_sub(f1, precision, recall, thresholds):
+def _plot_F1_sub(f1, precision, recall, thresholds, representative_iou):
     """
     Plot F1 scores as well as precision and recall values.
 
@@ -52,9 +49,9 @@ def _plot_F1_sub(f1, precision, recall, thresholds):
     plt.legend(loc='lower left')
     plt.ylabel('Score')
     plt.xlabel('IoU Threshold')
-    plt.vlines(REPRESENTATIVE_IOU, 0, 1, colors='gray', linestyles='dashed') 
-    indices = np.where(thresholds >= REPRESENTATIVE_IOU)
-    plt.title('F1 = %.2f at IoU = %.1f' % (f1[indices[0][0]], REPRESENTATIVE_IOU))
+    plt.vlines(representative_iou, 0, 1, colors='gray', linestyles='dashed')
+    indices = np.where(thresholds >= representative_iou)
+    plt.title('F1 = %.2f at IoU = %.1f' % (f1[indices[0][0]], representative_iou))
 
 
 def _plot_IoU_sub(IoU):
@@ -86,7 +83,7 @@ def _plot_IoU_sub(IoU):
     plt.title('IoU Matrix')
 
 
-def plot_F1(f1, precision, recall, thresholds):
+def plot_F1(f1, precision, recall, thresholds, representative_iou):
     """
     Plot F1 scores as well as precision and recall values.
 
@@ -100,11 +97,12 @@ def plot_F1(f1, precision, recall, thresholds):
 
     """
     plt.figure(figsize=(5, 5))
-    _plot_F1_sub(f1, precision, recall, thresholds)
+    _plot_F1_sub(f1, precision, recall, thresholds, representative_iou)
     plt.show()
 
 
-def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU, filename=None):
+def plot_F1_and_IoU(f1, precision, recall, thresholds,
+                    IoU, representative_iou, filename=None):
     """
     Plot F1 scores as well as precision and recall values,
     and visualize an IoU matrix as a heat map.
@@ -122,6 +120,8 @@ def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU, filename=None):
     IoU : 2D numpy.ndarray of float
         Matrix whose elements represent IoU values between predicted masks
         and ground truth masks.
+    representative_iou : float
+        IoU threshold at which representative F-1 score will be computed.
     filename : string or pathlib.Path, optional
         File path to which the plot will be saved. The default is None,
         in which case the plot will not be saved.
@@ -133,7 +133,7 @@ def plot_F1_and_IoU(f1, precision, recall, thresholds, IoU, filename=None):
     """
     plt.figure(figsize=(11, 5))
     plt.subplot(1, 2, 1)
-    _plot_F1_sub(f1, precision, recall, thresholds)
+    _plot_F1_sub(f1, precision, recall, thresholds, representative_iou)
     plt.subplot(1, 2, 2)
     _plot_IoU_sub(IoU)
     if(filename is not None):
@@ -241,7 +241,7 @@ def plot_masks(image, eval_masks, gt_masks, filename=None):
 
     
 
-def plot_per_dataset_scores(keys, scores, label, color):
+def plot_per_dataset_scores(keys, scores, label, color, representative_iou):
     """
     Plot a bar chart showing scores for individual data sets.
 
@@ -255,6 +255,9 @@ def plot_per_dataset_scores(keys, scores, label, color):
         Name of the score type. Used to label the chart.
     color : color (any color specification such as string, RGB, etc.)
         Color of the bars.
+    representative_iou : float
+        IoU threshold at which representative F-1 score has been computed.
+        It is used only for the purpose of labeling the plot here.
 
     Returns
     -------
@@ -268,7 +271,7 @@ def plot_per_dataset_scores(keys, scores, label, color):
     plt.xticks(list(range(len(scores))), keys, rotation='vertical')
     plt.ylabel(label)
     plt.xlabel('Dataset')
-    plt.title('Per-dataset ' + label + ' at IoU = %.1f' % REPRESENTATIVE_IOU)
+    plt.title('Per-dataset ' + label + ' at IoU = %.1f' % representative_iou)
     plt.show()
 
 

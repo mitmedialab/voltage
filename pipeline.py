@@ -393,10 +393,12 @@ elif(params['RUN_MODE'] == 'run'):
         if(params['RUN_EVALUATE']):
             gt_file = params['GT_FILES'][i]
             run_ipynb_evaluate_each(demix_file, gt_file, correction_file, #spatial_file,
-                                    spike_file, out_dir, tag)
+                                    spike_file, out_dir,
+                                    params['REPRESENTATIVE_IOU'], tag)
 
     if(params['RUN_EVALUATE']):
-        run_ipynb_evaluate_all(params['OUTPUT_DIR'])
+        run_ipynb_evaluate_all(params['OUTPUT_DIR'],
+                               params['REPRESENTATIVE_IOU'])
 
 else:
     print('Unexpected RUN_MODE: ' + params['RUN_MODE'])

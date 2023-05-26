@@ -5,10 +5,8 @@ import pandas as pd
 from .f1score import calc_f1_scores
 
 
-REPRESENTATIVE_IOU = 0.4
 
-
-def _aggregate_scores(out_dir, weighted=False):
+def _aggregate_scores(out_dir, representative_iou, weighted=False):
     """
     Aggregate individual evaluation scores.
 
@@ -17,6 +15,8 @@ def _aggregate_scores(out_dir, weighted=False):
     out_dir : string
         Path to a directory from which individual evaluation statistics will
         be read, and in which aggregated evaluation will be saved.
+    representative_iou : float
+        IoU threshold at which representative F-1 score will be computed.
     weighted : boolean, optional
         There are two ways to calculate aggregate F1 scores: one is to
         calculate it from the total numbers of true/false positives/negatives,
@@ -30,12 +30,12 @@ def _aggregate_scores(out_dir, weighted=False):
     -------
     f1_rep : float
         Single F1 score representing the overall accuracy of predicted neuron
-        masks, corresponding to an IoU threshold of REPRESENTATIVE_IOU.
+        masks, corresponding to an IoU threshold of representative_iou.
     df_sum : pandas.DataFrame
         Table summarizing overall evaluation statistics.
     df_each : pandas.DataFrame
         Table summarizing individual evalution statistics corresponding
-        to an IoU threshold of REPRESENTATIVE_IOU.
+        to an IoU threshold of representative_iou.
 
     """
     dataset_ids = []
@@ -51,7 +51,7 @@ def _aggregate_scores(out_dir, weighted=False):
         if(first):
             df_sum = df.drop(columns=['IoU_Thresh'])
             thresholds = df['IoU_Thresh']
-            indices = np.where(thresholds >= REPRESENTATIVE_IOU)
+            indices = np.where(thresholds >= representative_iou)
             representative_iou_index = indices[0][0]
             first = False
         else:
@@ -122,7 +122,7 @@ def _aggregate_times(out_dir):
         return 'No runtime was measured.'
 
 
-def evaluate_all(out_dir):
+def evaluate_all(out_dir, representative_iou):
     """
     Aggregate individual evaluation results and report overall evaluation.
     This assumes individual evaluations have already been performed by
@@ -133,6 +133,8 @@ def evaluate_all(out_dir):
     out_dir : string
         Path to a directory from which individual evaluation statistics will
         be read, and in which overall evaluation will be saved.
+    representative_iou : float
+        IoU threshold at which representative F-1 score will be computed.
 
     Returns
     -------
@@ -140,7 +142,8 @@ def evaluate_all(out_dir):
         Dictionary containing overall evaluation statistics.
 
     """
-    f1_rep, df_sum, df_each = _aggregate_scores(pathlib.Path(out_dir))
+    f1_rep, df_sum, df_each = _aggregate_scores(pathlib.Path(out_dir),
+                                                representative_iou)
 
     eval_data = {}
     eval_data['representative f1'] = f1_rep

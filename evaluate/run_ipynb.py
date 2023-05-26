@@ -45,7 +45,7 @@ def _run_ipynb(data, out_dir, out_basename):
 
 
 def run_ipynb_evaluate_each(in_file, gt_file, img_file, spike_file,
-                            out_dir, name):
+                            out_dir, representative_iou, name):
     """
     Run the Jupyter Notebook for single file evaluation.
 
@@ -61,6 +61,8 @@ def run_ipynb_evaluate_each(in_file, gt_file, img_file, spike_file,
         Path to the file containing extracted voltage traces and spikes.
     out_dir : string or pathlib.Path
         Directory path in which the results will be saved.
+    representative_iou : float
+        IoU threshold at which representative F-1 score will be computed.
     name : string
         Data set name used to show and save the results.
 
@@ -76,10 +78,11 @@ def run_ipynb_evaluate_each(in_file, gt_file, img_file, spike_file,
     data = data.replace('@@@IMG_FILE', str(img_file))
     data = data.replace('@@@SPIKE_FILE', str(spike_file))
     data = data.replace('@@@OUT_DIR', str(out_dir))
+    data = data.replace('@@@REPRESENTATIVE_IOU', str(representative_iou))
     _run_ipynb(data, out_dir, name)
 
 
-def run_ipynb_evaluate_all(out_dir):
+def run_ipynb_evaluate_all(out_dir, representative_iou):
     """
     Run the Jupyter Notebook for overall evaluation.
 
@@ -87,6 +90,8 @@ def run_ipynb_evaluate_all(out_dir):
     ----------
     out_dir : string or pathlib.Path
         Directory path in which the results will be saved.
+    representative_iou : float
+        IoU threshold at which representative F-1 score will be computed.
 
     Returns
     -------
@@ -95,4 +100,5 @@ def run_ipynb_evaluate_all(out_dir):
     """
     data = read_text(templates, 'evaluate_all.ipynb')
     data = data.replace('@@@OUT_DIR', str(out_dir))
+    data = data.replace('@@@REPRESENTATIVE_IOU', str(representative_iou))
     _run_ipynb(data, out_dir, 'all');
