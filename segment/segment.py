@@ -352,11 +352,12 @@ class VI_Segment:
         ----------
         input_files : list of pathlib.Path
             List of input file paths. Each corresponds to one channel of the input.
-        out_file : pathlib.Path
-            File path to which the U-Net output will be saved.
-        ref_file : pathlib.Path
+        out_file : pathlib.Path or None
+            File path to which the U-Net output will be saved. If None, it
+            will not be saved.
+        ref_file : pathlib.Path or None
             File path to which the U-Net input and output are juxtaposed
-            and saved for visual inspection.
+            and saved for visual inspection. If None, they will not be saved.
         norm_channel : integer, optional
             The channel used to determine the scale for patch normalization.
             If -1 (default), the max/min intensities of a given patch across
@@ -378,7 +379,9 @@ class VI_Segment:
 
         Returns
         -------
-        None.
+        3D numpy.ndarray of float
+            U-Net output representing probability maps of firing neurons.
+            The shape is (number_of_frames, image_height, image_width).
 
         """
         data_seq = VI_Sequence(batch_size, self.model_io_shape, tile_shape,
@@ -407,8 +410,10 @@ class VI_Segment:
 
         keras.backend.clear_session()
 
+        out_files = None if(out_file is None) else [out_file]
+        ref_files = None if(ref_file is None) else [ref_file]
         return merge_patches(patches, data_seq, tile_strides,
-                             [input_files], None, [out_file], [ref_file])
+                             [input_files], None, out_files, ref_files)
 
 
     def predict_online(self, input_images, norm_channel, norm_shifts,

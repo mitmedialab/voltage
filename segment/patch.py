@@ -118,7 +118,7 @@ def merge_patches(patches, seq, tile_strides,
     -------
     out : 3D numpy.ndarray of float
         Merged probability maps.
-        The shape is (number_of_frames, patch_height, patch_width).
+        The shape is (number_of_frames, image_height, image_width).
 
     """
     tic = time.perf_counter()
