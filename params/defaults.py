@@ -120,9 +120,9 @@ POLARITY        = 1          # 1 for voltage indicators with positive polarity
                              # -1 for negative polarity (fluorescence decreases
                              # for higher voltage like Voltron)
 
-SPIKE_THRESHOLD = 4.0        # The number of standard deviations above (below
-                             # in the case of negative polarity) which voltage
-                             # is considered spiking
+SPIKE_THRESHOLD = 2.5        # Neurons are considered spiking when their
+                             # voltage is larger than its subthreshold activity
+                             # range by this number of times
 
 
 #%% Evaluation parameters

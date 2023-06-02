@@ -297,6 +297,8 @@ def plot_voltage_traces(image, masks, spike_file, filename=None):
     None.
 
     """
+    YMIN = -5
+    YMAX = 10
     with h5py.File(spike_file, 'r') as f:
         for i, mask in enumerate(masks):
             _, (a0, a1) = plt.subplots(1, 2, width_ratios=(1, 5), figsize=(17, 3))
@@ -308,9 +310,8 @@ def plot_voltage_traces(image, masks, spike_file, filename=None):
             grp = f['neuron%d' % i]
             voltage = grp['voltage'][:]
             spikes = grp['spikes'][:]
-            spike_marks = np.ones_like(spikes) * max(voltage) * 1.1
-            #thresh = grp.attrs['thresh']
-            #a1.axhline(y=thresh, color='r', linestyle='-')
+            spike_marks = np.ones_like(spikes) * YMAX * 0.9
+            a1.set_ylim(YMIN, YMAX)
             a1.plot(voltage)
             a1.plot(spikes, spike_marks, '|')
             plt.show()
@@ -324,9 +325,10 @@ def plot_voltage_traces(image, masks, spike_file, filename=None):
                 grp = f['neuron%d' % i]
                 voltage = grp['voltage'][:]
                 spikes = grp['spikes'][:]
-                spike_marks = np.ones_like(spikes) * max(voltage) * 1.1
+                spike_marks = np.ones_like(spikes) * YMAX * 0.9
                 plt.subplot(num_neurons, 1, i+1)
                 plt.axis('off')
+                plt.ylim(YMIN, YMAX)
                 plt.plot(voltage, linewidth=0.5)
                 plt.plot(spikes, spike_marks, '|', markeredgewidth=0.5)
 

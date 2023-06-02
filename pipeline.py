@@ -352,31 +352,33 @@ elif(params['RUN_MODE'] == 'run'):
             timer.skip('Segment')
 
         # demix cells from U-Net outputs
-        demix_file = out_dir.joinpath(tag + '_masks.tif')
+        demix_file = out_dir.joinpath(tag + '_demix.tif')
         if(params['RUN_DEMIX']):
             timer.start()
-            m = compute_masks(None, None,
-                              segment_file, spatial_file, demix_file,
-                              params['PROBABILITY_THRESHOLD'],
-                              params['AREA_THRESHOLD_MIN'],
-                              params['AREA_THRESHOLD_MAX'],
-                              params['CONCAVITY_THRESHOLD'],
-                              params['INTENSITY_THRESHOLD'],
-                              params['ACTIVITY_THRESHOLD'],
-                              params['BACKGROUND_SIGMA'],
-                              params['BACKGROUND_EDGE'],
-                              params['BACKGROUND_THRESHOLD'],
-                              params['MASK_DILATION'],
-                              c.shape[1:])
+            masks = compute_masks(None, None,
+                                  segment_file, spatial_file, demix_file,
+                                  params['PROBABILITY_THRESHOLD'],
+                                  params['AREA_THRESHOLD_MIN'],
+                                  params['AREA_THRESHOLD_MAX'],
+                                  params['CONCAVITY_THRESHOLD'],
+                                  params['INTENSITY_THRESHOLD'],
+                                  params['ACTIVITY_THRESHOLD'],
+                                  params['BACKGROUND_SIGMA'],
+                                  params['BACKGROUND_EDGE'],
+                                  params['BACKGROUND_THRESHOLD'],
+                                  params['MASK_DILATION'],
+                                  c.shape[1:])
             timer.stop('Mask')
         else:
-            m = read_roi(demix_file, None)
+            masks = read_roi(demix_file, None)
             timer.skip('Mask')
 
+        # extract voltage traces, detect spikes, and remove inactive neurons
         spike_file = out_dir.joinpath(tag + '_spikes.hdf5')
+        mask_file = out_dir.joinpath(tag + '_masks.tif')
         if(params['RUN_SPIKE']):
             timer.start()
-            detect_spikes(c, m, spike_file,
+            detect_spikes(c, masks, spike_file, mask_file,
                           params['POLARITY'], params['SPIKE_THRESHOLD'])
             timer.stop('Spike')
         else:
@@ -385,14 +387,14 @@ elif(params['RUN_MODE'] == 'run'):
         # save speed stats
         timer.save(filename)
 
-        # save large file later
+        # save large intermediate file later
         if(params['RUN_CORRECT']):
             tiff.imwrite(correction_file, c, photometric='minisblack')
 
         # evaluate the accuracy of detections
         if(params['RUN_EVALUATE']):
             gt_file = params['GT_FILES'][i]
-            run_ipynb_evaluate_each(demix_file, gt_file, correction_file, #spatial_file,
+            run_ipynb_evaluate_each(mask_file, gt_file, correction_file, #spatial_file,
                                     spike_file, out_dir,
                                     params['REPRESENTATIVE_IOU'], tag)
 
