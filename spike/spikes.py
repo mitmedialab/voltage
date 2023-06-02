@@ -1,25 +1,66 @@
 import numpy as np
 import tifffile as tiff
 import h5py
+import multiprocessing as mp
+from threading import Thread
 from scipy.signal import find_peaks
 from scipy.ndimage import gaussian_filter1d
 
 
-def detect_spikes_sub(video, mask, polarity, spike_thresh):
+def _mean_roi(video, masks, idx, results):
+    voltages = np.zeros((len(masks), len(video)))
+    for i, mask in enumerate(masks):
+        voltages[i] = np.mean(video, axis=(1, 2), where=mask)
+    results[idx] = voltages
+
+def extract_voltage_traces(video, masks, num_threads):
     """
-    Extract voltage trace from video and a given mask and detect its spikes.
+    Extract voltage traces from video for given ROI masks.
 
     Parameters
     ----------
-    mask : 2D numpy.ndarray of boolean
-        ROI mask representing a neuron footprint.
+    See detect_spikes() for the definitions of other parameters.
+
+    Returns
+    -------
+    2D numpy.ndarray of float
+        Extracted voltage traces. The shape is (# masks, # video frames).
+
+    """
+    if(num_threads == 0):
+        num_threads = mp.cpu_count()
+    threads = [None] * num_threads
+    results = [None] * num_threads
+    num_frames = len(video)
+    num_frames_per_thread = (num_frames + num_threads - 1) // num_threads
+    for i in range(num_threads):
+        s = num_frames_per_thread * i
+        e = min(s + num_frames_per_thread, num_frames)
+        threads[i] = Thread(target=_mean_roi,
+                            args=(video[s:e], masks, i, results))
+        threads[i].start()
+
+    for t in threads:
+        t.join()
+
+    return np.concatenate(results, axis=1)
+
+
+def detect_spikes_sub(voltage, polarity, spike_thresh):
+    """
+    Detect spikes of a voltage trace.
+
+    Parameters
+    ----------
+    voltage: 1D numpy.ndarray of float
+        Input raw voltage trace.
 
     See detect_spikes() for the definitions of other parameters.
 
     Returns
     -------
     voltage : 1D numpy.ndarray of float
-        Normalized voltage trace.
+        Rectified voltage trace.
     spikes : 1D numpy.ndarray of integer
         Spike times (indices to the voltage trace).
     scale : float
@@ -27,7 +68,6 @@ def detect_spikes_sub(video, mask, polarity, spike_thresh):
         of the estimated subthreshold acitivity of the voltage trace.
 
     """
-    voltage = np.mean(video, axis=(1, 2), where=mask)
     if(polarity < 0):
         voltage = -voltage
     # Remove baseline fluctuation (filter size may need to be adjusted)
@@ -48,9 +88,11 @@ def detect_spikes_sub(video, mask, polarity, spike_thresh):
     return voltage, spikes, scale
 
 
-def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh):
+def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh,
+                  num_threads=0):
     """
     Extract voltage traces from video and masks, detect spikes, and save them.
+    Masks for inactive neurons (with no detected spikes) will be removed.
 
     Parameters
     ----------
@@ -69,17 +111,22 @@ def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh):
     spike_thresh : float
         Neurons are considered spiking when their voltage is larger than its
         subthreshold activity range by spike_thresh times.
+    num_threads : integer, optional
+        The number of threads to be used. Default is 0, in which case all the
+        available cores will be used.
 
     Returns
     -------
     None.
 
     """
+    voltage_list = extract_voltage_traces(video, masks, num_threads)
+
     inactive_neurons = []
     with h5py.File(spike_file, 'w') as f:
         neuron_id = 0
-        for i, mask in enumerate(masks):
-            v, s, t = detect_spikes_sub(video, mask, polarity, spike_thresh)
+        for i, voltage in enumerate(voltage_list):
+            v, s, t = detect_spikes_sub(voltage, polarity, spike_thresh)
             if(len(s) == 0):
                 inactive_neurons.append(i)
             else:
