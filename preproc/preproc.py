@@ -1,7 +1,5 @@
-import numpy as np
 import tifffile as tiff
 from libpreproc import preprocess_video_cython
-from skimage.transform import resize_local_mean
 
 
 def preprocess_video(in_file, in_video, temporal_file, spatial_file,
@@ -13,9 +11,9 @@ def preprocess_video(in_file, in_video, temporal_file, spatial_file,
 
     Parameters
     ----------
-    in_file : string or pathlib.Path
+    in_file : string, pathlib.Path, or None
         Input file path of a multi-page tiff containig motion/shading-corrected
-        voltage imaging video. If this is empty, in_video will be used.
+        voltage imaging video. If this is None, in_video will be used.
     in_video : 3D numpy.ndarray of float32
         Motion/shading-corrected voltage imaging video.
     temporal_file : string or pathlib.Path
@@ -51,7 +49,7 @@ def preprocess_video(in_file, in_video, temporal_file, spatial_file,
     elif(signal_method == 'med-min'):
         method_id = 2
 
-    if(in_file):
+    if(in_file is not None):
         in_video = tiff.imread(in_file).astype('float32')
 
     t, s = preprocess_video_cython(in_video,

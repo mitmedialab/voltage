@@ -305,7 +305,7 @@ elif(params['RUN_MODE'] == 'run'):
         motion_file = out_dir.joinpath(tag + '_motion.hdf5')
         if(params['RUN_CORRECT']):
             timer.start()
-            c = correct_video(filename, motion_file, '',
+            c = correct_video(filename, motion_file, None,
                               params['FIRST_FRAME'], params['NORMALIZE'],
                               params['MOTION_SEARCH_LEVEL'],
                               params['MOTION_SEARCH_SIZE'],
@@ -327,7 +327,7 @@ elif(params['RUN_MODE'] == 'run'):
         spatial_file = out_dir.joinpath(tag + '_spatial.tif')
         if(params['RUN_PREPROC']):
             timer.start()
-            preprocess_video('', c, temporal_file, spatial_file,
+            preprocess_video(None, c, temporal_file, spatial_file,
                              params['SIGNAL_METHOD'],
                              params['TIME_SEGMENT_SIZE'],
                              params['SIGNAL_SCALE'],
@@ -343,7 +343,7 @@ elif(params['RUN_MODE'] == 'run'):
         if(params['RUN_SEGMENT']):
             timer.start()
             segmenter.predict([temporal_file, spatial_file],
-                              segment_file, reference_file,
+                              segment_file, None, # pass reference_file if needed
                               params['NORM_CHANNEL'], params['NORM_SHIFTS'],
                               params['TILE_SHAPE'], params['TILE_STRIDES'],
                               params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
