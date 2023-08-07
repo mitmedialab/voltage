@@ -27,6 +27,10 @@ def extract_voltage_traces(video, masks, num_threads):
         Extracted voltage traces. The shape is (# masks, # video frames).
 
     """
+    # remove overlapping areas
+    no_overlap = np.sum(masks, axis=0) == 1
+    disjoint_masks = masks & no_overlap
+
     if(num_threads == 0):
         num_threads = mp.cpu_count()
     threads = [None] * num_threads
@@ -37,7 +41,7 @@ def extract_voltage_traces(video, masks, num_threads):
         s = num_frames_per_thread * i
         e = min(s + num_frames_per_thread, num_frames)
         threads[i] = Thread(target=_mean_roi,
-                            args=(video[s:e], masks, i, results))
+                            args=(video[s:e], disjoint_masks, i, results))
         threads[i].start()
 
     for t in threads:
@@ -124,6 +128,7 @@ def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh,
     """
     voltage_list = extract_voltage_traces(video, masks, num_threads)
 
+    # save voltage traces and spike timings while removing non-spiking neurons
     inactive_neurons = []
     with h5py.File(spike_file, 'w') as f:
         neuron_id = 0
@@ -138,6 +143,7 @@ def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh,
                 grp.attrs['scale']=t
                 neuron_id += 1
 
+    # save updated masks where non-spiking neurons have been removed
     masks = np.delete(masks, inactive_neurons, axis=0)
     if(len(masks) == 0):
         # add a blank image so the file has at least one page
