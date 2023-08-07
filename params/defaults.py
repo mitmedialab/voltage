@@ -60,6 +60,9 @@ TILE_SHAPE = (64, 64)        # Shape (height, width) of tiles to be extracted
                              
 TILE_STRIDES = (8, 8)        # Offset/interval/stride between sliding tiles
 
+TILE_MARGIN = (0, 0)         # Margin that tiles will leave on the image border,
+                             # specified as ratios to the image height and width
+
 BATCH_SIZE = 128             # Batch size for U-Net inference
 
 NORM_CHANNEL = 1             # Each tile will be normalized with respect to
@@ -113,7 +116,7 @@ MASK_DILATION = 0            # The computed masks will be dilated by this size
                              # to draw slightly larger ROIs around neurons
 
 
-#%% Spike parameters
+#%% Spike detection parameters
 
 POLARITY        = 1          # 1 for voltage indicators with positive polarity
                              # (fluorescence increases for higher voltage) and
@@ -123,6 +126,8 @@ POLARITY        = 1          # 1 for voltage indicators with positive polarity
 SPIKE_THRESHOLD = 2.5        # Neurons are considered spiking when their
                              # voltage is larger than its subthreshold activity
                              # range by this number of times
+
+REMOVE_INACTIVE = False      # Whether to remove non-spiking neurons
 
 
 #%% Evaluation parameters

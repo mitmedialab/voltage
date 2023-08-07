@@ -11,7 +11,8 @@ class VI_Sequence(Sequence):
     def __init__(self, batch_size, model_io_shape, patch_shape,
                  input_img_paths, target_img_paths, input_imgs=None,
                  norm_channel=-1, norm_shifts=[],
-                 num_darts=1, tiled=False, tile_strides=(1, 1),
+                 num_darts=1, tiled=False,
+                 tile_strides=(1, 1), tile_margin=(0, 0),
                  shuffle=False, padding='magnify'):
         """
         Initializes VI_Sequence (Voltage Imaging) instance.
@@ -73,6 +74,11 @@ class VI_Sequence(Sequence):
         tile_strides: tuple (y, x) of integers, optional
             Spacing between adjacent tiles when tiled=True. Ignored otherwise.
             The default is (1, 1).
+        tile_margin: tuple (y, x) of float, optional
+            Given a image size of H x W, the area in which patches are tiled
+            will leave a margin of Hy on the top and bottom, and a margin of Wx
+            on the left and right when tiled=True. Ignored otherwise.
+            The default is (0, 0).
         shuffle : boolean, optional
             If True, samples are shuffled in the beginning and every epoch.
             The default is False.
@@ -157,11 +163,19 @@ class VI_Sequence(Sequence):
                 self.target_images[s:e] = tiff.imread(target_img_paths[i])
 
 
-        h = max(self.image_shape[0] - self.patch_shape[0], 0)
-        w = max(self.image_shape[1] - self.patch_shape[1], 0)
+        h = max(self.image_shape[0] - patch_shape[0], 0)
+        w = max(self.image_shape[1] - patch_shape[1], 0)
 
         if(tiled): # regular tiling
-            y, x = np.mgrid[0:h+1:tile_strides[0], 0:w+1:tile_strides[1]]
+            h_margin = int(self.image_shape[0] * tile_margin[0])
+            h_margin_aligned = (h_margin // patch_shape[0]) * patch_shape[0]
+            ys = h_margin_aligned
+            ye = h + 1 - h_margin_aligned
+            w_margin = int(self.image_shape[1] * tile_margin[1])
+            w_margin_aligned = (w_margin // patch_shape[1]) * patch_shape[1]
+            xs = w_margin_aligned
+            xe = w + 1 - w_margin_aligned
+            y, x = np.mgrid[ys:ye:tile_strides[0], xs:xe:tile_strides[1]]
             self.num_darts = x.size
             # same tile positions for all the images
             self.Ys = np.tile(y.flatten(), num_images)

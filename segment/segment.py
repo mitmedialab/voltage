@@ -344,7 +344,8 @@ class VI_Segment:
 
     def predict(self, input_files, out_file, ref_file,
                 norm_channel, norm_shifts,
-                tile_shape, tile_strides, batch_size, gpu_mem_size=None):
+                tile_shape, tile_strides, tile_margin,
+                batch_size, gpu_mem_size=None):
         """
         Make offline predictions on a test/real data set stored in files.
 
@@ -370,6 +371,9 @@ class VI_Segment:
             Size of tiles to be extracted from images.
         tile_strides : tuple (y, x) of integer
             Spacing between adjacent tiles.
+        tile_margin : tuple (y, x) of float
+            Margin that tiles will leave on the image border, specified as
+            ratios to the image height and width.
         batch_size : integer
             Batch size for inference.
         gpu_mem_size : float or None
@@ -387,7 +391,8 @@ class VI_Segment:
         data_seq = VI_Sequence(batch_size, self.model_io_shape, tile_shape,
                                [input_files], None, None,
                                norm_channel, norm_shifts,
-                               tiled=True, tile_strides=tile_strides)
+                               tiled=True, tile_strides=tile_strides,
+                               tile_margin=tile_margin)
 
         num_gpus = len(self.gpus)
         if(num_gpus < 2): # CPU or single GPU

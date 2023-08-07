@@ -89,7 +89,7 @@ def detect_spikes_sub(voltage, polarity, spike_thresh):
 
 
 def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh,
-                  num_threads=0):
+                  remove_inactive=False, num_threads=0):
     """
     Extract voltage traces from video and masks, detect spikes, and save them.
     Masks for inactive neurons (with no detected spikes) will be removed.
@@ -111,6 +111,8 @@ def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh,
     spike_thresh : float
         Neurons are considered spiking when their voltage is larger than its
         subthreshold activity range by spike_thresh times.
+    remove_inactive : boolean
+        Whether to remove inactive (non-spiking) neurons. Default is False.
     num_threads : integer, optional
         The number of threads to be used. Default is 0, in which case all the
         available cores will be used.
@@ -127,7 +129,7 @@ def detect_spikes(video, masks, spike_file, mask_file, polarity, spike_thresh,
         neuron_id = 0
         for i, voltage in enumerate(voltage_list):
             v, s, t = detect_spikes_sub(voltage, polarity, spike_thresh)
-            if(len(s) == 0):
+            if(remove_inactive and len(s) == 0):
                 inactive_neurons.append(i)
             else:
                 grp = f.create_group('neuron%d' % neuron_id)

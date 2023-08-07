@@ -290,8 +290,10 @@ if(params['RUN_MODE'] == 'train'):
 
 
 elif(params['RUN_MODE'] == 'run'):
-    segmenter = VI_Segment()
-    segmenter.set_inference(params['MODEL_FILE'])
+
+    if(params['RUN_SEGMENT']):
+        segmenter = VI_Segment()
+        segmenter.set_inference(params['MODEL_FILE'])
 
     for i, filename in enumerate(params['INPUT_FILES']):
         tag = filename.stem
@@ -346,6 +348,7 @@ elif(params['RUN_MODE'] == 'run'):
                               segment_file, None, # pass reference_file if needed
                               params['NORM_CHANNEL'], params['NORM_SHIFTS'],
                               params['TILE_SHAPE'], params['TILE_STRIDES'],
+                              params['TILE_MARGIN'],
                               params['BATCH_SIZE'], params['GPU_MEM_SIZE'])
             timer.stop('Segment')
         else:
@@ -355,22 +358,21 @@ elif(params['RUN_MODE'] == 'run'):
         demix_file = out_dir.joinpath(tag + '_demix.tif')
         if(params['RUN_DEMIX']):
             timer.start()
-            masks = compute_masks(None, None,
-                                  segment_file, spatial_file, demix_file,
-                                  params['PROBABILITY_THRESHOLD'],
-                                  params['AREA_THRESHOLD_MIN'],
-                                  params['AREA_THRESHOLD_MAX'],
-                                  params['CONCAVITY_THRESHOLD'],
-                                  params['INTENSITY_THRESHOLD'],
-                                  params['ACTIVITY_THRESHOLD'],
-                                  params['BACKGROUND_SIGMA'],
-                                  params['BACKGROUND_EDGE'],
-                                  params['BACKGROUND_THRESHOLD'],
-                                  params['MASK_DILATION'],
-                                  c.shape[1:])
+            compute_masks(None, None,
+                          segment_file, spatial_file, demix_file,
+                          params['PROBABILITY_THRESHOLD'],
+                          params['AREA_THRESHOLD_MIN'],
+                          params['AREA_THRESHOLD_MAX'],
+                          params['CONCAVITY_THRESHOLD'],
+                          params['INTENSITY_THRESHOLD'],
+                          params['ACTIVITY_THRESHOLD'],
+                          params['BACKGROUND_SIGMA'],
+                          params['BACKGROUND_EDGE'],
+                          params['BACKGROUND_THRESHOLD'],
+                          params['MASK_DILATION'],
+                          c.shape[1:])
             timer.stop('Mask')
         else:
-            masks = read_roi(demix_file, None)
             timer.skip('Mask')
 
         # extract voltage traces, detect spikes, and remove inactive neurons
@@ -378,8 +380,10 @@ elif(params['RUN_MODE'] == 'run'):
         mask_file = out_dir.joinpath(tag + '_masks.tif')
         if(params['RUN_SPIKE']):
             timer.start()
+            masks = read_roi(demix_file, None)
             detect_spikes(c, masks, spike_file, mask_file,
-                          params['POLARITY'], params['SPIKE_THRESHOLD'])
+                          params['POLARITY'], params['SPIKE_THRESHOLD'],
+                          params['REMOVE_INACTIVE'])
             timer.stop('Spike')
         else:
             timer.skip('Spike')
