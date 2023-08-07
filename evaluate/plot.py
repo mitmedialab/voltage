@@ -1,8 +1,10 @@
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+from statistics import mean, stdev
 from scipy.ndimage import center_of_mass
 from skimage.segmentation import find_boundaries
+from pathlib import Path
 
 
 
@@ -271,7 +273,8 @@ def plot_per_dataset_scores(keys, scores, label, color, representative_iou):
     plt.xticks(list(range(len(scores))), keys, rotation='vertical')
     plt.ylabel(label)
     plt.xlabel('Dataset')
-    plt.title('Per-dataset ' + label + ' at IoU = %.1f' % representative_iou)
+    plt.title('Per-dataset ' + label + ' at IoU = %.1f' % representative_iou
+              + ' (mean %.2f, stdev %.2f)' % (mean(scores), stdev(scores)))
     plt.show()
 
 
@@ -297,6 +300,9 @@ def plot_voltage_traces(image, masks, spike_file, filename=None):
     None.
 
     """
+    if(not Path(spike_file).exists()):
+        return
+
     YMIN = -5
     YMAX = 10
     with h5py.File(spike_file, 'r') as f:
