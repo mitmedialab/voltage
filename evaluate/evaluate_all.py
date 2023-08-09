@@ -81,6 +81,7 @@ def _aggregate_scores(out_dir, representative_iou, weighted=False):
     df_each['Precision'] = precision_each
     df_each['Recall'] = recall_each
     df_each['F1'] = f1_each
+    df_each.to_csv(out_dir.joinpath('individual_scores.csv'), index=False)
     
     return f1_rep, df_sum, df_each
 
