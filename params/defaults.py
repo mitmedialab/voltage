@@ -132,7 +132,7 @@ REMOVE_INACTIVE = False      # Whether to remove non-spiking neurons
 
 #%% Evaluation parameters
 
-REPRESENTATIVE_IOU = 0.4     # IoU threshold at which representative F-1 scores
+REPRESENTATIVE_IOU = 0.3     # IoU threshold at which representative F-1 scores
                              # will be computed
 
 
