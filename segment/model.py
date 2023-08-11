@@ -43,7 +43,37 @@ def _up(inputs, copy, num_filters, dropout_rate, method, centered):
 def get_model(img_size, num_channels,
               num_stages, num_filters, dropout_rate,
               upsample_method, centered):
+    """
+    Construct a U-Net model.
 
+    Parameters
+    ----------
+    img_size : tuple (height, width) of integer
+        Input image size.
+    num_channels : integer
+        Number of channels of the input image.
+    num_stages : integer
+        Number of downsampling/upsampling stages. The U-Net will have
+        (num_stages + 1) levels of image resolution.
+    num_filters : integer
+        Number of convolution filters at the top resolution. It doubles as
+        the resolution level goes down.
+    dropout_rate : float
+        Rate for dropout layers.
+    upsample_method : string
+        If 'conv_transpose,' transposed convolution will be used for
+        upsampling. Otherwise, simple upsamplers will be used.
+    centered : boolean
+        If True, downsampling/upsampling with 3x3 kernel size will be used so
+        that the pixel center positions stay the same. If False, standard size
+        of 2x2 will be used. Ignored for simple upsamplers.
+
+    Returns
+    -------
+    model : tensorflow.keras.Model
+        The constructed U-Net model.
+
+    """
     inputs = layers.Input(shape=img_size + (num_channels,))
 
     x = inputs
