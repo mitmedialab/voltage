@@ -40,11 +40,11 @@ def set_dir(base_path, dirname):
     if not p.exists():
         p.mkdir()
     return p
-    
+
 
 def simulate(num_videos, data_dir, temporal_gt_dir, spatial_gt_dir):
     tic = time.perf_counter()
-    
+
     num_neurons_list = list(range(params['NUM_CELLS_MIN'], params['NUM_CELLS_MAX']))
     args = []
     for i in range(num_videos):
@@ -62,97 +62,67 @@ def simulate(num_videos, data_dir, temporal_gt_dir, spatial_gt_dir):
     print('%.1f seconds to simulate' % (toc - tic))
 
 
-def decimate(in_dir, out_dir, mode, size, filename):
+def decimate(in_dir, out_dir, mode, size):
     tic = time.perf_counter()
-    
-    if(filename):
-        in_file = in_dir.joinpath(filename + '.tif')
+
+    filenames = sorted(in_dir.glob('*.tif'))
+    args = []
+    for in_file in filenames:
         out_file = out_dir.joinpath(in_file.name)
-        decimate_video(in_file, out_file, mode, size)
-    else:
-        filenames = sorted(in_dir.glob('*.tif'))
-        args = []
-        for in_file in filenames:
-            out_file = out_dir.joinpath(in_file.name)
-            args.append((in_file, out_file, mode, size))
-    
-        pool = mp.Pool(mp.cpu_count())
-        pool.starmap(decimate_video, args)
-        pool.close()
-    
+        args.append((in_file, out_file, mode, size))
+
+    pool = mp.Pool(mp.cpu_count())
+    pool.starmap(decimate_video, args)
+    pool.close()
+
     toc = time.perf_counter()
     print('%.1f seconds to decimate' % (toc - tic))
 
 
-def correct(in_dir, correction_dir, filename):
+def correct(in_dir, correction_dir):
     tic = time.perf_counter()
 
-    if(filename): # file mode, multi-threaded job for a single file
-        in_file = in_dir.joinpath(filename + '.tif')
+    filenames = sorted(in_dir.glob('*.tif'))
+    args = []
+    for in_file in filenames:
         correction_file = correction_dir.joinpath(in_file.name)
         motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
-        correct_video(in_file, motion_file, correction_file,
-                      0, True,
-                      params['MOTION_SEARCH_LEVEL'],
-                      params['MOTION_SEARCH_SIZE'],
-                      params['MOTION_PATCH_SIZE'],
-                      params['MOTION_PATCH_OFFSET'],
-                      1.0, 1.0,
-                      params['TIME_SEGMENT_SIZE'])
+        args.append((in_file, motion_file, correction_file,
+                     0, True,
+                     params['MOTION_SEARCH_LEVEL'],
+                     params['MOTION_SEARCH_SIZE'],
+                     params['MOTION_PATCH_SIZE'],
+                     params['MOTION_PATCH_OFFSET'],
+                     1.0, 1.0,
+                     params['TIME_SEGMENT_SIZE'],
+                     False, 0, 1)) # use one core of CPU
 
-    else: # batch mode, single-threaded jobs for multiple files
-        filenames = sorted(in_dir.glob('*.tif'))
-        args = []
-        for in_file in filenames:
-            correction_file = correction_dir.joinpath(in_file.name)
-            motion_file = correction_dir.joinpath(in_file.stem + '_motion.hdf5')
-            args.append((in_file, motion_file, correction_file,
-                         0, True,
-                         params['MOTION_SEARCH_LEVEL'],
-                         params['MOTION_SEARCH_SIZE'],
-                         params['MOTION_PATCH_SIZE'],
-                         params['MOTION_PATCH_OFFSET'],
-                         1.0, 1.0,
-                         params['TIME_SEGMENT_SIZE'],
-                         False, 1000, 1)) # use CPU instead of GPU
-
-        pool = mp.Pool(mp.cpu_count())
-        pool.starmap(correct_video, args)
-        pool.close()
+    pool = mp.Pool(mp.cpu_count())
+    pool.starmap(correct_video, args)
+    pool.close()
 
     toc = time.perf_counter()
     print('%.1f seconds to correct' % (toc - tic))
 
 
-def preprocess(in_dir, temporal_dir, spatial_dir, filename):
+def preprocess(in_dir, temporal_dir, spatial_dir):
     tic = time.perf_counter()
 
-    if(filename): # file mode, multi-threaded job for a single file
-        in_file = in_dir.joinpath(filename + '.tif')
+    filenames = sorted(in_dir.glob('*.tif'))
+    args = []
+    for in_file in filenames:
         temporal_file = temporal_dir.joinpath(in_file.name)
         spatial_file = spatial_dir.joinpath(in_file.name)
-        preprocess_video(in_file, None,
-                         temporal_file, spatial_file,
-                         params['SIGNAL_METHOD'],
-                         params['TIME_SEGMENT_SIZE'],
-                         params['SIGNAL_SCALE'])
-        
-    else: # batch mode, single-threaded jobs for multiple files
-        filenames = sorted(in_dir.glob('*.tif'))
-        args = []
-        for in_file in filenames:
-            temporal_file = temporal_dir.joinpath(in_file.name)
-            spatial_file = spatial_dir.joinpath(in_file.name)
-            args.append((in_file, None,
-                         temporal_file, spatial_file,
-                         params['SIGNAL_METHOD'],
-                         params['TIME_SEGMENT_SIZE'],
-                         params['SIGNAL_SCALE'],
-                         1.0, 1))
+        args.append((in_file, None,
+                     temporal_file, spatial_file,
+                     params['SIGNAL_METHOD'],
+                     params['TIME_SEGMENT_SIZE'],
+                     params['SIGNAL_SCALE'],
+                     1.0, 1)) # use one core of CPU
 
-        pool = mp.Pool(mp.cpu_count())
-        pool.starmap(preprocess_video, args)
-        pool.close()
+    pool = mp.Pool(mp.cpu_count())
+    pool.starmap(preprocess_video, args)
+    pool.close()
 
     toc = time.perf_counter()
     print('%.1f seconds to preprocess' % (toc - tic))
@@ -177,59 +147,39 @@ def train(in_dirs, target_dir, model_dir, log_file, out_dir, ref_dir):
     print('%.1f seconds to train' % (toc - tic))
 
 
-def demix(in_dir, out_dir, spatial_dir, filename):
+def demix(in_dir, out_dir, spatial_dir):
     tic = time.perf_counter()
-    
-    if(filename):
-        in_file = in_dir.joinpath(filename + '.tif')
+
+    filenames = sorted(in_dir.glob('*.tif'))
+    args = []
+    for in_file in filenames:
         out_file = out_dir.joinpath(in_file.name)
         img_file = spatial_dir.joinpath(in_file.name)
-        compute_masks(None, None, in_file, img_file, out_file,
-                      params['PROBABILITY_THRESHOLD'],
-                      params['AREA_THRESHOLD_MIN'],
-                      params['AREA_THRESHOLD_MAX'],
-                      params['CONCAVITY_THRESHOLD'],
-                      params['INTENSITY_THRESHOLD'],
-                      params['ACTIVITY_THRESHOLD'],
-                      params['BACKGROUND_SIGMA'],
-                      params['BACKGROUND_EDGE'],
-                      params['BACKGROUND_THRESHOLD'],
-                      params['MASK_DILATION'],
-                      None)
-    else:
-        filenames = sorted(in_dir.glob('*.tif'))
-        args = []
-        for in_file in filenames:
-            out_file = out_dir.joinpath(in_file.name)
-            img_file = spatial_dir.joinpath(in_file.name)
-            args.append((None, None, in_file, img_file, out_file,
-                         params['PROBABILITY_THRESHOLD'],
-                         params['AREA_THRESHOLD_MIN'],
-                         params['AREA_THRESHOLD_MAX'],
-                         params['CONCAVITY_THRESHOLD'],
-                         params['INTENSITY_THRESHOLD'],
-                         params['ACTIVITY_THRESHOLD'],
-                         params['BACKGROUND_SIGMA'],
-                         params['BACKGROUND_EDGE'],
-                         params['BACKGROUND_THRESHOLD'],
-                         params['MASK_DILATION'],
-                         None))
+        args.append((None, None, in_file, img_file, out_file,
+                     params['PROBABILITY_THRESHOLD'],
+                     params['AREA_THRESHOLD_MIN'],
+                     params['AREA_THRESHOLD_MAX'],
+                     params['CONCAVITY_THRESHOLD'],
+                     params['INTENSITY_THRESHOLD'],
+                     params['ACTIVITY_THRESHOLD'],
+                     params['BACKGROUND_SIGMA'],
+                     params['BACKGROUND_EDGE'],
+                     params['BACKGROUND_THRESHOLD'],
+                     params['MASK_DILATION'],
+                     None))
 
-        pool = mp.Pool(mp.cpu_count())
-        pool.starmap(compute_masks, args)
-        pool.close()
-    
+    pool = mp.Pool(mp.cpu_count())
+    pool.starmap(compute_masks, args)
+    pool.close()
+
     toc = time.perf_counter()
     print('%.1f seconds to demix' % (toc - tic))
 
 
-def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
+def evaluate(in_dir, gt_dir, img_dir, out_dir):
     tic = time.perf_counter()
 
-    if(filename):
-        filenames = [in_dir.joinpath(filename + '.tif')]
-    else:
-        filenames = sorted(in_dir.glob('*.tif'))
+    filenames = sorted(in_dir.glob('*.tif'))
     # notebook can't do multiprocessing, run one file at a time
     for in_file in filenames:
         print('evaluating ' + in_file.stem)
@@ -246,48 +196,52 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
 
 
 if(params['RUN_MODE'] == 'train'):
+    if(not params['BASE_DIR']):
+        print('Please specify BASE_DIR')
+        sys.exit(0)
+
     # simulate and create training data sets
-    data_dir = set_dir(params['DATA_DIR'], 'data')
-    temporal_gt_dir = set_dir(params['DATA_DIR'], 'temporal_label')
-    spatial_gt_dir = set_dir(params['DATA_DIR'], 'spatial_label')
-    decimated_gt_dir = set_dir(params['DATA_DIR'],
+    synth_dir = set_dir(params['BASE_DIR'], 'synthetic')
+    data_dir = set_dir(synth_dir, 'data')
+    temporal_gt_dir = set_dir(synth_dir, 'temporal_label')
+    spatial_gt_dir = set_dir(synth_dir, 'spatial_label')
+    decimated_gt_dir = set_dir(synth_dir,
                                'temporal_label_%d' % params['TIME_SEGMENT_SIZE'])
     if(params['RUN_SIMULATE']):
         simulate(params['NUM_VIDEOS'], data_dir, temporal_gt_dir, spatial_gt_dir)
         decimate(temporal_gt_dir, decimated_gt_dir, 'logical_or',
-                 params['TIME_SEGMENT_SIZE'], params['FILENAME'])
+                 params['TIME_SEGMENT_SIZE'])
 
     # correct images
-    correction_dir = set_dir(params['PREPROC_DIR'], 'corrected')
+    preproc_dir = set_dir(params['BASE_DIR'], 'preproc')
+    correction_dir = set_dir(preproc_dir, 'corrected')
     if(params['RUN_CORRECT']):
-        correct(data_dir, correction_dir, params['FILENAME'])
+        correct(data_dir, correction_dir)
 
     # preprocess images
-    temporal_dir = set_dir(params['PREPROC_DIR'], 'temporal')
-    spatial_dir = set_dir(params['PREPROC_DIR'], 'spatial')
+    temporal_dir = set_dir(preproc_dir, 'temporal')
+    spatial_dir = set_dir(preproc_dir, 'spatial')
     if(params['RUN_PREPROC']):
-        preprocess(correction_dir, temporal_dir, spatial_dir,
-                   params['FILENAME'])
+        preprocess(correction_dir, temporal_dir, spatial_dir)
 
     # train the U-Net
-    model_dir = Path(params['MODEL_DIR'])
+    model_dir = set_dir(params['BASE_DIR'], 'model')
     log_file = model_dir.joinpath('log.csv')
-    segment_dir = set_dir(params['OUTPUT_DIR'], 'segmented')
-    validate_dir = set_dir(params['OUTPUT_DIR'], 'validate')
+    segment_dir = set_dir(params['BASE_DIR'], 'segmented')
+    validate_dir = set_dir(params['BASE_DIR'], 'validate')
     if(params['RUN_TRAIN']):
         train([temporal_dir, spatial_dir], decimated_gt_dir,
               model_dir, log_file, segment_dir, validate_dir)
 
     # demix cells from U-Net outputs
-    demix_dir = set_dir(params['OUTPUT_DIR'], 'demixed')
+    demix_dir = set_dir(params['BASE_DIR'], 'demixed')
     if(params['RUN_DEMIX']):
-        demix(segment_dir, demix_dir, spatial_dir, params['FILENAME'])
+        demix(segment_dir, demix_dir, spatial_dir)
 
     # evaluate the accuracy of detections
-    eval_dir = set_dir(params['OUTPUT_DIR'], 'evaluated')
+    eval_dir = set_dir(params['BASE_DIR'], 'evaluated')
     if(params['RUN_EVALUATE']):
-        evaluate(demix_dir, spatial_gt_dir, spatial_dir, eval_dir,
-                 params['FILENAME'])
+        evaluate(demix_dir, spatial_gt_dir, spatial_dir, eval_dir)
 
 
 elif(params['RUN_MODE'] == 'run'):
