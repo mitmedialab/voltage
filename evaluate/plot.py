@@ -144,6 +144,38 @@ def plot_F1_and_IoU(f1, precision, recall, thresholds,
 
 
 
+def _get_overlay(masks, color, mode):
+    """
+    Construct an image representing the contours of given masks to be
+    overlaid on another image.
+
+    Parameters
+    ----------
+    masks : 3D numpy.ndarray of boolean
+        Mask images.
+    color : 3-tuple of float
+        RGB color in [0, 1] for drawing mask contours.
+    mode : string
+        Boundary mode for skimage.segmentation.find_boundaries().
+
+    Returns
+    -------
+    3D numpy.ndarray of float
+        Overlay image. The last dimension has (R, G, B, A) values.
+
+    """
+    contour_image = np.zeros(masks.shape[1:], dtype=bool)
+    for mask in masks:
+        contour = find_boundaries(mask, mode=mode)
+        contour_image = np.logical_or(contour_image, contour)
+    overlay = np.zeros(contour_image.shape + (4,)) # RGBA
+    overlay[:, :, 0] = color[0]
+    overlay[:, :, 1] = color[1]
+    overlay[:, :, 2] = color[2]
+    overlay[:, :, 3] = contour_image
+    return overlay
+
+
 def _overlay_masks(masks, color, base=0):
     """
     Overlay masks on an image, and label each mask with its ID number.
@@ -155,7 +187,7 @@ def _overlay_masks(masks, color, base=0):
     masks : 3D numpy.ndarray of boolean
         Mask images.
     color : 3-tuple of float
-        RGB color in [0, 1] for drawing mask contours
+        RGB color in [0, 1] for drawing mask contours.
     base : integer, optional
         Base number for IDs. They will be offset by this number. Default is 0.
 
@@ -164,15 +196,7 @@ def _overlay_masks(masks, color, base=0):
     None.
 
     """
-    contour_image = np.zeros(masks.shape[1:], dtype=bool)
-    for mask in masks:
-        contour = find_boundaries(mask, mode='outer')
-        contour_image = np.logical_or(contour_image, contour)
-    overlay = np.zeros(contour_image.shape + (4,)) # RGBA
-    overlay[:, :, 0] = color[0]
-    overlay[:, :, 1] = color[1]
-    overlay[:, :, 2] = color[2]
-    overlay[:, :, 3] = contour_image
+    overlay = _get_overlay(masks, color, 'outer')
     plt.imshow(overlay, interpolation='bilinear')
     for i, mask in enumerate(masks):
         p = center_of_mass(mask)
@@ -239,6 +263,27 @@ def plot_masks(image, eval_masks, gt_masks, filename=None):
     _plot_masks_sub(image, None, gt_masks)
     if(filename is not None):
         _savefig(filename)
+
+        # additionally, save mask comparison image for the paper
+        # L1 & TEG
+        # vmin = 0
+        # vmax = np.percentile(image, 99.9)
+        # HPC
+        # vmin, vmax = np.percentile(image, [0.01, 99.9])
+        # HPC2
+        # vmin = np.amin(image)
+        # vmax = np.amax(image) * 1.2
+        #
+        # image = np.clip((image - vmin) / (vmax - vmin), 0, 1)
+        # image = np.tile(image[:, :, np.newaxis], (1, 1, 3)) # to RGB
+        # ol1 = _get_overlay(gt_masks, (0.6, 0, 0), 'thick')
+        # ol2 = _get_overlay(eval_masks, (0, 1, 0), 'thick')
+        # ol = np.minimum(1, ol1 * ol1[:, :, 3:] + ol2 * ol2[:, :, 3:]) 
+        # image = image * (1 - ol[:, :, 3:]) + ol[:, :, :3] * ol[:, :, 3:]
+        # import tifffile as tiff
+        # tiff.imwrite(str(filename) + '.tif', (image * 255).astype('uint8'),
+        #              photometric='rgb')
+
     plt.show()
 
     
