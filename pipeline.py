@@ -236,8 +236,9 @@ def evaluate(in_dir, gt_dir, img_dir, out_dir, filename):
         gt_file = gt_dir.joinpath(in_file.name)
         img_file = img_dir.joinpath(in_file.name)
         out_subdir = set_dir(out_dir, in_file.stem)
-        run_ipynb_evaluate_each(in_file, gt_file, img_file, out_subdir, in_file.stem)
-    run_ipynb_evaluate_all(out_dir)
+        run_ipynb_evaluate_each(in_file, gt_file, img_file, None, out_subdir,
+                                params['REPRESENTATIVE_IOU'], in_file.stem)
+    run_ipynb_evaluate_all(out_dir, params['REPRESENTATIVE_IOU'])
 
     toc = time.perf_counter()
     print('%.1f seconds to evaluate' % (toc - tic))
