@@ -42,9 +42,13 @@ def run_invivo_segmentation(input_file, output_dir,
     output_dir = Path(output_dir).absolute()
     output_dir.mkdir(exist_ok=True)
 
+    f = open('runtimes.dat', 'w')
+
     #%% NoRMCorre
+    start = time.time()
     command = MATLAB + f'"run_normcorre(\'{input_file}\', \'{output_dir}\'); exit;"'
     run_command(command)
+    f.write('NoRMCorre took: ' + str(time.time() - start) + ' sec\n')
 
     #%% denoising parameters
     mov_in = 'movReg.tif'
@@ -67,14 +71,18 @@ def run_invivo_segmentation(input_file, output_dir,
         col_blocks += 1
 
     #%% denoising
+    start = time.time()
     args = (output_dir, mov_in, output_dir, detr_spacing,
             row_blocks, col_blocks, trunc_start-1, trunc_length)
     command = 'python invivo-imaging/denoise/denoise.py %s %s %s %d %d %d %d %d' % args
     run_command(command)
+    f.write('denoising took: ' + str(time.time() - start) + ' sec\n')
 
     #%% motion correction
+    start = time.time()
     command = MATLAB + f'"correct_motion(\'{output_dir}\');exit;"'
     run_command(command)
+    f.write('motion correction took: ' + str(time.time() - start) + ' sec\n')
 
     #%% Read in movie
 
@@ -189,9 +197,10 @@ def run_invivo_segmentation(input_file, output_dir,
                               remove = 0
                               )
     
-    print('Demixing took: ' + str(time.time() - start) + ' sec')
+    f.write('Demixing took: ' + str(time.time() - start) + ' sec\n')
 
     #%% Get Background Components from Unfiltered Movie
+    start = time.time()
 
     # rank of background to model, if none selected
     bg_rank = 3
@@ -239,10 +248,14 @@ def run_invivo_segmentation(input_file, output_dir,
                               merge_corr_thr=0.8,
                               merge_overlap_thr=0.8, keep_shape=True)
 
+    f.write('Getting background components took: ' + str(time.time() - start) + ' sec\n')
+
     #%% Choose Cells and Recover Temporal Correlation Structures
     def tv_norm(image):
         return np.sum(np.abs(image[:, :-1] - image[:, 1:])) + np.sum(np.abs(image[:-1, :] - image[1:, :]))
-    
+
+    start = time.time()
+
     Y = movB.transpose(1, 0, 2).reshape(movB.shape[0] * movB.shape[1], movB.shape[2])
     X = np.hstack((a, fb))
     X = X / np.ptp(X, axis=0)
@@ -274,9 +287,14 @@ def run_invivo_segmentation(input_file, output_dir,
         
         X2[:, -(b+1)] = np.maximum(X[:, -(b+1)] - np.squeeze(X[:, :nCells] @ opt_weights), 0)
 
+    f.write('Recovering temporal correlation took: ' + str(time.time() - start) + ' sec\n')
+
     #%% Get Final Traces
+    start = time.time()
     beta_hat2 = np.linalg.lstsq(X2, Y)[0]
     res = np.mean(np.square(Y - X2 @ beta_hat2), axis = 0)
+    f.write('Getting final traces took: ' + str(time.time() - start) + ' sec\n')
+    f.close()
 
     #%% Save Results
     suffix = ''
