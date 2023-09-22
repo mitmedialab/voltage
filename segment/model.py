@@ -1,5 +1,4 @@
 from tensorflow.keras import layers, models
-from .loss import weighted_bce, dice_loss, bce_dice_loss, iou_loss
 
 
 def _conv(inputs, num_filters):
@@ -93,27 +92,4 @@ def get_model(img_size, num_channels,
     outputs = layers.Conv2D(1, (1, 1), activation='sigmoid')(x)
 
     model = models.Model(inputs, outputs)
-    return model
-
-
-def load_model(model_file):
-    """
-    Load a U-Net model from a file.
-
-    Parameters
-    ----------
-    model_file : string or pathlib.Path
-        File path containing a model.
-
-    Returns
-    -------
-    model : tensorflow.keras.Model
-        The loaded model.
-
-    """
-    loss_dict = {'weighted_bce': weighted_bce,
-                 'dice_loss': dice_loss,
-                 'bce_dice_loss': bce_dice_loss,
-                 'iou_loss': iou_loss}
-    model = models.load_model(model_file, custom_objects=loss_dict)
     return model

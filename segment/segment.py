@@ -10,7 +10,7 @@ from skimage.transform import resize
 
 from .sequence import VI_Sequence
 from .data import get_training_data
-from .model import get_model, load_model
+from .model import get_model
 from .patch import merge_patches
 
 
@@ -295,7 +295,7 @@ class VI_Segment:
         model_files = sorted(Path(model_dir).glob('model*.h5'),
                              key=lambda x: float(x.stem.split('v')[-1]))
         # first item of the sorted list has the lowest validation loss
-        model = load_model(model_files[0])
+        model = keras.models.load_model(model_files[0])
         assert(model.input_shape[1:3] == self.model_io_shape)
 
         valid_seq = VI_Sequence(batch_size,
@@ -329,14 +329,14 @@ class VI_Segment:
         self._prevent_tf_from_occupying_entire_gpu_memory()    
         keras.backend.clear_session()
         if(len(self.gpus) < 2): # CPU or single GPU
-            self.model = load_model(model_file)
+            self.model = keras.models.load_model(model_file)
             _prerun_predict(self.model)
             self.model_io_shape = self.model.input_shape[1:3]
         else:
             self.models = []
             for gpu in self.gpus:
                 with tf.device(gpu.name.replace('physical_', '')):
-                    model = load_model(model_file)
+                    model = keras.models.load_model(model_file)
                     self.models.append(model)
                     _prerun_predict(model)
             self.model_io_shape = self.models[0].input_shape[1:3]
