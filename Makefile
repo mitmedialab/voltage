@@ -1,6 +1,6 @@
 TOPTARGETS := all clean
 
-SUBDIRS := utils correct preproc demix
+SUBDIRS := utils correct preproc
 
 $(TOPTARGETS): $(SUBDIRS)
 
