@@ -58,3 +58,9 @@ For convenience, a Python script is provided that runs everything (except for vi
 ```
 python main.py
 ```
+
+## Run on HPC2 Datasets
+By running the following script, main.py mentioned above will run on all of the HPC2 datasets. This can take tens of hours.
+```
+python run_invivo_on_hpc2_datasets.py
+```
