@@ -8,7 +8,7 @@ from train import split_training_data
 
 
 MODE = 1               # HPC2 datasets
-VALIDATION_RATIO = 3  # N-fold cross validation
+VALIDATION_RATIO = 13  # N-fold cross validation
 
 paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
 paths = runpy.run_path(paths_file)

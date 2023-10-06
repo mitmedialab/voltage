@@ -61,20 +61,20 @@ conda activate <voltage>
 python pipeline.py params/volpy/eval_volpy_{l1,teg,hpc}.py
 ```
 
-### Run VolPy on Archon Datasets
+### Run VolPy on HPC2 Datasets
 
-The Archon dataset can be downloaded from: TBD
+The HPC2 datasets can be downloaded from: TBD
 
 Run the following script after setting the parameters.
 ```
-python run_volpy_on_archon_dataset.py
+python run_volpy_on_hpc2_datasets.py
 ```
 Once done, the accuracy can be evaluated using the voltage pipeline as
 ```
 cd ../..
 conda deactivate
 conda activate <voltage>
-python pipeline.py params/volpy/eval_volpy_archon.py
+python pipeline.py params/volpy/eval_volpy_hpc2.py
 ```
 
 
@@ -102,7 +102,11 @@ from ..mrcnn import model as modellib, utils
 
 ### Train VolPy on VolPy Datasets
 
-Run the following script after setting the parameters.
+Run VolPy first to generate summary images from VolPy datasets.
+```
+python run_volpy_on_volpy_datasets.py
+```
+Then, run the following script after setting the parameters.
 ```
 python train_volpy_on_volpy_datasets.py
 ```
@@ -115,16 +119,21 @@ conda activate <voltage>
 python pipeline.py params/volpy/eval_volpy_{l1,teg,hpc}.py
 ```
 
-### Train VolPy on Archon Datasets
+### Train VolPy on HPC2 Datasets
 
-Run the following script after setting the parameters.
+Run VolPy first to generate summary images from HPC2 datasets.
 ```
-python train_volpy_on_archon_datasets.py
+python run_volpy_on_hpc2_datasets.py
 ```
+Then, run the following script after setting the parameters.
+```
+python train_volpy_on_hpc2_datasets.py
+```
+VALIDATION_RATIO is set to 13 to perform leave-one-out cross-validation.
 Once done, the validation accuracy can be evaluated in the same way as above.
 ```
 cd ../..
 conda deactivate
 conda activate <voltage>
-python pipeline.py params/volpy/eval_volpy_archon.py
+python pipeline.py params/volpy/eval_volpy_hpc2.py
 ```
