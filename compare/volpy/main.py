@@ -39,6 +39,7 @@ import caiman as cm
 from caiman.motion_correction import MotionCorrect
 from caiman.source_extraction.volpy import utils
 from caiman.source_extraction.volpy.volparams import volparams
+from caiman.source_extraction.volpy.volpy import VOLPY
 from caiman.summary_images import local_correlations_movie_offline
 from caiman.summary_images import mean_image
 from caiman.utils.utils import download_model
@@ -144,7 +145,7 @@ def run_volpy_segmentation(input_file, output_dir,
             f.write('%f\n' % (toc - tic))
         tiff.imwrite(output_dir.joinpath(input_file.stem + '_summary_images.tif'),
                      summary_images, photometric='minisblack')
-        # below is for compatibility with our evaluation framework
+        # Note: Below is for compatibility with our evaluation framework
         tiff.imwrite(output_dir.joinpath(input_file.stem + '_spatial.tif'),
                      summary_images[0], photometric='minisblack')
     else:
@@ -162,6 +163,67 @@ def run_volpy_segmentation(input_file, output_dir,
     tiff.imwrite(output_dir.joinpath(input_file.stem + '_masks.tif'),
                  ROIs, photometric='minisblack')
 
+    # Note: The following part of the code is commented out as we do not need
+    # it for our segmentation comparison. It can be uncommented to measure
+    # the runtime of spike detection.
+    """
+# %% restart cluster to clean up memory
+    cm.stop_server(dview=dview)
+    c, dview, n_processes = cm.cluster.setup_cluster(
+        backend='local', n_processes=None, single_thread=False, maxtasksperchild=1)
+
+# %% parameters for trace denoising and spike extraction
+    ROIs = ROIs                                   # region of interests
+    index = list(range(len(ROIs)))                # index of neurons
+    weights = None                                # if None, use ROIs for initialization; to reuse weights check reuse weights block 
+
+    template_size = 0.02                          # half size of the window length for spike templates, default is 20 ms 
+    context_size = 35                             # number of pixels surrounding the ROI to censor from the background PCA
+    visualize_ROI = False                         # whether to visualize the region of interest inside the context region
+    flip_signal = True                            # Important!! Flip signal or not, True for Voltron indicator, False for others
+    hp_freq_pb = 1 / 3                            # parameter for high-pass filter to remove photobleaching
+    clip = 100                                    # maximum number of spikes to form spike template
+    threshold_method = 'adaptive_threshold'       # adaptive_threshold or simple 
+    min_spikes= 10                                # minimal spikes to be found
+    pnorm = 0.5                                   # a variable deciding the amount of spikes chosen for adaptive threshold method
+    threshold = 3                                 # threshold for finding spikes only used in simple threshold method, Increase the threshold to find less spikes
+    do_plot = False                               # plot detail of spikes, template for the last iteration
+    ridge_bg= 0.01                                # ridge regression regularizer strength for background removement, larger value specifies stronger regularization 
+    sub_freq = 20                                 # frequency for subthreshold extraction
+    weight_update = 'ridge'                       # ridge or NMF for weight update
+    n_iter = 2                                    # number of iterations alternating between estimating spike times and spatial filters
+    
+    opts_dict={'fnames': mc.mmap_file[0], #fname_new,
+               'ROIs': ROIs,
+               'index': index,
+               'weights': weights,
+               'template_size': template_size, 
+               'context_size': context_size,
+               'visualize_ROI': visualize_ROI, 
+               'flip_signal': flip_signal,
+               'hp_freq_pb': hp_freq_pb,
+               'clip': clip,
+               'threshold_method': threshold_method,
+               'min_spikes':min_spikes,
+               'pnorm': pnorm, 
+               'threshold': threshold,
+               'do_plot':do_plot,
+               'ridge_bg':ridge_bg,
+               'sub_freq': sub_freq,
+               'weight_update': weight_update,
+               'n_iter': n_iter}
+
+    opts.change_params(params_dict=opts_dict);          
+
+#%% TRACE DENOISING AND SPIKE DETECTION
+    tic = time.perf_counter()
+    vpy = VOLPY(n_processes=n_processes, dview=dview, params=opts)
+    vpy.fit(n_processes=n_processes, dview=dview)
+    toc = time.perf_counter()
+    with open('time_spike.txt', 'w') as f:
+        f.write('%f\n' % (toc - tic))
+    """
+
 # %% STOP CLUSTER and clean up log files
     cm.stop_server(dview=dview)
     log_files = glob.glob('*_LOG_*')
@@ -169,21 +231,23 @@ def run_volpy_segmentation(input_file, output_dir,
         os.remove(log_file)
 
 
-input_file = sys.argv[1]
-output_dir = sys.argv[2]
-num_processes = int(sys.argv[3])
-use_cuda = bool(int(sys.argv[4]))
-do_motion_correction = bool(int(sys.argv[5]))
-max_shift = int(sys.argv[6])
-save_movie = bool(int(sys.argv[7]))
-do_summary_creation = bool(int(sys.argv[8]))
-frame_rate = int(sys.argv[9])
-gaussian_blur = bool(int(sys.argv[10]))
-min_size = int(sys.argv[11])
-max_size = int(sys.argv[12])
-weights_path = sys.argv[13] if len(sys.argv) > 13 else ''
-run_volpy_segmentation(input_file, output_dir,
-                       num_processes, use_cuda,
-                       do_motion_correction, max_shift, save_movie,
-                       do_summary_creation, frame_rate, gaussian_blur,
-                       min_size, max_size, weights_path='')
+#%% main
+if __name__ == '__main__':
+    input_file = sys.argv[1]
+    output_dir = sys.argv[2]
+    num_processes = int(sys.argv[3])
+    use_cuda = bool(int(sys.argv[4]))
+    do_motion_correction = bool(int(sys.argv[5]))
+    max_shift = int(sys.argv[6])
+    save_movie = bool(int(sys.argv[7]))
+    do_summary_creation = bool(int(sys.argv[8]))
+    frame_rate = int(sys.argv[9])
+    gaussian_blur = bool(int(sys.argv[10]))
+    min_size = int(sys.argv[11])
+    max_size = int(sys.argv[12])
+    weights_path = sys.argv[13] if len(sys.argv) > 13 else ''
+    run_volpy_segmentation(input_file, output_dir,
+                           num_processes, use_cuda,
+                           do_motion_correction, max_shift, save_movie,
+                           do_summary_creation, frame_rate, gaussian_blur,
+                           min_size, max_size, weights_path)
