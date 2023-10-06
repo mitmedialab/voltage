@@ -18,8 +18,8 @@ git checkout 91aaec809eceaff9e26041a20c1793dfafdf137f
 ```
 Then, create a conda environment, run setup_env.sh to install necessary packages, and install CaImAn locally.
 ```
-conda create -n <env_name> -y python=3.7.3
-conda activate <env_name>
+conda create -n volpy -y python=3.7.3
+conda activate volpy
 sh ../setup_env.sh
 pip install -e .
 ```
@@ -47,9 +47,7 @@ method = methods_list[1]
 
 ### Run VolPy on VolPy Datasets
 
-The datasets used in the VolPy paper can be downloaded from: https://zenodo.org/record/4515768#.Y3gVI77MLE8
-
-To reproduce the results in the VolPy paper, run the following script after setting the parameters (the variables in capital letters) approapriately.
+To reproduce the results in the VolPy paper, run the following script.
 ```
 python run_volpy_on_volpy_datasets.py
 ```
@@ -57,15 +55,15 @@ Once done, the accuracy can be evaluated using the voltage pipeline as
 ```
 cd ../..
 conda deactivate
-conda activate <voltage>
-python pipeline.py params/volpy/eval_volpy_{l1,teg,hpc}.py
+conda activate voltage
+python pipeline.py params/volpy/eval_volpy_l1.py
+python pipeline.py params/volpy/eval_volpy_teg.py
+python pipeline.py params/volpy/eval_volpy_hpc.py
 ```
 
 ### Run VolPy on HPC2 Datasets
 
-The HPC2 datasets can be downloaded from: TBD
-
-Run the following script after setting the parameters.
+Run the following script.
 ```
 python run_volpy_on_hpc2_datasets.py
 ```
@@ -73,7 +71,7 @@ Once done, the accuracy can be evaluated using the voltage pipeline as
 ```
 cd ../..
 conda deactivate
-conda activate <voltage>
+conda activate voltage
 python pipeline.py params/volpy/eval_volpy_hpc2.py
 ```
 
@@ -84,7 +82,7 @@ Clone the Mask R-CNN repository
 ```
 git clone https://github.com/matterport/Mask_RCNN.git
 ```
-To test, run train.py after setting the parameters (the variables in capital letters) approapriately.
+To test, run train.py after setting INPUT_PATH and OUTPUT_PATH appropriately.
 ```
 python train.py
 ```
@@ -106,7 +104,7 @@ Run VolPy first to generate summary images from VolPy datasets.
 ```
 python run_volpy_on_volpy_datasets.py
 ```
-Then, run the following script after setting the parameters.
+Then, run the following script.
 ```
 python train_volpy_on_volpy_datasets.py
 ```
@@ -115,8 +113,10 @@ Once done, the validation accuracy can be evaluated in the same way as above.
 ```
 cd ../..
 conda deactivate
-conda activate <voltage>
-python pipeline.py params/volpy/eval_volpy_{l1,teg,hpc}.py
+conda activate voltage
+python pipeline.py params/volpy/eval_volpy_l1.py
+python pipeline.py params/volpy/eval_volpy_teg.py
+python pipeline.py params/volpy/eval_volpy_hpc.py
 ```
 
 ### Train VolPy on HPC2 Datasets
@@ -125,7 +125,7 @@ Run VolPy first to generate summary images from HPC2 datasets.
 ```
 python run_volpy_on_hpc2_datasets.py
 ```
-Then, run the following script after setting the parameters.
+Then, run the following script.
 ```
 python train_volpy_on_hpc2_datasets.py
 ```
