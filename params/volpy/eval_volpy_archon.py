@@ -1,15 +1,19 @@
 # runtime parameters
-RUN_MODE = 'run' # run the pipeline for neuron detection
-RUN_CORRECT = False
-RUN_PREPROC = False
-RUN_SEGMENT = False
-RUN_DEMIX = False
+RUN_CORRECT  = False
+RUN_PREPROC  = False
+RUN_SEGMENT  = False
+RUN_DEMIX    = False
+RUN_SPIKE    = False
 RUN_EVALUATE = True
 
 # file paths
+import runpy
 from pathlib import Path
-INPUT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag'
-INPUT_FILES = sorted(Path(INPUT_DIR).glob('*.tif'))
-GT_DIR = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag_GT'
+paths_file = Path(__file__).absolute().parents[1].joinpath('paths.py')
+paths = runpy.run_path(paths_file)
+
+INPUT_DIR = Path(paths['HPC2_DATASETS'])
+INPUT_FILES = sorted(INPUT_DIR.glob('*.tif'))
+GT_DIR = Path(paths['HPC2_DATASETS'] + '_GT')
 GT_FILES = [Path(GT_DIR).joinpath(f.name) for f in INPUT_FILES]
-OUTPUT_DIR = '/media/bandy/nvme_work/voltage/compare/volpy/lowmag'
+OUTPUT_DIR = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'volpy', 'voltage_HPC2')

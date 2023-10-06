@@ -1,5 +1,7 @@
 import os
+import runpy
 import shutil
+import keras
 from pathlib import Path
 from datetime import datetime
 from train import split_training_data
@@ -8,8 +10,11 @@ from train import split_training_data
 MODE = 0              # VolPy datasets
 VALIDATION_RATIO = 3  # N-fold cross validation
 
-INPUT_PATH = '/media/bandy/nvme_data/VolPy_Data/Extracted'
-OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy'
+paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
+paths = runpy.run_path(paths_file)
+
+INPUT_PATH = paths['VOLPY_DATASETS']
+OUTPUT_PATH = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'volpy')
 DATASET_GROUPS = [
     # (group_name, frame_rate, min_size, max_size)
     # Note that the sizes are lengths and will be squared to specify an area range
@@ -18,9 +23,7 @@ DATASET_GROUPS = [
     ('voltage_TEG',  300, 10, 1000), # remove masks with <100 pixels
     ('voltage_HPC', 1000, 20, 1000), # remove masks with <400 pixels
 ]
-MAX_SHIFT = 5               # search range for motion correction
-USE_CUDA = False            # motion correction on GPU
-GAUSSIAN_BLUR = False       # use when the input video is noisy
+
 
 MRCNN_PATH = './Mask_RCNN'
 MRCNN_SCRIPT_PATH = Path(MRCNN_PATH, 'samples', 'neurons')
@@ -44,6 +47,7 @@ for index in range(VALIDATION_RATIO):
     _, val_files = split_training_data(INPUT_PATH, OUTPUT_PATH, INPUT_PATH,
                                        MODE, [g[0] for g in DATASET_GROUPS],
                                        VALIDATION_RATIO, index)
+    keras.backend.clear_session()
     command = '(cd %s; %s)' % (MRCNN_SCRIPT_PATH, MRCNN_TRAIN_CMD)
     run_command(command)
 
@@ -66,10 +70,11 @@ for index in range(VALIDATION_RATIO):
             dataset_name = input_file.stem
             if(dataset_name in val_names):
                 output_subdir = output_dir.joinpath(dataset_name)
-                args = (input_file, output_subdir, frame_rate, min_size, max_size,
-                        MAX_SHIFT, USE_CUDA, GAUSSIAN_BLUR,
-                        False, False, weights_path)
-                command = 'python main.py %s %s %d %d %d %d %d %d %d %d %s' % args
+                # most parameters can be False or dummy numbers
+                args = (input_file, output_subdir, 1, False,
+                        False, 1, False, False, 1, False,
+                        min_size, max_size, weights_path)
+                command = 'python main.py %s %s %d %d %d %d %d %d %d %d %d %d %s' % args
                 run_command(command)
 
 logfile.close()

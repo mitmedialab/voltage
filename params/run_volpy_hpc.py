@@ -19,16 +19,21 @@ BACKGROUND_THRESHOLD = 0.003
 MASK_DILATION = 0
 
 # runtime parameters
-RUN_CORRECT = True
-RUN_PREPROC = True
-RUN_SEGMENT = True
-RUN_DEMIX = True
+RUN_CORRECT  = True
+RUN_PREPROC  = True
+RUN_SEGMENT  = True
+RUN_DEMIX    = True
+RUN_SPIKE    = True
 RUN_EVALUATE = True
 
 # file paths
+import runpy
 from pathlib import Path
-INPUT_DIR = '/media/bandy/nvme_data/voltage/volpy_data/voltage_HPC'
-INPUT_FILES = sorted(Path(INPUT_DIR).glob('*/*.tif'))
+paths_file = Path(__file__).parent.joinpath('paths.py')
+paths = runpy.run_path(paths_file)
+
+INPUT_DIR = Path(paths['VOLPY_DATASETS'], 'voltage_HPC')
+INPUT_FILES = sorted(INPUT_DIR.glob('*/*.tif'))
 GT_FILES = [f.with_name(f.stem + '_ROI.zip') for f in INPUT_FILES]
-MODEL_FILE = '/media/bandy/nvme_data/voltage/models/model20220620_patchnorm/model_e11_v0.0456.h5'
-OUTPUT_DIR = '/media/bandy/nvme_work/voltage/volpyHPC'
+MODEL_FILE = paths['MODEL_FILE']
+OUTPUT_DIR = Path(paths['OUTPUT_BASE_PATH'], 'results', 'voltage_HPC')

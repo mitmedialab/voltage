@@ -1,8 +1,3 @@
-# directory under which to save training-related files
-# (the data size will be about 150 GB with the default settings)
-BASE_DIR = ''
-
-
 # simulation parameters
 IMAGE_SHAPE = (128, 128)
 TIME_FRAMES = 1000
@@ -28,8 +23,17 @@ BACKGROUND_THRESHOLD = 0
 # runtime parameters
 RUN_MODE = 'train'
 RUN_SIMULATE = True
-RUN_CORRECT = True
-RUN_PREPROC = True
-RUN_TRAIN = True
-RUN_DEMIX = True
+RUN_CORRECT  = True
+RUN_PREPROC  = True
+RUN_TRAIN    = True
+RUN_DEMIX    = True
 RUN_EVALUATE = True
+
+# directory under which to save training-related files
+# (the data size will be about 150 GB with the default settings)
+import runpy
+from pathlib import Path
+paths_file = Path(__file__).parent.joinpath('paths.py')
+paths = runpy.run_path(paths_file)
+
+BASE_DIR = paths['TRAIN_BASE_PATH']

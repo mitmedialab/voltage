@@ -1,4 +1,5 @@
-import pathlib
+import runpy
+from pathlib import Path
 import numpy as np
 import tifffile as tiff
 import preproc
@@ -46,18 +47,21 @@ def summarize_video_for_manual_annotation(in_file, out_base):
     # so as not to blur the images too much for manual annotation 
     temporal_file = out_base + '_maxmed.tif'
     spatial_file = 'tmp.tif' # we don't need this
-    preproc.preprocess_video(in_file, temporal_file, spatial_file,
+    preproc.preprocess_video(in_file, None, temporal_file, spatial_file,
                              'max-med', 50, 2.0)
 
-    # PCA
+    # PCA (turns out useless in most cases as it tends to extract blood vessels)
     temporal_file = out_base + '_pca.tif'
-    preproc.preprocess_video(in_file, temporal_file, spatial_file,
+    preproc.preprocess_video(in_file, None, temporal_file, spatial_file,
                              'pca', 100, 0.0)
 
 
 # The following code batch-processes files produced by pipeline.py
-INPUT_DIR = '/media/bandy/nvme_work/voltage/lowmag_v0.4'
-INPUT_FILES = sorted(pathlib.Path(INPUT_DIR).glob('*/*_corrected.tif'))
+paths_file = Path(__file__).absolute().parents[1].joinpath('params', 'paths.py')
+paths = runpy.run_path(paths_file)
+
+INPUT_DIR = Path(paths['OUTPUT_BASE_PATH'], 'results', 'voltage_HPC2')
+INPUT_FILES = sorted(INPUT_DIR.glob('*/*_corrected.tif'))
 
 for in_file in INPUT_FILES:
     out_base = in_file.parent.joinpath(in_file.stem.replace('_corrected', ''))

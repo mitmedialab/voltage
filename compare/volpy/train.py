@@ -36,7 +36,7 @@ def convert_files(files, save_dir, gt_dir, mode):
         if(mode == 0): # VolPy datasets
             roi_file = gt_dir.joinpath(dataset_name, dataset_name + '_ROI.zip')
             coords_list = read_zipped_roi(roi_file)
-        else: # Archon dataset
+        else: # HPC2 datasets
             roi_file = gt_dir.joinpath(dataset_name + '.tif')
             coords_list = read_masks(roi_file)
 
@@ -100,7 +100,7 @@ def split_training_data(input_path, output_path, gt_path, mode, dataset_groups,
 
 #%% Test
 if __name__ == '__main__':
-    INPUT_PATH = '/media/bandy/nvme_data/VolPy_Data/Extracted'
-    OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy'
+    INPUT_PATH = ''
+    OUTPUT_PATH = ''
     DATASET_GROUPS = ['voltage_L1', 'voltage_TEG', 'voltage_HPC']
     split_training_data(INPUT_PATH, OUTPUT_PATH, INPUT_PATH, 0, DATASET_GROUPS, 3, 0)

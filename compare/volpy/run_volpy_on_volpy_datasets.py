@@ -1,11 +1,15 @@
 import os
+import runpy
 import shutil
 from pathlib import Path
 
 
 # Path and dataset specific parameters
-INPUT_PATH = '/media/bandy/nvme_data/voltage/volpy_data'
-OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy'
+paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
+paths = runpy.run_path(paths_file)
+
+INPUT_PATH = paths['VOLPY_DATASETS']
+OUTPUT_PATH = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'volpy')
 DATASET_GROUPS = [
     # (group_name, frame_rate, min_size, max_size)
     # Note that the sizes are lengths and will be squared to specify an area range
@@ -39,7 +43,7 @@ for group in DATASET_GROUPS:
     input_dir = Path(INPUT_PATH).joinpath(group_name)
     input_files = sorted(input_dir.glob('*/*.tif'))
     output_dir = Path(OUTPUT_PATH).joinpath(group_name)
-    output_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True, parents=True)
     for input_file in input_files:
         dataset_name = input_file.stem
         output_subdir = output_dir.joinpath(dataset_name)

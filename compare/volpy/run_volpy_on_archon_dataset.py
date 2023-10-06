@@ -1,5 +1,6 @@
 import os
 import re
+import runpy
 import shutil
 import pandas as pd
 from pathlib import Path
@@ -7,8 +8,11 @@ from tifffile import TiffFile
 
 
 # Path parameters
-INPUT_PATH = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag'
-OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/volpy/archon'
+paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
+paths = runpy.run_path(paths_file)
+
+INPUT_PATH = paths['HPC2_DATASETS']
+OUTPUT_PATH = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'volpy', 'voltage_HPC2')
 FILENAME = ''               # If blank, all the files under INPUT_PATH will be processed
                             # Otherwise the specified file will be processed 10 times for runtime stats
 
@@ -20,7 +24,7 @@ USE_CUDA = False            # Whether to use GPU for motion correction
 
 # Motion correction parameters
 DO_MOTION_CORRECTION = True # If False, previously saved result (mmap) will be used
-MAX_SHIFT = 20              # Search range for motion correction (20 is equivalent to our 5)
+MAX_SHIFT = 20              # Search range for motion correction (20 is equivalent to our 3)
 SAVE_MOVIE = True           # Set False to measure motion correction computation time
 
 # Summary image creation parameters

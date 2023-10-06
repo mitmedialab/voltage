@@ -1,9 +1,13 @@
+import runpy
 from pathlib import Path
 from main import run_invivo_segmentation
 
 
-INPUT_PATH = '/media/bandy/nvme_data/voltage/datasets_v0.5/lowmag'
-OUTPUT_PATH = '/media/bandy/nvme_work/voltage/compare/invivo/lowmag'
+paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
+paths = runpy.run_path(paths_file)
+
+INPUT_PATH = paths['HPC2_DATASETS']
+OUTPUT_PATH = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'invivo', 'voltage_HPC2')
 
 
 max_block_size = 50
@@ -15,7 +19,7 @@ patch_size = 30
 corr_th_fix = 0.4    # 0.3-0.6
 
 input_files = sorted(Path(INPUT_PATH).glob('*.tif'))
-Path(OUTPUT_PATH).mkdir(exist_ok=True)
+Path(OUTPUT_PATH).mkdir(exist_ok=True, parents=True)
 for input_file in input_files:
     dataset_name = input_file.stem
     print('Processing ', dataset_name)

@@ -19,7 +19,7 @@ if(len(sys.argv) != 2):
     print(sys.argv[0] + ' params.py')
     sys.exit(0)
 
-default_param_file = Path(sys.argv[0]).parent.joinpath('params/defaults.py')
+default_param_file = Path(sys.argv[0]).parent.joinpath('params', 'defaults.py')
 params = runpy.run_path(default_param_file)
 user_params = runpy.run_path(sys.argv[1])
 params.update(user_params) # overwrite default values with user parameters
@@ -37,8 +37,7 @@ if('NUM_GPUS' in params):
 
 def set_dir(base_path, dirname):
     p = Path(base_path, dirname)
-    if not p.exists():
-        p.mkdir()
+    p.mkdir(exist_ok=True, parents=True)
     return p
 
 
