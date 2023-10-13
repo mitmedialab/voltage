@@ -13,8 +13,8 @@ VALIDATION_RATIO = 13  # N-fold cross validation
 paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
 paths = runpy.run_path(paths_file)
 
-INPUT_PATH = paths['HPC2_DATASETS']
-GT_PATH = paths['HPC2_DATASETS'] + '_GT'
+INPUT_PATH = Path(paths['HPC2_DATASETS'], 'HPC2')
+GT_PATH = Path(paths['HPC2_DATASETS'], 'HPC2_GT')
 OUTPUT_PATH = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'volpy', 'voltage_HPC2')
 
 MIN_SIZE = 10               # Minimum neuron size to be detected

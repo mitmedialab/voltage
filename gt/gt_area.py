@@ -11,8 +11,8 @@ paths_file = Path(__file__).absolute().parents[1].joinpath('params', 'paths.py')
 paths = runpy.run_path(paths_file)
 
 INPUTS = [
-    (Path(paths['HPC2_DATASETS'] + '_GT'), '*.tif'),
-    (Path(paths['VOLPY_DATASETS'], 'voltage_L1'), '*/*.zip'),
+    (Path(paths['HPC2_DATASETS'],  'HPC2_GT'),     '*.tif'),
+    (Path(paths['VOLPY_DATASETS'], 'voltage_L1'),  '*/*.zip'),
     (Path(paths['VOLPY_DATASETS'], 'voltage_TEG'), '*/*.zip'),
     (Path(paths['VOLPY_DATASETS'], 'voltage_HPC'), '*/*.zip'),
 ]

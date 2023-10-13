@@ -11,7 +11,7 @@ from tifffile import TiffFile
 paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
 paths = runpy.run_path(paths_file)
 
-INPUT_PATH = paths['HPC2_DATASETS']
+INPUT_PATH = Path(paths['HPC2_DATASETS'], 'HPC2')
 OUTPUT_PATH = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'volpy', 'voltage_HPC2')
 FILENAME = ''               # If blank, all the files under INPUT_PATH will be processed
                             # Otherwise the specified file will be processed 10 times for runtime stats

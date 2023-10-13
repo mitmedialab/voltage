@@ -6,7 +6,7 @@ from main import run_invivo_segmentation
 paths_file = Path(__file__).absolute().parents[2].joinpath('params', 'paths.py')
 paths = runpy.run_path(paths_file)
 
-INPUT_PATH = paths['HPC2_DATASETS']
+INPUT_PATH = Path(paths['HPC2_DATASETS'], 'HPC2')
 OUTPUT_PATH = Path(paths['OUTPUT_BASE_PATH'], 'compare', 'invivo', 'voltage_HPC2')
 
 
