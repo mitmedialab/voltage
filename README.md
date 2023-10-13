@@ -1,47 +1,65 @@
 # Voltage Imaging Data Processing
 
+This is a data processing pipeline for voltage imaging data (called "Voltage" for short).
+It takes as input a 2D microscopy video caputuring neurons expressing time-varying fluorescence
+depending on their membrane potential, and outputs voltage traces of individual neurons.
 
-## Directory Structure
+The Voltage pipeline consists of three stages.
+1. **Motion correction** to cancel 2D translational motion of neurons relative to the microscope.  
+1. **Neuron segmentation** to localize and delineate neuron boundaries from the background.
+1. **Voltage trace extraction** to reconstruct time-varying membrane potentials of neurons.
 
-* correct/     : motion/shading correction
-* preproc/     : preliminary feature extraction
-* segment/     : segmentation of active cell regions
-* demix/       : demixing of overlapping cells
-* simulate/    : synthetic data generation for training U-Net segmentation
-* evaluate/    : accuracy evaluation by comparison with ground truth
-* utils/       : C++ utilities used by some of the above modules
-* params/      : parameter files for pipeline script
-* pipeline.py  : pipeline script
+The focus of Voltage is to accelerate the first two stages in order to quickly identify
+region-of-interest (ROI) masks of firing neurons in the video.
+For a video with a moderate resolution (a few hundred pixels in width and height),
+Voltage works in real time on a single high-end desktop computer equipped with GPUs and SSDs,
+meaning that the processing speed is faster than the image recording rate (e.g., hundreds of frames per second).
 
-
-## Environment Setup
-
-$ conda create -n voltage python=3.8  
-$ conda activate voltage  
-$ conda install tiffile  
-$ conda install scikit-image  
-$ conda install keras  
-$ conda install tensorflow-gpu  
-$ conda install ipykernel  
-$ conda install nbconvert  
-$ conda install pandas  
-$ conda install cython  
-$ pip install elasticdeform  
-$ pip install read-roi
 
 
 ## How To Run
 
-Build and install C++ Cython modules:
+### Computational environment
 
-$ make
+### Set up a Python environment
 
-To train the U-Net cell segmentation network, edit params/train.py (path strings in particular) and run:
+Run the following commands to set up a Python virtual environment and install necessary packages.
+```
+conda env create -f environment.yml
+conda activate voltage
+```
+Edit environment.yml if you prefer a different environment name to "voltage."
 
-$ python pipeline.py params/train.py
 
-This will create synthetic data and train the network. The trained U-Net model will be stored in MODEL_DIR.
+### Build modules
 
-To run the pipeline for real data sets using the trained model, edit params/run_xxx.py (choose one of the preconfigured parameter files or create your own) and run:
+Voltage uses modules written in C++ and CUDA. To build and install them, run:
+```
+make
+```
 
-$ python pipeline.py params/run_xxx.py
+
+### Set paths
+
+Edit params/paths.py so the pipeline knows where to read input data and write output data.
+See the comments in paths.py, and download test datasets as necessary.
+
+
+### Test run 
+
+The following commands run the pipeline on test datasets.
+
+```
+python pipeline.py params/run_l1.py
+python pipeline.py params/run_teg.py
+python pipeline.py params/run_hpc.py
+python pipeline.py params/run_hpc2.py
+```
+
+### Train a segmentation model
+
+To train the U-Net cell segmentation network, run:
+```
+python pipeline.py params/train.py
+```
+This will create synthetic data and train the network. The trained U-Net model will be stored in TRAIN_BASE_PATH/train/model.
