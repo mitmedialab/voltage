@@ -7,8 +7,7 @@ dependencies:
   - tifffile
   - scikit-image
   - scikit-learn
-  - ipykernel
-  - nbconvert
+  - jupyter
   - pandas
   - matplotlib
   - pip
