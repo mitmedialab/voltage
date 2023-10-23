@@ -1,4 +1,4 @@
-# Voltage Imaging Data Processing
+# Voltage: Fast Data Processing Pipeline for Voltage Imaging
 
 This is a data processing pipeline for voltage imaging data (called "Voltage" for short).
 It takes as input a 2D microscopy video caputuring neurons expressing time-varying fluorescence
@@ -29,7 +29,7 @@ Voltage has been tested on the computational environment summarized in the follo
 | SSD       | KIOXIA EXCERIA PRO 2 TB (PCIe Gen 4 x4)  |
 | OS        | Ubuntu 20.04.6 LTS, Linux kernel 5.15    |
 | Software  | NVIDIA Driver 525.105.17, CUDA 12.0      |
-|           | Python 3.8, TensorFlow 2.4.1., g++ 9.4.0 |
+|           | Python 3.8, g++ 9.4.0                    |
 
 In terms of hardware,
 this is not necessarily a requirement, but at least one GPU and NVMe SSD will be needed
@@ -65,7 +65,9 @@ make
 ### Set paths
 
 Edit `params/paths.py` so the pipeline knows where to read input data and write output data.
-See the comments in `paths.py`, and download test datasets as necessary.
+See the comments in `paths.py`, and download test datasets
+from [here](https://zenodo.org/records/4515768) and [here](https://zenodo.org/records/10020273)
+as necessary.
 
 
 ### Test-run 
@@ -101,7 +103,9 @@ variables such as `INPUT_DIR` in a parameter file if that is more convenient.
 
 ### Train a segmentation model
 
-To train the U-Net cell segmentation network, run:
+Instead of using the pre-trained U-Net cell segmentation network
+[available here](https://zenodo.org/records/10020273),
+one can train it from scratch by running:
 ```
 python pipeline.py params/train.py
 ```
