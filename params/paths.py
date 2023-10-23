@@ -1,5 +1,5 @@
 # Path to a directory containing copies of the datasets used in the VolPy paper,
-# which can be downloaded from: https://zenodo.org/record/4515768#.Y3gVI77MLE8
+# which can be downloaded from: https://zenodo.org/records/4515768
 # Download voltage_HPC.zip, voltage_L1.zip, and voltage_TEG.zip.
 # Unzipped files should be placed as follows:
 #     <Directory specified by VOLPY_DATASETS>/
@@ -16,7 +16,7 @@
 VOLPY_DATASETS = ''
 
 # Path to a directory containing copies of the datasets introduced in this work,
-# which can be downloaded from: XXX.
+# which can be downloaded from: https://zenodo.org/records/10020273
 # Download voltage_HPC2.zip. Unzipped files should be placed as follows:
 #     <Directory specified by HPC2_DATASETS>/
 #           |
@@ -37,15 +37,15 @@ VOLPY_DATASETS = ''
 #
 HPC2_DATASETS = ''
 
-# Path to a directory under which output data will be stored.
-# The directory structure will be as follows:
+# Path to a directory for storing output data.
+# After running all the scripts, the directory structure will be as follows:
 #     <Directory specified by OUTPUT_BASE_PATH>/
 #           |
 #           +-- compare/
-#                  |
-#                  + invivo/
-#                  + volpy/
-#
+#           |      |
+#           |      + invivo/
+#           |      + volpy/
+#           |
 #           +-- results/
 #                  |
 #                  + voltage_HPC/
@@ -56,11 +56,12 @@ HPC2_DATASETS = ''
 # The total data size will be around 300 GB.
 OUTPUT_BASE_PATH = ''
 
-# Path to a file storing a U-Net segmentation network model. A pre-trained
-# model can be downloaded from: XXX.
-# One can also train a model using the provided pipeline and speficy it here.
+# Path to a file storing a U-Net segmentation network model.
+# One can either specify the pre-trained model (voltage_u-net_model.h5)
+# which can be downloaded from: https://zenodo.org/records/10020273
+# or train a model using the provided pipeline and speficy it here.
 MODEL_FILE = ''
 
-# Path to a directory under which training data and results will be stored.
-# The total data size will be around 150 GB.
+# Path to a directory for storing training data and results.
+# After training, the total data size will be around 150 GB.
 TRAIN_BASE_PATH = ''
