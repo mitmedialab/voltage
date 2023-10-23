@@ -1,7 +1,7 @@
 # Voltage: Fast Data Processing Pipeline for Voltage Imaging
 
 This is a data processing pipeline for voltage imaging data (called "Voltage" for short).
-It takes as input a 2D microscopy video caputuring neurons expressing time-varying fluorescence
+It takes as input a 2D microscopy video capturing neurons expressing time-varying fluorescence
 depending on their membrane potential, and outputs voltage traces of individual neurons.
 
 The Voltage pipeline consists of three stages.
